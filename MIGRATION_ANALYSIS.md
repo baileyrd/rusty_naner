@@ -227,7 +227,75 @@ Expected binary footprint with `opt-level = "s"`, `lto = true`, `strip = true`,
 `panic = "abort"`: roughly **1.5–4 MB per exe** vs today's ~11 MB trimmed .NET
 launcher — plus materially faster cold start (no runtime/single-file extraction).
 
-### 2.4 Windows-only vs cross-platform
+### 2.4 Design principles: applying the Unix philosophy
+
+Assessed against the classic tenets (McIlroy's "do one thing well," Raymond's rules):
+the philosophy is largely applicable, partly already present in the C# app, and the
+migration is the cheapest possible moment to adopt the rest — with one tenet
+(one-program-per-tool) deliberately compromised for compatibility.
+
+**Already aligned (preserve through the port):**
+
+- *Text streams as the interface* — `--export-env` emits an eval-able script on pure
+  stdout (`naner --export-env | Invoke-Expression`), warnings alone on stderr,
+  trailing newline trimmed for pipeline safety.
+- *Pipeline awareness* — the `IsStdoutCaptured` check already detects redirection and
+  refuses to attach a console over a pipe.
+- *Representation / mechanism-not-policy* — `naner.json` and `vendors.json` hold the
+  policy (profiles, PATH order, vendor sources); the launcher and installer are dumb
+  engines executing data.
+- *Separation of interfaces from engines* — the two-executable split
+  (bootstrapper vs launcher).
+
+**Current violations the rewrite should address:**
+
+- *Do one thing* — `naner.exe` is four tools in one: launcher, env exporter, vendor
+  package manager, diagnostics.
+- *Silence is golden* — `[*]`/`[OK]` status lines narrate every operation
+  unconditionally.
+- *Repair (fail loudly, fail fast)* — the vendor fallback cascade degrades **silently**;
+  bug B1 went unnoticed precisely because nothing reports when a fallback URL is used.
+- *Composability gaps* — `install --list` output is human-decorated only; there is no
+  scriptable primitive for "where is NANER_ROOT?".
+
+**Adoption plan, in three tiers:**
+
+1. **Internal design (free, now)** — modularity, clarity, transparency,
+   representation. Already embodied in the workspace layout: each subcommand is an
+   isolated module in `naner-core`/`naner` with args-in → text-out → exit-code
+   semantics, independently testable.
+2. **Additive surface (parity-safe, during Phases 2–3)** — new commands/flags that
+   cannot perturb golden-parity diffs:
+   - `naner root` — print the discovered NANER_ROOT and exit (composable primitive:
+     `cd $(naner root)`).
+   - `--quiet`/`-q` on launcher and vendor commands — suppress `[*]` chatter.
+   - Machine-readable vendor listing (e.g. `install --list --porcelain`:
+     one `name<TAB>installed<TAB>version` line per vendor).
+3. **Default-output changes (post-parity wave, with B1–B6)** — these are the *right*
+   behavior but would diverge from the C# golden outputs, so they land as deliberate,
+   changelog-visible follow-ups after cutover:
+   - Auto-silence status chatter when stdout is not a TTY (the detection mechanism
+     already exists); chatty on console, silent in pipelines.
+   - Fail loudly: warn on stderr whenever a fallback URL is taken or a configured
+     PATH entry is dropped for not existing (today both vanish without a word) —
+     this is the same instinct as fixing B1.
+
+**The deliberate compromise:** a literal binary-per-tool split (`naner-launch.exe`,
+`naner-env.exe`, `naner-vendor.exe`, …) collides with the release/update contract
+(§4.2 — deployed inits fetch an asset named exactly `naner.exe`), `naner.bat`, and
+user muscle memory. The **multi-call binary** pattern (git/cargo/busybox) captures
+~90% of the value: one `naner.exe`, subcommands designed and tested as independent
+small tools. That is how the `naner` crate is organized regardless. A true
+multi-binary split stays available as a post-cutover decision, with `naner.exe` as a
+thin dispatcher, if ever wanted.
+
+**Where not to force it:** spawning a GUI terminal is inherently not a pipeline
+stage, and `naner-init`'s interactive Y/n bootstrap is deliberately a human
+interface. Apply text-stream composability to the surfaces where composition is real
+(`root`, `--export-env`, vendor listing, diagnostics), not dogmatically to the
+launcher's core act.
+
+### 2.5 Windows-only vs cross-platform
 
 Recommendation: **target `x86_64-pc-windows-msvc` only, with clean seams.** The product
 is intrinsically Windows-shaped (Windows Terminal, MSYS2, `%VAR%` expansion, `;` PATH,
@@ -407,14 +475,17 @@ fields, JSON/YAML providers, env overrides, validator, search order), PATH build
 clap CLI with two-layer routing; `--version`/`--help`/`--diagnose` (directory verifier,
 config verifier, environment reporter); `--export-env`/`--setup-only`; first-run
 detection/message; `TerminalLauncher` (WT discovery chain, arg building, fire-and-forget
-spawn). **Exit criteria:** Rust `naner.exe` is a daily-drivable drop-in inside an
-existing initialized tree (vendors still managed by C# exe); golden harness green.
+spawn). Additive Unix-philosophy surface from §2.4 tier 2: `naner root` and `--quiet`
+(new command/flag — parity-safe). **Exit criteria:** Rust `naner.exe` is a
+daily-drivable drop-in inside an existing initialized tree (vendors still managed by
+C# exe); golden harness green.
 
 ### Phase 3 — vendors + archives (large)
 `vendors.json` loader (lenient JSON), six source-type resolvers with fallback cascade,
 downloader (progress format preserved), checksum verifier, extractors (zip native;
 tar.xz native + 7z fallback; 7z/msi/exe shell-outs; flattening), WT portable-mode
-configurator, `install` and `update-vendors` commands, WT-preserving update semantics.
+configurator, `install` and `update-vendors` commands (incl. the parity-safe `--porcelain`
+machine-readable listing from §2.4), WT-preserving update semantics.
 **Exit criteria:** clean-tree essential-vendor install and per-vendor update produce a
 layout byte-comparable (modulo timestamps) to the C# pipeline; optional-vendor spot
 checks (`nodejs`, `rust` installer path).
@@ -431,7 +502,9 @@ Release workflow on `baileyrd/naner` publishes Rust-built `naner.exe`,
 `naner-init.exe`, `naner-bundle.zip` (same tags/asset names — see §4.2); `naner.bat`
 unchanged; freeze `src/csharp` (delete in a later major); retire stale docs/Pester
 tests; then schedule the deliberate bug-fix wave (B1–B6, dependency ordering, checksums,
-MSYS2 packages) as post-parity releases.
+MSYS2 packages) as post-parity releases, together with the §2.4 tier-3 output changes
+(auto-quiet when stdout is not a TTY; loud stderr warnings on fallback URLs and dropped
+PATH entries).
 
 ### Rough effort
 
@@ -459,3 +532,4 @@ isn't ported, but Rust error handling and Win32 FFI add some back.)
 5. **Native zip + tar.xz extraction, shell-out for msi/7z/exe installers**, keeping 7z.exe fallback for tar.xz until the MSYS2 extraction is proven on real trees.
 6. **Do not port**: setup wizard, plugin loader, EventAggregator, DI layer, orphaned PowerShell resources, unused HTTP service, Pester tests.
 7. **Invest early in the console spike and the golden-parity harness** — they de-risk everything else.
+8. **Adopt the Unix philosophy via the multi-call binary pattern** (§2.4): subcommands designed as independent small tools inside one `naner.exe`; parity-safe composability additions (`naner root`, `--quiet`, `--porcelain`) during Phases 2–3; default-output changes (auto-quiet in pipelines, loud fallback warnings) deferred to the post-parity wave. No literal binary-per-tool split — it breaks the release/update contract.
