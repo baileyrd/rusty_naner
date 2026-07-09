@@ -51,6 +51,16 @@ pub fn extract_archive(
     }
 }
 
+/// Plain zip extraction with overwrite and NO flattening — the
+/// naner-bundle.zip path (`ZipFile.ExtractToDirectory(..., overwrite:
+/// true)` in `NanerUpdater`), where the archive's layout IS the tree.
+pub fn extract_zip_plain(archive_path: &Path, target_dir: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(target_dir).map_err(|e| e.to_string())?;
+    let file = std::fs::File::open(archive_path).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
+    archive.extract(target_dir).map_err(|e| e.to_string())
+}
+
 /// `ArchiveUtilities.FlattenSingleSubdirectory`: when extraction produced
 /// exactly one entry and it is a directory, hoist its contents via the
 /// rename-based strategy (no copying, symlink-safe).

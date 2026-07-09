@@ -14,6 +14,7 @@ pub mod config;
 pub mod console;
 pub mod constants;
 pub mod env_export;
+pub mod github;
 pub mod http;
 pub mod logger;
 pub mod paths;

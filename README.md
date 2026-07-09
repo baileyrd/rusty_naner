@@ -41,10 +41,23 @@ Phase 1 (naner-core foundations) in progress. Done so far:
   `--quiet`. 85 tests; the happy path verified live (Node.js resolved,
   downloaded, extracted, flattened, version-stamped; re-run skips).
 
-Next: Phase 4 (`naner-init`: GitHub release client, updater, bootstrap).
-Still outstanding on a real Windows box: console-spike launch modes,
-`scripts/parity.ps1` against the C# exe, and an MSYS2-scale tar.xz
-extraction trial (symlinks/long paths, §4.3).
+- **Phase 4**: `naner-init` — the GitHub releases client (release-by-tag with
+  the `v`-prefix rule, latest-with-prerelease fallback, octet-stream asset
+  downloads, `GITHUB_TOKEN` bearer support), the `NanerUpdater` port with the
+  exact sync-to-embedded-version semantics (normalized string inequality —
+  happily "downgrades"; version file written in tag form), bundle
+  initialization (no-flatten extraction, marker + version files), essential
+  vendor bootstrap in the fixed 7-Zip-first order, Y/n prompts
+  (empty/y/yes = yes), the allocated-console-only exit pause, and argument
+  pass-through to naner.exe. 90 tests.
+
+Remaining: **Phase 5 (cutover)** — publish Rust-built `naner.exe` /
+`naner-init.exe` / `naner-bundle.zip` releases on `baileyrd/naner` with
+identical tags and asset names (§4.2), then the deliberate post-parity
+bug-fix wave (B1–B6) and tier-3 output changes. Outstanding on a real
+Windows box: console-spike launch modes, `scripts/parity.ps1` against the
+C# exe, an MSYS2-scale tar.xz trial, and an end-to-end `naner-init` first
+run against a staged release.
 
 - [MIGRATION_ANALYSIS.md](MIGRATION_ANALYSIS.md) — detailed analysis of the existing C#
   codebase and the phased migration plan.
