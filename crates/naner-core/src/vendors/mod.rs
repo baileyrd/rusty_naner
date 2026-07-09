@@ -52,10 +52,9 @@ pub struct VendorDefinition {
     pub static_url: Option<String>,
     pub file_name: Option<String>,
 
-    // GitHub releases. NOTE (bug B1, preserved): the vendors.json loader
-    // never populates `asset_pattern_end`, and asset matching uses substring
-    // `contains` — so glob-style patterns like `*win-x64.zip` never match and
-    // JSON-defined GitHub vendors always fall back to their pinned URL.
+    // GitHub releases. B1 fixed: patterns with `*`/`?` glob-match the whole
+    // asset name; wildcard-free patterns keep substring semantics (which the
+    // `asset_pattern` + `asset_pattern_end` built-in pairs rely on).
     pub github_owner: Option<String>,
     pub github_repo: Option<String>,
     pub asset_pattern: Option<String>,
@@ -69,7 +68,7 @@ pub struct VendorDefinition {
     pub fallback_version: Option<String>,
     pub fallback_file_name: Option<String>,
 
-    // Checksum (bug B2, preserved: never populated from vendors.json)
+    // Checksum (B2 fixed: populated from an optional vendors.json object)
     pub checksum: Option<ChecksumInfo>,
 
     // Executable installers
@@ -85,12 +84,13 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
         VendorDefinition {
             name: constants::vendor_names::SEVEN_ZIP.into(),
             extract_dir: "7zip".into(),
-            source_type: VendorSourceType::WebScrape,
-            web_scrape: Some(WebScrapeConfig {
-                url: "https://www.7-zip.org/download.html".into(),
-                pattern: r#"href="(a/7z\d+-x64\.msi)""#.into(),
-                base_url: "https://www.7-zip.org".into(),
-            }),
+            // 7-zip.org moved its binaries to GitHub releases; the old
+            // download.html scrape now yields a mangled URL. GitHub source
+            // with a glob (works since the B1 fix) is the real path.
+            source_type: VendorSourceType::GitHub,
+            github_owner: Some("ip7z".into()),
+            github_repo: Some("7zip".into()),
+            asset_pattern: Some("7z*-x64.msi".into()),
             fallback_url: Some("https://www.7-zip.org/a/7z2408-x64.msi".into()),
             ..Default::default()
         },

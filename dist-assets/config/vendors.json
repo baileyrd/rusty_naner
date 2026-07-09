@@ -11,9 +11,9 @@
       "required": true,
       "dependencies": [],
       "releaseSource": {
-        "type": "web-scrape",
-        "url": "https://www.7-zip.org/download.html",
-        "pattern": "href=\"([^\"]*7z(\\d+)-x64\\.msi)\"",
+        "type": "github",
+        "repo": "ip7z/7zip",
+        "assetPattern": "7z*-x64.msi",
         "fallback": {
           "version": "24.08",
           "url": "https://www.7-zip.org/a/7z2408-x64.msi",

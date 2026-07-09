@@ -58,14 +58,16 @@ impl<'a> NanerUpdater<'a> {
         &self.init_version
     }
 
-    /// `CheckForUpdateAsync`: normalized string inequality against the
-    /// embedded version (bugs B5/B6 live here — preserved).
+    /// `CheckForUpdateAsync`: canonical-form inequality against the embedded
+    /// version (B5 fixed: "1.2" == "1.2.0"; B6 handled by canonicalizing the
+    /// leading `v`). Still sync-to-embedded — any difference, including a
+    /// prerelease suffix or a downgrade, triggers the swap.
     pub fn check_for_update(&self) -> (bool, Option<String>) {
         let Some(installed) = self.installed_version() else {
             return (true, Some(self.init_version.clone()));
         };
         let update_needed =
-            version::normalize(&installed) != version::normalize(&self.init_version);
+            version::canonical(&installed) != version::canonical(&self.init_version);
         (
             update_needed,
             update_needed.then(|| self.init_version.clone()),

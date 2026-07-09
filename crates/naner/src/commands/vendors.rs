@@ -70,7 +70,12 @@ pub fn execute_update(args: &[String]) -> i32 {
 }
 
 fn strip_quiet(args: &[String]) -> (Vec<String>, bool) {
-    let quiet = args.iter().any(|a| a.eq_ignore_ascii_case(QUIET_FLAG));
+    // Tier-3: auto-quiet in pipelines. Explicit --quiet still works in a
+    // terminal; a redirected stdout suppresses the [*]/[OK]/info chatter on
+    // its own. Failures and stderr warnings are unaffected, and porcelain
+    // output prints directly (not via the logger).
+    let quiet = args.iter().any(|a| a.eq_ignore_ascii_case(QUIET_FLAG))
+        || !std::io::IsTerminal::is_terminal(&std::io::stdout());
     let rest = args
         .iter()
         .filter(|a| !a.eq_ignore_ascii_case(QUIET_FLAG))

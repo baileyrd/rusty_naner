@@ -2,10 +2,11 @@
 //! comments + trailing commas tolerated), convert to definitions, fall back
 //! to the hardcoded essential set when missing/empty/invalid.
 //!
-//! Preserved bugs (MIGRATION_ANALYSIS §3): B1 — `assetPattern` goes into
-//! `asset_pattern` for substring matching and `asset_pattern_end` is never
-//! set from JSON; B2 — no checksum field exists in the JSON models, so
-//! `checksum` is always `None`.
+//! Post-parity fixes (see docs/post-parity-fix-wave.md): B1 — `assetPattern`
+//! globs now match for real in the installer (`asset_pattern_end` remains a
+//! built-in-defaults-only mechanism); B2 — an optional `checksum`
+//! `{algorithm, value, required}` object per vendor entry is wired through to
+//! the verifier.
 
 use std::path::{Path, PathBuf};
 
@@ -38,6 +39,18 @@ struct VendorJsonEntry {
     install_type: Option<String>,
     #[serde(rename = "installerArgs", alias = "installerargs")]
     installer_args: Option<Vec<String>>,
+    checksum: Option<ChecksumJson>,
+}
+
+/// Optional per-vendor checksum (fix for B2 — the C# schema never had one).
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct ChecksumJson {
+    /// `SHA256` (default), `SHA512`, `SHA384`, `SHA1`, or `MD5`.
+    algorithm: Option<String>,
+    value: Option<String>,
+    /// When true a mismatch blocks installation; otherwise it only warns.
+    required: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -172,6 +185,15 @@ fn convert(vendors: indexmap::IndexMap<String, VendorJsonEntry>) -> Vec<VendorDe
             dependencies: entry.dependencies.unwrap_or_default(),
             install_type: entry.install_type,
             installer_args: entry.installer_args,
+            // B2 fixed: an optional checksum object flows to the verifier.
+            checksum: entry.checksum.and_then(|c| {
+                let value = c.value.unwrap_or_default();
+                (!value.is_empty()).then(|| crate::checksum::ChecksumInfo {
+                    algorithm: c.algorithm.unwrap_or_else(|| "SHA256".into()),
+                    value,
+                    required: c.required,
+                })
+            }),
             ..Default::default()
         };
 
@@ -186,8 +208,8 @@ fn convert(vendors: indexmap::IndexMap<String, VendorJsonEntry>) -> Vec<VendorDe
                             def.github_repo = Some(parts[1].to_string());
                         }
                     }
-                    // B1: the glob-looking pattern lands in the substring
-                    // matcher; asset_pattern_end stays None.
+                    // B1 fixed: glob patterns now match in the installer;
+                    // asset_pattern_end stays a built-in-defaults mechanism.
                     def.asset_pattern = source.asset_pattern.clone();
                 }
                 VendorSourceType::WebScrape => {
@@ -326,11 +348,11 @@ mod tests {
         assert_eq!(ps.source_type, VendorSourceType::GitHub);
         assert_eq!(ps.github_owner.as_deref(), Some("PowerShell"));
         assert_eq!(ps.github_repo.as_deref(), Some("PowerShell"));
-        // B1 preserved: the glob string is kept verbatim for substring
-        // matching, and no pattern-end is ever set from JSON.
+        // The glob string is kept verbatim (the installer glob-matches it
+        // since the B1 fix); no pattern-end is ever set from JSON.
         assert_eq!(ps.asset_pattern.as_deref(), Some("*win-x64.zip"));
         assert!(ps.asset_pattern_end.is_none());
-        // B2 preserved: checksums cannot come from vendors.json.
+        // No checksum object in the JSON → none on the definition.
         assert!(ps.checksum.is_none());
         assert_eq!(ps.dependencies, vec!["SevenZip"]);
         assert_eq!(
@@ -347,6 +369,36 @@ mod tests {
         let ruby = &vendors[2];
         assert_eq!(ruby.source_type, VendorSourceType::StaticUrl);
         assert_eq!(ruby.static_url.as_deref(), Some("https://x.example/r.7z"));
+    }
+
+    #[test]
+    fn b2_checksum_object_is_wired_through() {
+        let json = r#"{ "vendors": { "Tool": {
+            "name": "Tool", "extractDir": "tool", "enabled": true, "required": false,
+            "checksum": { "algorithm": "SHA512", "value": "AB CD", "required": true }
+        } } }"#;
+        let (_tmp, loader) = loader_with(Some(json));
+        let tool = &loader.load_vendors()[0];
+        let checksum = tool.checksum.as_ref().expect("checksum wired");
+        assert_eq!(checksum.algorithm, "SHA512");
+        assert_eq!(checksum.value, "AB CD");
+        assert!(checksum.required);
+
+        // Algorithm defaults to SHA256; an empty value means no checksum.
+        let json = r#"{ "vendors": { "Tool": {
+            "name": "Tool", "extractDir": "tool", "enabled": true, "required": false,
+            "checksum": { "value": "ff00" }
+        } } }"#;
+        let (_tmp, loader) = loader_with(Some(json));
+        let tool = &loader.load_vendors()[0];
+        assert_eq!(tool.checksum.as_ref().unwrap().algorithm, "SHA256");
+
+        let json = r#"{ "vendors": { "Tool": {
+            "name": "Tool", "extractDir": "tool", "enabled": true, "required": false,
+            "checksum": { "algorithm": "SHA256" }
+        } } }"#;
+        let (_tmp, loader) = loader_with(Some(json));
+        assert!(loader.load_vendors()[0].checksum.is_none());
     }
 
     #[test]
