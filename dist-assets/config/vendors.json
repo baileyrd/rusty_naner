@@ -1,0 +1,226 @@
+{
+  "$schema": "./vendors-schema.json",
+  "version": "1.0.0",
+  "description": "Naner vendor dependency configuration",
+  "vendors": {
+    "SevenZip": {
+      "name": "7-Zip",
+      "description": "File archiver with high compression ratio",
+      "extractDir": "7zip",
+      "enabled": true,
+      "required": true,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "web-scrape",
+        "url": "https://www.7-zip.org/download.html",
+        "pattern": "href=\"([^\"]*7z(\\d+)-x64\\.msi)\"",
+        "fallback": {
+          "version": "24.08",
+          "url": "https://www.7-zip.org/a/7z2408-x64.msi",
+          "fileName": "7z2408-x64.msi",
+          "size": "~2"
+        }
+      },
+      "postInstallFunction": "SevenZip.PostInstall"
+    },
+    "PowerShell": {
+      "name": "PowerShell",
+      "description": "Cross-platform automation and configuration tool",
+      "extractDir": "powershell",
+      "enabled": true,
+      "required": true,
+      "dependencies": ["SevenZip"],
+      "releaseSource": {
+        "type": "github",
+        "repo": "PowerShell/PowerShell",
+        "assetPattern": "*win-x64.zip",
+        "fallback": {
+          "version": "7.4.6",
+          "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip",
+          "fileName": "PowerShell-7.4.6-win-x64.zip",
+          "size": "~100"
+        }
+      },
+      "postInstallFunction": "PowerShell.PostInstall"
+    },
+    "WindowsTerminal": {
+      "name": "Windows Terminal",
+      "description": "Modern terminal application for Windows",
+      "extractDir": "terminal",
+      "enabled": true,
+      "required": true,
+      "dependencies": ["SevenZip"],
+      "releaseSource": {
+        "type": "github",
+        "repo": "microsoft/terminal",
+        "assetPattern": "*_x64.zip",
+        "fallback": {
+          "version": "1.21.2361.0",
+          "url": "https://github.com/microsoft/terminal/releases/download/v1.21.2361.0/Microsoft.WindowsTerminal_1.21.2361.0_x64.zip",
+          "fileName": "Microsoft.WindowsTerminal_1.21.2361.0_x64.zip",
+          "size": "~50"
+        }
+      },
+      "postInstallFunction": "WindowsTerminal.PostInstall"
+    },
+    "MSYS2": {
+      "name": "MSYS2",
+      "description": "Collection of tools and libraries for Windows",
+      "extractDir": "msys64",
+      "enabled": true,
+      "required": true,
+      "dependencies": ["SevenZip"],
+      "releaseSource": {
+        "type": "web-scrape",
+        "url": "https://repo.msys2.org/distrib/x86_64/",
+        "pattern": "href=\"(msys2-base-x86_64-(\\d{8})\\.tar\\.xz)\"",
+        "fallback": {
+          "version": "20240727",
+          "url": "https://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20240727.tar.xz",
+          "fileName": "msys2-base-x86_64-20240727.tar.xz",
+          "size": "~400"
+        }
+      },
+      "postInstallFunction": "MSYS2.PostInstall",
+      "packages": [
+        "git",
+        "make",
+        "mingw-w64-x86_64-gcc",
+        "mingw-w64-x86_64-make",
+        "diffutils",
+        "patch",
+        "tar",
+        "zip",
+        "unzip"
+      ]
+    },
+    "NodeJS": {
+      "name": "Node.js",
+      "description": "JavaScript runtime built on Chrome's V8 engine",
+      "extractDir": "nodejs",
+      "enabled": false,
+      "required": false,
+      "dependencies": ["SevenZip"],
+      "releaseSource": {
+        "type": "nodejs-api",
+        "fallback": {
+          "version": "v20.11.0",
+          "url": "https://nodejs.org/dist/v20.11.0/node-v20.11.0-win-x64.zip",
+          "fileName": "node-v20.11.0-win-x64.zip",
+          "size": "~30"
+        }
+      },
+      "postInstallFunction": "NodeJS.PostInstall"
+    },
+    "Miniconda": {
+      "name": "Miniconda",
+      "description": "Minimal Python distribution with conda package manager",
+      "extractDir": "miniconda",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "static",
+        "url": "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe",
+        "version": "latest",
+        "fileName": "Miniconda3-latest-Windows-x86_64.exe",
+        "size": "~50"
+      },
+      "postInstallFunction": "Miniconda.PostInstall"
+    },
+    "Go": {
+      "name": "Go",
+      "description": "Statically typed, compiled programming language",
+      "extractDir": "go",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "golang-api",
+        "url": "https://go.dev/dl/?mode=json",
+        "fallback": {
+          "version": "go1.21.6",
+          "url": "https://go.dev/dl/go1.21.6.windows-amd64.zip",
+          "fileName": "go1.21.6.windows-amd64.zip",
+          "size": "~140"
+        }
+      },
+      "postInstallFunction": "Go.PostInstall"
+    },
+    "Rust": {
+      "name": "Rust",
+      "description": "Systems programming language via rustup",
+      "extractDir": "rust",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "static",
+        "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe",
+        "version": "latest",
+        "fileName": "rustup-init.exe",
+        "size": "~10"
+      },
+      "postInstallFunction": "Rust.PostInstall",
+      "installType": "installer",
+      "installerArgs": [
+        "-y",
+        "--default-toolchain",
+        "stable",
+        "--profile",
+        "default",
+        "--no-modify-path"
+      ]
+    },
+    "Ruby": {
+      "name": "Ruby",
+      "description": "Dynamic, open source programming language",
+      "extractDir": "ruby",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "oneclick/rubyinstaller2",
+        "assetPattern": "rubyinstaller-*-x64.7z",
+        "fallback": {
+          "version": "4.0.0-1",
+          "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-4.0.0-1/rubyinstaller-4.0.0-1-x64.7z",
+          "fileName": "rubyinstaller-4.0.0-1-x64.7z",
+          "size": "~30"
+        }
+      },
+      "postInstallFunction": "Ruby.PostInstall"
+    },
+    "DotNetSDK": {
+      "name": ".NET SDK",
+      "description": "Software development kit for building .NET applications (required for C# migration)",
+      "extractDir": "dotnet-sdk",
+      "enabled": true,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "dotnet-api",
+        "fallback": {
+          "version": "10.0.102",
+          "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.102/dotnet-sdk-10.0.102-win-x64.zip",
+          "fileName": "dotnet-sdk-10.0.102-win-x64.zip",
+          "size": "~290"
+        }
+      },
+      "postInstallFunction": "DotNetSDK.PostInstall"
+    }
+  },
+  "metadata": {
+    "createdDate": "2026-01-07",
+    "lastModified": "2026-01-07",
+    "configVersion": "1.0.0",
+    "notes": [
+      "This configuration file documents the current vendor setup for Naner.",
+      "Vendors marked as 'required: true' are essential for Naner to function.",
+      "Vendors marked as 'enabled: false' are optional and can be enabled as needed.",
+      "Dependencies are processed in order to ensure proper installation sequence.",
+      "PostInstall functions reference the scriptblocks in Setup-NanerVendor.ps1"
+    ]
+  }
+}

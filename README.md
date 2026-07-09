@@ -51,13 +51,20 @@ Phase 1 (naner-core foundations) in progress. Done so far:
   (empty/y/yes = yes), the allocated-console-only exit pause, and argument
   pass-through to naner.exe. 90 tests.
 
-Remaining: **Phase 5 (cutover)** — publish Rust-built `naner.exe` /
-`naner-init.exe` / `naner-bundle.zip` releases on `baileyrd/naner` with
-identical tags and asset names (§4.2), then the deliberate post-parity
-bug-fix wave (B1–B6) and tier-3 output changes. Outstanding on a real
-Windows box: console-spike launch modes, `scripts/parity.ps1` against the
-C# exe, an MSYS2-scale tar.xz trial, and an end-to-end `naner-init` first
-run against a staged release.
+- **Phase 5 (cutover, in progress)**: the release workflow publishes
+  Rust-built `naner.exe` / `naner-init.exe` / `naner-bundle.zip` to
+  `baileyrd/naner` with identical tags and asset names (§4.2), as
+  **prereleases** until the remaining validation gates pass. The static
+  bundle content (`bin/`, `config/`, `home/`, `icons/`, `naner.bat`) is
+  vendored from the C# repo in `dist-assets/`.
+
+Remaining before full (non-prerelease) cutover — see
+[docs/VALIDATION.md](docs/VALIDATION.md): `scripts/parity.ps1` against the
+C# exe, the manual console launch modes (attach / double-click), an
+end-to-end `naner-init` first run against the published prerelease, then
+the deliberate post-parity bug-fix wave (B1–B6) and tier-3 output changes.
+The MSYS2-scale native tar.xz trial has passed on a real Windows box
+(~250 MB archive, no 7-Zip fallback, bash runs).
 
 - [MIGRATION_ANALYSIS.md](MIGRATION_ANALYSIS.md) — detailed analysis of the existing C#
   codebase and the phased migration plan.

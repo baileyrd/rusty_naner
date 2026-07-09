@@ -1,0 +1,131 @@
+# Naner Configuration
+# YAML configuration for Naner terminal launcher
+
+VendorPaths:
+  SevenZip: "%NANER_ROOT%\\vendor\\7zip\\7z.exe"
+  PowerShell: "%NANER_ROOT%\\vendor\\powershell\\pwsh.exe"
+  WindowsTerminal: "%NANER_ROOT%\\vendor\\terminal\\wt.exe"
+  GitBash: "%NANER_ROOT%\\vendor\\msys64\\usr\\bin\\bash.exe"
+  MSYS2Shell: "%NANER_ROOT%\\vendor\\msys64\\msys2_shell.cmd"
+  NodeJS: "%NANER_ROOT%\\vendor\\nodejs\\node.exe"
+  Python: "%NANER_ROOT%\\vendor\\miniconda\\python.exe"
+  Conda: "%NANER_ROOT%\\vendor\\miniconda\\Scripts\\conda.exe"
+  Go: "%NANER_ROOT%\\vendor\\go\\bin\\go.exe"
+  Rustc: "%NANER_ROOT%\\vendor\\rust\\rustc\\bin\\rustc.exe"
+  Cargo: "%NANER_ROOT%\\vendor\\rust\\cargo\\bin\\cargo.exe"
+  Ruby: "%NANER_ROOT%\\vendor\\ruby\\bin\\ruby.exe"
+  Gem: "%NANER_ROOT%\\vendor\\ruby\\bin\\gem.cmd"
+  DotNet: "%NANER_ROOT%\\vendor\\dotnet-sdk\\dotnet.exe"
+
+Environment:
+  UnifiedPath: true
+  PathPrecedence:
+    - "%NANER_ROOT%\\bin"
+    - "%NANER_ROOT%\\home\\.npm-global"
+    - "%NANER_ROOT%\\home\\go\\bin"
+    - "%NANER_ROOT%\\home\\.cargo\\bin"
+    - "%NANER_ROOT%\\home\\.gem\\bin"
+    - "%NANER_ROOT%\\vendor\\go\\bin"
+    - "%NANER_ROOT%\\vendor\\rust\\cargo\\bin"
+    - "%NANER_ROOT%\\vendor\\rust\\rustc\\bin"
+    - "%NANER_ROOT%\\vendor\\ruby\\bin"
+    - "%NANER_ROOT%\\vendor\\miniconda"
+    - "%NANER_ROOT%\\vendor\\miniconda\\Scripts"
+    - "%NANER_ROOT%\\vendor\\miniconda\\Library\\bin"
+    - "%NANER_ROOT%\\vendor\\nodejs"
+    - "%NANER_ROOT%\\vendor\\msys64\\mingw64\\bin"
+    - "%NANER_ROOT%\\vendor\\msys64\\usr\\bin"
+    - "%NANER_ROOT%\\vendor\\powershell"
+    - "%NANER_ROOT%\\vendor\\7zip"
+    - "%NANER_ROOT%\\vendor\\dotnet-sdk"
+    - "%NANER_ROOT%\\opt"
+  EnvironmentVariables:
+    NANER_ROOT: "%NANER_ROOT%"
+    HOME: "%NANER_ROOT%\\home"
+    SSH_HOME: "%NANER_ROOT%\\home\\.ssh"
+    PROFILE: "%NANER_ROOT%\\home\\.config\\powershell\\profile.ps1"
+    PSModulePath: "%NANER_ROOT%\\home\\Documents\\PowerShell\\Modules;%PSModulePath%"
+    GIT_CONFIG_GLOBAL: "%NANER_ROOT%\\home\\.gitconfig"
+    GIT_CONFIG_SYSTEM: "%NANER_ROOT%\\home\\.gitconfig"
+    NPM_CONFIG_PREFIX: "%NANER_ROOT%\\home\\.npm-global"
+    NPM_CONFIG_CACHE: "%NANER_ROOT%\\home\\.npm-cache"
+    NODE_PATH: "%NANER_ROOT%\\home\\.npm-global\\lib\\node_modules"
+    CONDA_PKGS_DIRS: "%NANER_ROOT%\\home\\.conda\\pkgs"
+    CONDA_ENVS_PATH: "%NANER_ROOT%\\home\\.conda\\envs"
+    PYTHONUSERBASE: "%NANER_ROOT%\\home\\.local"
+    GOROOT: "%NANER_ROOT%\\vendor\\go"
+    GOPATH: "%NANER_ROOT%\\home\\go"
+    GOCACHE: "%NANER_ROOT%\\home\\.cache\\go-build"
+    CARGO_HOME: "%NANER_ROOT%\\home\\.cargo"
+    RUSTUP_HOME: "%NANER_ROOT%\\home\\.rustup"
+    GEM_HOME: "%NANER_ROOT%\\home\\.gem"
+    GEM_PATH: "%NANER_ROOT%\\home\\.gem"
+    DOTNET_ROOT: "%NANER_ROOT%\\vendor\\dotnet-sdk"
+    DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    MSYSTEM: "MINGW64"
+    MSYS2_PATH_TYPE: "inherit"
+
+DefaultProfile: Unified
+
+Profiles:
+  Unified:
+    Name: "Naner (Unified)"
+    Description: "Unified environment with PowerShell, Git, and Unix tools"
+    Shell: PowerShell
+    StartingDirectory: "%USERPROFILE%"
+    Icon: "%NANER_ROOT%\\icons\\naner.ico"
+    ColorScheme: Campbell
+    UseVendorPath: true
+    CustomShell:
+      ExecutablePath: "%NANER_ROOT%\\vendor\\powershell\\pwsh.exe"
+      Arguments: "-NoExit -NoLogo -NoProfile -Command \". '%NANER_ROOT%\\home\\.config\\powershell\\profile.ps1'\""
+
+  PowerShell:
+    Name: "PowerShell 7"
+    Description: "PowerShell 7 with vendored tools in PATH"
+    Shell: PowerShell
+    StartingDirectory: "%USERPROFILE%"
+    Icon: "%NANER_ROOT%\\icons\\powershell.ico"
+    ColorScheme: Campbell
+    UseVendorPath: true
+    CustomShell:
+      ExecutablePath: "%NANER_ROOT%\\vendor\\powershell\\pwsh.exe"
+      Arguments: "-NoExit -NoLogo -NoProfile -Command \". '%NANER_ROOT%\\home\\.config\\powershell\\profile.ps1'\""
+
+  Bash:
+    Name: Bash
+    Description: "MSYS2 Bash environment"
+    Shell: Bash
+    StartingDirectory: "~"
+    Icon: "%NANER_ROOT%\\icons\\bash.ico"
+    ColorScheme: Campbell
+    UseVendorPath: true
+    CustomShell:
+      ExecutablePath: "%NANER_ROOT%\\vendor\\msys64\\usr\\bin\\bash.exe"
+      Arguments: "--login -i"
+
+  CMD:
+    Name: CMD
+    Description: "Windows Command Prompt with vendored tools"
+    Shell: CMD
+    StartingDirectory: "%USERPROFILE%"
+    Icon: "%NANER_ROOT%\\icons\\cmd.ico"
+    ColorScheme: Campbell
+    UseVendorPath: true
+    CustomShell:
+      ExecutablePath: cmd.exe
+      Arguments: /k
+
+WindowsTerminal:
+  DefaultTerminal: true
+  LaunchMode: default
+  TabTitle: Naner
+  SuppressApplicationTitle: true
+
+Advanced:
+  PreservePath: false
+  InheritSystemPath: true
+  VerboseLogging: false
+  DebugMode: false
+
+CustomProfiles: {}
