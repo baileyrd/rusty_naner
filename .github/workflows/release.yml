@@ -1,0 +1,60 @@
+# Release skeleton (Phase 0). Produces the assets the update protocol
+# requires — `naner.exe` and `naner-bundle.zip` plus the `.naner-version`
+# marker inside the bundle — with the tag == package-version check that
+# replaces the C# build script's Directory.Build.props rewrite
+# (MIGRATION_ANALYSIS §4.2).
+#
+# Publishing is DRAFT-only for now, and stays on this repo until the Phase 5
+# cutover, at which point releases must move to `baileyrd/naner` with
+# identical tag format (vX.Y.Z) and asset names or deployed naner-init.exe
+# installations strand. The bundle layout below is a placeholder; Phase 4
+# fixes it against the real first-run extraction contract.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify tag matches package version
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $meta = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+          $ver = ($meta.packages | Where-Object name -eq 'naner').version
+          if ($tag -ne $ver) {
+            throw "Tag v$tag does not match package version $ver - refusing to release (update protocol relies on tag == embedded version)"
+          }
+
+      - name: Build
+        run: cargo build --release --workspace
+
+      - name: Stage assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/bundle/vendor/bin | Out-Null
+          Copy-Item target/release/naner.exe dist/
+          Copy-Item target/release/naner.exe dist/bundle/vendor/bin/
+          Copy-Item target/release/naner-init.exe dist/bundle/vendor/bin/
+          # Written in tag form; comparisons must normalize the leading 'v'
+          # (MIGRATION_ANALYSIS bug B6 - tag form is the canonical choice).
+          Set-Content -NoNewline dist/bundle/vendor/bin/.naner-version '${{ github.ref_name }}'
+          Compress-Archive -Path dist/bundle/* -DestinationPath dist/naner-bundle.zip
+
+      - name: Draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/naner.exe
+            dist/naner-bundle.zip

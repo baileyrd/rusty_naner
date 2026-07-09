@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = ["crates/naner-core", "crates/naner", "crates/naner-init"]
+
+[workspace.package]
+# The release workflow enforces tag == this version (MIGRATION_ANALYSIS §4.2):
+# deployed naner-init.exe installations look up the GitHub release whose tag
+# matches their embedded version, so the two must never drift.
+version = "0.5.0-alpha.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/baileyrd/rusty_naner"
+
+[workspace.dependencies]
+naner-core = { path = "crates/naner-core" }
+
+[workspace.dependencies.windows-sys]
+version = "0.59"
+features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Console",
+    "Win32_Storage_FileSystem",
+]
+
+# Size-focused release profile (MIGRATION_ANALYSIS §2.3): target ~1.5–4 MB
+# per exe vs the ~11 MB trimmed .NET launcher.
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+panic = "abort"
+codegen-units = 1
