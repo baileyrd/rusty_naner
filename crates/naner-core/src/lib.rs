@@ -8,10 +8,14 @@
 //! and `version`. Phases 2–4 build the launcher, vendor pipeline, and init
 //! on top.
 
+pub mod archives;
+pub mod checksum;
 pub mod config;
 pub mod console;
 pub mod constants;
 pub mod env_export;
+pub mod http;
 pub mod logger;
 pub mod paths;
+pub mod vendors;
 pub mod version;

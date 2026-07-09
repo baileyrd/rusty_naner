@@ -29,9 +29,22 @@ Phase 1 (naner-core foundations) in progress. Done so far:
   `naner root` composable primitive. 60 tests; the full flow smoke-tested
   against a fixture tree on Linux.
 
-Next gates before Phase 3 (vendors + archives): validate the console spike's
-four launch modes and run `scripts/parity.ps1` against the C# naner.exe on a
-real Windows box.
+- **Phase 3**: the vendor pipeline — vendors.json loader (lenient JSON,
+  default-essential fallback), all six release-source resolvers with the
+  two-level fallback cascade (bugs B1/B2 preserved bug-for-bug), blocking
+  HTTP with the exact download-progress format, checksum verifier, archive
+  extractors (native zip + native tar.xz with 7z.exe fallback; 7z/msi/exe
+  shell-outs; rename-based flattening), Windows Terminal portable-mode
+  configurator with settings-preserving updates, and the real
+  `install`/`update-vendors` commands with dependency-first installs.
+  Additive Unix-philosophy surface: `install --list --porcelain` and
+  `--quiet`. 85 tests; the happy path verified live (Node.js resolved,
+  downloaded, extracted, flattened, version-stamped; re-run skips).
+
+Next: Phase 4 (`naner-init`: GitHub release client, updater, bootstrap).
+Still outstanding on a real Windows box: console-spike launch modes,
+`scripts/parity.ps1` against the C# exe, and an MSYS2-scale tar.xz
+extraction trial (symlinks/long paths, §4.3).
 
 - [MIGRATION_ANALYSIS.md](MIGRATION_ANALYSIS.md) — detailed analysis of the existing C#
   codebase and the phased migration plan.

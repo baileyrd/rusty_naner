@@ -13,12 +13,24 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 static COLOR_ENABLED: AtomicBool = AtomicBool::new(true);
+static QUIET: AtomicBool = AtomicBool::new(false);
 
 /// Disable colors (e.g. when stdout is not a terminal). The C# code always
 /// emitted color calls; making this switchable costs nothing and the default
 /// (on) matches the C# behavior.
 pub fn set_color_enabled(enabled: bool) {
     COLOR_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+/// Additive `--quiet` support (MIGRATION_ANALYSIS §2.4 tier 2): suppresses
+/// `[*]` status, `[OK]` success, and indented info chatter. Failures,
+/// warnings, and headers still print. Off by default — parity-safe.
+pub fn set_quiet(quiet: bool) {
+    QUIET.store(quiet, Ordering::Relaxed);
+}
+
+fn quiet() -> bool {
+    QUIET.load(Ordering::Relaxed)
 }
 
 fn paint(code: &str, line: &str) -> String {
@@ -31,12 +43,16 @@ fn paint(code: &str, line: &str) -> String {
 
 /// `[*]` cyan status line (stdout).
 pub fn status(message: &str) {
-    println!("{}", paint("96", &format!("[*] {message}")));
+    if !quiet() {
+        println!("{}", paint("96", &format!("[*] {message}")));
+    }
 }
 
 /// `[OK]` green success line (stdout).
 pub fn success(message: &str) {
-    println!("{}", paint("92", &format!("[OK] {message}")));
+    if !quiet() {
+        println!("{}", paint("92", &format!("[OK] {message}")));
+    }
 }
 
 /// `[✗]` red failure line (stdout — not stderr; only warnings go to stderr).
@@ -46,7 +62,9 @@ pub fn failure(message: &str) {
 
 /// Gray, 4-space-indented info line (stdout).
 pub fn info(message: &str) {
-    println!("{}", paint("37", &format!("    {message}")));
+    if !quiet() {
+        println!("{}", paint("37", &format!("    {message}")));
+    }
 }
 
 /// `[DEBUG]` yellow line (stdout), emitted only when `debug_mode`.

@@ -17,6 +17,24 @@ serde_yaml_ng = "0.10"
 indexmap = { version = "2", features = ["serde"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 thiserror = "2"
+# Blocking HTTP without an async runtime (MIGRATION_ANALYSIS §2.2: the C#
+# async is incidental; everything blocks). native-tls = schannel on Windows
+# (system cert store + proxy behavior closest to .NET, §2.3) and OpenSSL on
+# Linux; it also keeps the Windows cross-check C-free (rustls' ring backend
+# can't cross-compile from Linux).
+ureq = { version = "2", default-features = false, features = ["native-tls", "gzip"] }
+native-tls = "0.2"
+# Archive handling: native zip + tar.xz (pure Rust so the Windows cross-check
+# works); 7z/msi/exe stay shell-outs (MIGRATION_ANALYSIS §2.3).
+zip = { version = "2", default-features = false, features = ["deflate"] }
+tar = "0.4"
+lzma-rs = "0.3"
+# Checksums (SHA256/384/512/SHA1/MD5 like the C# verifier).
+sha2 = "0.10"
+sha1 = "0.10"
+md-5 = "0.10"
+# Web-scrape patterns from vendors.json are simple capture-group regexes.
+regex-lite = "0.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
