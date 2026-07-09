@@ -349,6 +349,10 @@ would duplicate policy the launcher already holds — see §6 recommendation 3.
 
 ### 5.2 rush
 
+> Full per-gap specs (current behavior with `file:line` evidence at HEAD
+> `fc13153`, targets, implementation sketches, acceptance criteria, sequencing):
+> [docs/rush-gaps.md](docs/rush-gaps.md).
+
 Two tiers, so rush can enter the ecosystem early without overpromising.
 
 **Tier 1 — "vendorable as an experimental shell"** (unblocks Level 3):
