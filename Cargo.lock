@@ -672,7 +672,10 @@ dependencies = [
 name = "naner-init"
 version = "0.5.0-alpha.0"
 dependencies = [
+ "chrono",
  "naner-core",
+ "tempfile",
+ "zip",
 ]
 
 [[package]]
