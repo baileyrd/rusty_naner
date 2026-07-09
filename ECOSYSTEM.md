@@ -379,6 +379,10 @@ own roadmap, not naner's):
 
 ### 5.3 rusty_lsp
 
+> Full per-gap specs (current behavior with `file:line` evidence at HEAD
+> `2b0a528`, targets, acceptance criteria, sequencing):
+> [docs/rusty_lsp-gaps.md](docs/rusty_lsp-gaps.md).
+
 | # | Gap | Why | Size |
 |---|---|---|---|
 | 1 | Fix the placeholder `repository` URL (`github.com/example/rusty_lsp` → `github.com/baileyrd/rusty_lsp`) | Broken metadata; blocks crates.io | S |
