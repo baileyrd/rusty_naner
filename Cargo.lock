@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "naner"
-version = "0.5.0-alpha.0"
+version = "0.5.0"
 dependencies = [
  "clap",
  "naner-core",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "naner-core"
-version = "0.5.0-alpha.0"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "indexmap",
@@ -670,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "naner-init"
-version = "0.5.0-alpha.0"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "naner-core",
