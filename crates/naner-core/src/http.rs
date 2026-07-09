@@ -106,8 +106,8 @@ impl Http for UreqHttp {
                     }
                     total_read += bytes_read as u64;
 
-                    if total_bytes > 0 {
-                        let percent = ((total_read * 100) / total_bytes) as i64;
+                    if let Some(pct) = (total_read * 100).checked_div(total_bytes) {
+                        let percent = pct as i64;
                         if percent != last_percent
                             && percent % constants::PROGRESS_UPDATE_INTERVAL as i64 == 0
                         {

@@ -29,6 +29,28 @@ pub fn normalize(version: &str) -> String {
     }
 }
 
+/// Canonical form for equality checks (fix for B5): leading `v`/`V` stripped,
+/// major/minor/patch parsed and re-emitted as exactly three components, the
+/// prerelease suffix preserved verbatim. `"1.2"` and `"1.2.0"` are canonically
+/// equal, while `"0.5.0-alpha.0"` and `"0.5.0"` are not — the updater's
+/// sync-to-embedded check must still fire across prerelease boundaries.
+pub fn canonical(version: &str) -> String {
+    let trimmed = version.trim_start_matches(['v', 'V']);
+    let (base, suffix) = match trimmed.find('-') {
+        Some(idx) if idx > 0 => (&trimmed[..idx], &trimmed[idx..]),
+        _ => (trimmed, ""),
+    };
+    let mut parts = base.split('.');
+    let mut next = || -> i64 {
+        parts
+            .next()
+            .and_then(|p| p.parse::<i64>().ok())
+            .unwrap_or(0)
+    };
+    let (major, minor, patch) = (next(), next(), next());
+    format!("{major}.{minor}.{patch}{suffix}")
+}
+
 fn parse(version: &str) -> (i64, i64, i64) {
     let normalized = normalize(version);
     let mut parts = normalized.split('.');
@@ -74,6 +96,17 @@ mod tests {
         assert_eq!(compare("1.2", "1.2.0"), Ordering::Equal);
         assert_eq!(compare("garbage", "0.0.0"), Ordering::Equal);
         assert_eq!(compare("1.x.3", "1.0.3"), Ordering::Equal);
+    }
+
+    #[test]
+    fn canonical_fixes_b5_but_keeps_prerelease_distinct() {
+        // B5: "1.2" vs "1.2.0" used to string-mismatch into a spurious update.
+        assert_eq!(canonical("1.2"), canonical("1.2.0"));
+        assert_eq!(canonical("v0.4.6"), canonical("0.4.6"));
+        // Prerelease suffixes still count — alpha -> final must sync.
+        assert_ne!(canonical("0.5.0-alpha.0"), canonical("0.5.0"));
+        assert_eq!(canonical("v0.5.0-alpha.0"), "0.5.0-alpha.0");
+        assert_eq!(canonical("garbage"), "0.0.0");
     }
 
     #[test]

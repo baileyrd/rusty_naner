@@ -94,7 +94,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 logger::warning(&format!("Failed to download {}, skipping...", vendor.name));
                 return false;
             };
-            logger::info("  Primary download failed, trying fallback version...");
+            logger::warning("  Primary download failed, trying fallback version...");
             info = fallback_info(vendor, fallback_url);
             download_path = self.download_dir.join(&info.file_name);
             logger::status(&format!("  Downloading {}...", info.file_name));
@@ -190,7 +190,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
         logger::newline();
 
         let _ = std::fs::create_dir_all(&self.download_dir);
-        for vendor in &self.vendors {
+        for vendor in dependency_order(&self.vendors) {
             self.install_vendor(&vendor.name);
             logger::newline();
         }
@@ -198,9 +198,9 @@ impl<'a> UnifiedVendorInstaller<'a> {
 
         logger::newline();
         logger::success("Vendor setup completed!");
-        logger::info(
-            "Note: MSYS2 packages (git, make, gcc) will be installed on first terminal launch",
-        );
+        // B4: the C# "MSYS2 packages will be installed on first launch" note
+        // was removed — nothing ever installed them. If pacman bootstrap is
+        // ever implemented, it belongs in a post-install hook here.
         true
     }
 
@@ -210,7 +210,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
         logger::newline();
 
         let _ = std::fs::create_dir_all(&self.download_dir);
-        for vendor in &self.vendors {
+        for vendor in dependency_order(&self.vendors) {
             self.update_vendor(&vendor.name);
             logger::newline();
         }
@@ -241,12 +241,14 @@ impl<'a> UnifiedVendorInstaller<'a> {
             Ok(Some(info)) => Some(info),
             Ok(None) => {
                 let fallback_url = vendor.fallback_url.as_deref()?;
-                logger::info("  No matching release found, using fallback URL");
+                // Tier-3: fallback use is loud (stderr) — a silently pinned
+                // old version is how B1 went unnoticed for years.
+                logger::warning("  No matching release found, using fallback URL");
                 Some(fallback_info(vendor, fallback_url))
             }
             Err(e) => {
                 logger::warning(&format!("  Failed to fetch dynamically: {e}"));
-                logger::info("  Using fallback URL");
+                logger::warning("  Using fallback URL");
                 vendor
                     .fallback_url
                     .as_deref()
@@ -283,11 +285,14 @@ impl<'a> UnifiedVendorInstaller<'a> {
         let release: GitHubRelease = serde_json::from_str(&body).map_err(|e| e.to_string())?;
         let assets = release.assets.unwrap_or_default();
 
-        // B1 preserved: substring Contains matching, case-insensitive. A
-        // glob like `*win-x64.zip` from vendors.json therefore never matches.
+        // B1 fixed: patterns containing `*`/`?` are matched as whole-name
+        // globs (case-insensitive), so `*win-x64.zip` from vendors.json now
+        // works. Wildcard-free patterns keep the C# substring semantics the
+        // built-in defaults rely on (`win-x64.zip`, `Microsoft.WindowsTerminal_`).
         let matches = |name: &str, pattern: &Option<String>| match pattern {
             None => true,
             Some(p) if p.is_empty() => true,
+            Some(p) if p.contains(['*', '?']) => glob_matches(name, p),
             Some(p) => name.to_lowercase().contains(&p.to_lowercase()),
         };
         let asset = assets.iter().find(|a| {
@@ -537,6 +542,37 @@ fn file_name_of(url: &str) -> String {
     url.rsplit(['/', '\\']).next().unwrap_or(url).to_string()
 }
 
+/// Whole-name, case-insensitive glob match (`*` = any run, `?` = any char).
+/// Everything else is matched literally (fix for B1). Classic two-pointer
+/// backtracking matcher — no regex, no escaping edge cases.
+fn glob_matches(name: &str, pattern: &str) -> bool {
+    let name: Vec<char> = name.to_lowercase().chars().collect();
+    let pat: Vec<char> = pattern.to_lowercase().chars().collect();
+    let (mut n, mut p) = (0usize, 0usize);
+    let (mut star, mut restart) = (None::<usize>, 0usize);
+
+    while n < name.len() {
+        if p < pat.len() && (pat[p] == '?' || pat[p] == name[n]) {
+            n += 1;
+            p += 1;
+        } else if p < pat.len() && pat[p] == '*' {
+            star = Some(p);
+            restart = n;
+            p += 1;
+        } else if let Some(s) = star {
+            p = s + 1;
+            restart += 1;
+            n = restart;
+        } else {
+            return false;
+        }
+    }
+    while p < pat.len() && pat[p] == '*' {
+        p += 1;
+    }
+    p == pat.len()
+}
+
 /// `ExtractVersionFromFileName`: first `(\d+\.?\d*\.?\d*\.?\d*)` match, else
 /// "latest".
 fn version_from_file_name(file_name: &str) -> String {
@@ -546,6 +582,34 @@ fn version_from_file_name(file_name: &str) -> String {
         .and_then(|c| c.get(1))
         .map(|m| m.as_str().to_string())
         .unwrap_or_else(|| "latest".to_string())
+}
+
+/// Dependency-first ordering (fix for B3): repeatedly emit the first vendor
+/// whose dependencies (matched by key or name, case-insensitive) are either
+/// already emitted or not present in the set at all. Cycles degrade to the
+/// original order for the remainder — never an infinite loop, never a panic.
+fn dependency_order(vendors: &[VendorDefinition]) -> Vec<&VendorDefinition> {
+    let matches_dep = |v: &VendorDefinition, dep: &str| {
+        v.key.eq_ignore_ascii_case(dep) || v.name.eq_ignore_ascii_case(dep)
+    };
+    let mut ordered: Vec<&VendorDefinition> = Vec::new();
+    let mut remaining: Vec<&VendorDefinition> = vendors.iter().collect();
+    while !remaining.is_empty() {
+        let ready = remaining.iter().position(|v| {
+            v.dependencies.iter().all(|dep| {
+                ordered.iter().any(|o| matches_dep(o, dep))
+                    || !remaining.iter().any(|r| matches_dep(r, dep))
+            })
+        });
+        match ready {
+            Some(i) => ordered.push(remaining.remove(i)),
+            None => {
+                // Dependency cycle: fall back to the given order.
+                ordered.append(&mut remaining);
+            }
+        }
+    }
+    ordered
 }
 
 fn dir_is_nonempty(dir: &Path) -> bool {
@@ -616,7 +680,7 @@ mod tests {
             source_type: VendorSourceType::GitHub,
             github_owner: Some("PowerShell".into()),
             github_repo: Some("PowerShell".into()),
-            asset_pattern: Some("*win-x64.zip".into()), // glob → B1 territory
+            asset_pattern: Some("*win-x64.zip".into()), // glob — matches since the B1 fix
             fallback_url: Some("https://fallback.example/PowerShell-7.4.6-win-x64.zip".into()),
             fallback_version: Some("7.4.6".into()),
             fallback_file_name: Some("PowerShell-7.4.6-win-x64.zip".into()),
@@ -633,16 +697,17 @@ mod tests {
     }"#;
 
     #[test]
-    fn bug_b1_glob_pattern_never_matches_so_fallback_wins() {
+    fn b1_fixed_glob_pattern_matches_release_asset() {
         let root = tempfile::tempdir().unwrap();
         let mut http = StubHttp::default();
         http.text.insert(
             "https://api.github.com/repos/PowerShell/PowerShell/releases/latest".into(),
             (200, RELEASE_JSON.into()),
         );
-        // Only the FALLBACK download is routable — proving resolution chose it.
+        // Only the PRIMARY asset download is routable — proving the glob
+        // `*win-x64.zip` resolved the release asset instead of falling back.
         http.files.insert(
-            "https://fallback.example/PowerShell-7.4.6-win-x64.zip".into(),
+            "https://gh.example/PowerShell-7.5.0-win-x64.zip".into(),
             zip_bytes("pwsh.exe", b"fake"),
         );
 
@@ -653,8 +718,51 @@ mod tests {
         assert!(target.join("pwsh.exe").is_file());
         assert_eq!(
             std::fs::read_to_string(target.join(".vendor-version")).unwrap(),
-            "7.4.6"
+            "v7.5.0"
         );
+    }
+
+    #[test]
+    fn glob_matcher_semantics() {
+        assert!(glob_matches("PowerShell-7.5.0-win-x64.zip", "*win-x64.zip"));
+        assert!(glob_matches("7z2602-x64.msi", "7z*-x64.msi"));
+        assert!(glob_matches(
+            "Microsoft.WindowsTerminal_1.21_x64.zip",
+            "microsoft.windowsterminal_*_x64.zip"
+        ));
+        // Whole-name semantics: no implicit substring.
+        assert!(!glob_matches(
+            "PowerShell-7.5.0-win-x64.zip.sha256",
+            "*win-x64.zip"
+        ));
+        assert!(!glob_matches("7z2602-arm64.msi", "7z*-x64.msi"));
+        assert!(glob_matches("abc", "a?c"));
+        assert!(!glob_matches("abbc", "a?c"));
+    }
+
+    #[test]
+    fn b3_dependency_order_puts_dependencies_first() {
+        let dep = |name: &str, deps: &[&str]| VendorDefinition {
+            name: name.into(),
+            key: name.into(),
+            dependencies: deps.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        };
+        // Node depends on SevenZip which comes later in the given order.
+        let vendors = vec![
+            dep("Node", &["SevenZip"]),
+            dep("Terminal", &[]),
+            dep("SevenZip", &[]),
+        ];
+        let order: Vec<&str> = dependency_order(&vendors)
+            .iter()
+            .map(|v| v.name.as_str())
+            .collect();
+        assert_eq!(order, vec!["Terminal", "SevenZip", "Node"]);
+
+        // A cycle degrades to the given order instead of hanging.
+        let cyclic = vec![dep("A", &["B"]), dep("B", &["A"])];
+        assert_eq!(dependency_order(&cyclic).len(), 2);
     }
 
     #[test]

@@ -6,8 +6,8 @@
 #
 # Publishes to `baileyrd/naner` (identical tag format vX.Y.Z and asset names,
 # or deployed naner-init.exe installations strand) via the NANER_RELEASE_TOKEN
-# PAT secret. Prerelease-only until the remaining VALIDATION.md gates pass
-# (parity harness vs C#, manual console modes, staged first-run).
+# PAT secret. Full releases since the v0.5.0-alpha.0 cutover (validation
+# gates signed off 2026-07-09).
 #
 # Bundle layout mirrors the C# first-run extraction contract; the static
 # files (bin/, config/, home/, icons/, naner.bat) are vendored from
@@ -59,12 +59,11 @@ jobs:
           Set-Content -Path dist/bundle/vendor/bin/.naner-version -Value '${{ github.ref_name }}' -NoNewline
           Compress-Archive -Path dist/bundle/* -DestinationPath dist/naner-bundle.zip
 
-      - name: Publish prerelease to baileyrd/naner
+      - name: Publish release to baileyrd/naner
         uses: softprops/action-gh-release@v2
         with:
           repository: baileyrd/naner
           token: ${{ secrets.NANER_RELEASE_TOKEN }}
-          prerelease: true
           files: |
             dist/naner.exe
             dist/naner-init.exe
