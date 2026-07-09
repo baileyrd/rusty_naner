@@ -21,7 +21,7 @@ pub use loader::{ConfigError, find_configuration_file, load};
 pub use validator::{ValidationReport, validate};
 pub use yaml::load_yaml;
 
-use indexmap::IndexMap;
+pub use indexmap::IndexMap;
 use serde::Deserialize;
 
 /// Root configuration model (`NanerConfig`), mapping `config/naner.json`.

@@ -21,8 +21,17 @@ Phase 1 (naner-core foundations) in progress. Done so far:
   and `env_export` (powershell/bash/cmd formats) — 50 unit tests, all
   pure-logic and green on Linux and the Windows cross-check.
 
-Next: Phase 2, the launcher MVP (clap CLI, diagnostics, `--export-env`
-end-to-end, terminal launch).
+- **Phase 2**: the launcher MVP — two-layer CLI dispatch (router verbs, then
+  clap launch options), `--version`/`--help`/`--diagnose` with verbatim C#
+  output, first-run detection and message, `--export-env`/`--setup-only`
+  end-to-end, the `TerminalLauncher` port (wt.exe discovery chain,
+  string-identical argument building, fire-and-forget spawn), and the additive
+  `naner root` composable primitive. 60 tests; the full flow smoke-tested
+  against a fixture tree on Linux.
+
+Next gates before Phase 3 (vendors + archives): validate the console spike's
+four launch modes and run `scripts/parity.ps1` against the C# naner.exe on a
+real Windows box.
 
 - [MIGRATION_ANALYSIS.md](MIGRATION_ANALYSIS.md) — detailed analysis of the existing C#
   codebase and the phased migration plan.

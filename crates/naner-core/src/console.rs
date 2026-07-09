@@ -28,14 +28,6 @@
 //! run on a real Windows box): launched from a shell, double-clicked, piped
 //! (`| more`), and redirected to a file — for both binaries.
 
-/// Which binary is asking. The two exes have different command surfaces and
-/// therefore different "needs a console" decisions.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Exe {
-    Naner,
-    NanerInit,
-}
-
 /// How this process ended up with (or without) a console.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConsoleState {
@@ -59,27 +51,16 @@ impl ConsoleState {
     }
 }
 
-/// Decide from the first argument whether this invocation writes to a
-/// console. Mirrors the C# per-exe command lists: every sub-command and every
-/// launch that prints status needs one; the bare launcher path does too (it
-/// logs `[*]` progress before spawning the terminal).
-///
-/// The exact lists get refined against golden outputs in Phase 2; the shape
-/// (per-exe, keyed on a case-insensitive `args[0]`) is the contract.
-pub fn needs_console(exe: Exe, args: &[String]) -> bool {
-    let first = args.first().map(|s| s.to_ascii_lowercase());
-    match exe {
-        // Every current naner code path emits console output (even a plain
-        // launch logs status), so the launcher always wants a console — the
-        // redirection check in `setup` is what keeps pipelines clean.
-        Exe::Naner => true,
-        // naner-init: everything except a bare pass-through launch prints.
-        // A bare launch also prints ("[*] Starting naner..."), so: always.
-        Exe::NanerInit => {
-            let _ = first;
-            true
-        }
-    }
+/// Port of `ConsoleManager.NeedsConsole`: true when `args[0]` (lowercased)
+/// matches one of the exe's console commands. Each binary owns its command
+/// list and ORs in its extra conditions (first-run, `--debug`,
+/// `--export-env`) exactly as its C# `Main` did.
+pub fn arg_needs_console(args: &[String], console_commands: &[&str]) -> bool {
+    let Some(first) = args.first() else {
+        return false;
+    };
+    let first = first.to_lowercase();
+    console_commands.iter().any(|c| first == c.to_lowercase())
 }
 
 /// Prepare the console per the contract above and report how it went.
@@ -225,22 +206,15 @@ mod tests {
     }
 
     #[test]
-    fn naner_always_wants_a_console() {
-        for case in [
-            args(&[]),
-            args(&["--version"]),
-            args(&["--export-env"]),
-            args(&["INSTALL", "--list"]),
-        ] {
-            assert!(needs_console(Exe::Naner, &case), "case: {case:?}");
-        }
-    }
-
-    #[test]
-    fn naner_init_always_wants_a_console() {
-        for case in [args(&[]), args(&["update"]), args(&["--version"])] {
-            assert!(needs_console(Exe::NanerInit, &case), "case: {case:?}");
-        }
+    fn first_arg_is_matched_case_insensitively() {
+        let commands = ["--version", "-v", "install"];
+        assert!(arg_needs_console(&args(&["--version"]), &commands));
+        assert!(arg_needs_console(&args(&["INSTALL", "--list"]), &commands));
+        assert!(!arg_needs_console(
+            &args(&["--profile", "install"]),
+            &commands
+        ));
+        assert!(!arg_needs_console(&args(&[]), &commands));
     }
 
     #[test]

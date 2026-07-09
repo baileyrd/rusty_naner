@@ -5,13 +5,26 @@
 
 use std::io::BufRead;
 
-use naner_core::console::{self, Exe};
+use naner_core::console;
+
+/// `InitCommandNames.ConsoleCommands`. In C# the actual attach decision also
+/// happens on first output for pass-through launches; Phase 4 refines this
+/// against the real Program.cs flow.
+const CONSOLE_COMMANDS: [&str; 7] = [
+    "--version",
+    "-v",
+    "--help",
+    "-h",
+    "init",
+    "update",
+    "check-update",
+];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     // Console setup must precede any output (MIGRATION_ANALYSIS §4.1).
-    let state = console::setup(console::needs_console(Exe::NanerInit, &args));
+    let state = console::setup(console::arg_needs_console(&args, &CONSOLE_COMMANDS));
 
     let code = match args.first().map(|s| s.to_ascii_lowercase()).as_deref() {
         Some("--version") | Some("-v") => {

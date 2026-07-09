@@ -8,6 +8,10 @@
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub const PRODUCT_NAME: &str = "Naner Terminal Launcher";
+/// C# says "Pure C# Implementation"; keeping the structure but telling the
+/// truth is a deliberate, visible divergence (the version number on the same
+/// screen already differs during the migration).
+pub const PHASE_NAME: &str = "Production Release - Pure Rust Implementation";
 
 pub const INITIALIZATION_MARKER_FILE: &str = ".naner-initialized";
 pub const VERSION_FILE: &str = ".naner-version";
