@@ -1,0 +1,10 @@
+[package]
+name = "naner-init"
+description = "Bootstrapper/updater for the naner terminal environment"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+naner-core.workspace = true

@@ -5,7 +5,12 @@ environment launcher for Windows.
 
 ## Status
 
-Planning.
+Phase 0 (scaffolding + console spike) in progress: Cargo workspace with
+`naner-core` / `naner` / `naner-init`, the Windows console attach/alloc/
+pipe-detection spike, CI (fmt + clippy + test on Linux and Windows), a draft
+release workflow with the tag == version guard, and the golden-parity harness
+(`scripts/parity.ps1`). The console spike still needs manual validation of the
+four launch modes on a real Windows box before Phase 1 work lands on top of it.
 
 - [MIGRATION_ANALYSIS.md](MIGRATION_ANALYSIS.md) — detailed analysis of the existing C#
   codebase and the phased migration plan.

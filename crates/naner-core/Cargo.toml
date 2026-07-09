@@ -1,0 +1,10 @@
+[package]
+name = "naner-core"
+description = "Shared library for the naner launcher and bootstrapper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
