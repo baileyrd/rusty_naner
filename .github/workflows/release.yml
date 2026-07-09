@@ -1,14 +1,17 @@
-# Release skeleton (Phase 0). Produces the assets the update protocol
-# requires — `naner.exe` and `naner-bundle.zip` plus the `.naner-version`
-# marker inside the bundle — with the tag == package-version check that
-# replaces the C# build script's Directory.Build.props rewrite
+# Release (Phase 5 cutover). Produces the assets the update protocol
+# requires — `naner.exe`, `naner-init.exe`, and `naner-bundle.zip` with the
+# `.naner-version` marker inside the bundle — with the tag == package-version
+# check that replaces the C# build script's Directory.Build.props rewrite
 # (MIGRATION_ANALYSIS §4.2).
 #
-# Publishing is DRAFT-only for now, and stays on this repo until the Phase 5
-# cutover, at which point releases must move to `baileyrd/naner` with
-# identical tag format (vX.Y.Z) and asset names or deployed naner-init.exe
-# installations strand. The bundle layout below is a placeholder; Phase 4
-# fixes it against the real first-run extraction contract.
+# Publishes to `baileyrd/naner` (identical tag format vX.Y.Z and asset names,
+# or deployed naner-init.exe installations strand) via the NANER_RELEASE_TOKEN
+# PAT secret. Prerelease-only until the remaining VALIDATION.md gates pass
+# (parity harness vs C#, manual console modes, staged first-run).
+#
+# Bundle layout mirrors the C# first-run extraction contract; the static
+# files (bin/, config/, home/, icons/, naner.bat) are vendored from
+# baileyrd/naner into dist-assets/.
 
 name: Release
 
@@ -43,18 +46,26 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist/bundle/vendor/bin | Out-Null
+          # Static bundle content vendored from baileyrd/naner.
+          Copy-Item dist-assets/* dist/bundle/ -Recurse
           Copy-Item target/release/naner.exe dist/
+          Copy-Item target/release/naner-init.exe dist/
           Copy-Item target/release/naner.exe dist/bundle/vendor/bin/
           Copy-Item target/release/naner-init.exe dist/bundle/vendor/bin/
           # Written in tag form; comparisons must normalize the leading 'v'
           # (MIGRATION_ANALYSIS bug B6 - tag form is the canonical choice).
-          Set-Content -NoNewline dist/bundle/vendor/bin/.naner-version '${{ github.ref_name }}'
+          # Named parameters required: positional Set-Content binds the value
+          # as the filename and silently skips the target path.
+          Set-Content -Path dist/bundle/vendor/bin/.naner-version -Value '${{ github.ref_name }}' -NoNewline
           Compress-Archive -Path dist/bundle/* -DestinationPath dist/naner-bundle.zip
 
-      - name: Draft release
+      - name: Publish prerelease to baileyrd/naner
         uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          repository: baileyrd/naner
+          token: ${{ secrets.NANER_RELEASE_TOKEN }}
+          prerelease: true
           files: |
             dist/naner.exe
+            dist/naner-init.exe
             dist/naner-bundle.zip

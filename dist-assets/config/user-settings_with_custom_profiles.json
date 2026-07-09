@@ -1,0 +1,22 @@
+{
+    "DefaultProfile": "PowerShell",
+    "StartupDir": null,
+    "WindowsTerminalPath": "%LOCALAPPDATA%\\Microsoft\\WindowsApps\\wt.exe",
+    "CustomProfiles": {
+        "PowerShell7": {
+            "ShellPath": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+            "Arguments": "-NoLogo",
+            "Title": "PowerShell 7"
+        },
+        "PowerShellPreview": {
+            "ShellPath": "%ProgramFiles%\\PowerShell\\7-preview\\pwsh.exe",
+            "Arguments": "-NoLogo",
+            "Title": "PowerShell Preview"
+        },
+        "CustomPwsh": {
+            "ShellPath": "%USERPROFILE%\\CustomApps\\PowerShell\\pwsh.exe",
+            "Arguments": "-NoLogo -NoExit -Command \"Write-Host 'Custom PowerShell!' -ForegroundColor Cyan\"",
+            "Title": "My Custom PowerShell"
+        }
+    }
+}

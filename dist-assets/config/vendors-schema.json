@@ -1,0 +1,182 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://naner.dev/schemas/vendors.json",
+  "title": "Naner Vendor Configuration Schema",
+  "description": "Schema for Naner vendor dependency configuration",
+  "type": "object",
+  "required": ["version", "vendors"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Configuration file version (semver)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of this configuration file"
+    },
+    "vendors": {
+      "type": "object",
+      "description": "Vendor dependency definitions",
+      "patternProperties": {
+        "^[A-Z][A-Za-z0-9]+$": {
+          "$ref": "#/definitions/vendor"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Configuration metadata",
+      "properties": {
+        "createdDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "lastModified": {
+          "type": "string",
+          "format": "date"
+        },
+        "configVersion": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "vendor": {
+      "type": "object",
+      "required": ["name", "extractDir", "enabled", "releaseSource"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name of the vendor"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of what this vendor provides"
+        },
+        "extractDir": {
+          "type": "string",
+          "description": "Directory name within vendor/ where this will be extracted"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this vendor should be installed by default"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this vendor is required for Naner to function"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of vendor IDs that must be installed before this one"
+        },
+        "releaseSource": {
+          "$ref": "#/definitions/releaseSource"
+        },
+        "postInstallFunction": {
+          "type": "string",
+          "description": "Name of the PostInstall function to execute after extraction"
+        },
+        "installType": {
+          "type": "string",
+          "enum": ["archive", "installer"],
+          "description": "Type of installation (archive extraction or installer execution)"
+        },
+        "installerArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Arguments to pass to installer (if installType is 'installer')"
+        },
+        "packages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of packages to install (vendor-specific, e.g., MSYS2 packages)"
+        }
+      }
+    },
+    "releaseSource": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["github", "web-scrape", "static", "golang-api"],
+          "description": "Type of release source"
+        },
+        "repo": {
+          "type": "string",
+          "description": "GitHub repository (owner/repo) for type: github"
+        },
+        "assetPattern": {
+          "type": "string",
+          "description": "Pattern to match release assets for type: github"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL to fetch release information or download file"
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern to extract version/URL from web page for type: web-scrape"
+        },
+        "version": {
+          "type": "string",
+          "description": "Static version string for type: static"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Static filename for type: static"
+        },
+        "size": {
+          "type": "string",
+          "description": "Approximate download size (e.g., '~50' for ~50MB)"
+        },
+        "fallback": {
+          "$ref": "#/definitions/fallback"
+        }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "required": ["version", "url", "fileName"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Fallback version to use if API/scraping fails"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Direct download URL for fallback"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Filename of the fallback download"
+        },
+        "size": {
+          "type": "string",
+          "description": "Approximate download size"
+        }
+      }
+    }
+  }
+}

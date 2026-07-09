@@ -1,0 +1,87 @@
+{
+    "$help": "https://aka.ms/terminal-documentation",
+    "$schema": "https://aka.ms/terminal-profiles-schema",
+    "actions": [],
+    "copyFormatting": "none",
+    "copyOnSelect": false,
+    "defaultProfile": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+    "keybindings": [
+        {
+            "id": "Terminal.CopyToClipboard",
+            "keys": "ctrl+c"
+        },
+        {
+            "id": "Terminal.PasteFromClipboard",
+            "keys": "ctrl+v"
+        },
+        {
+            "id": "Terminal.FindText",
+            "keys": "ctrl+shift+f"
+        },
+        {
+            "id": "Terminal.DuplicatePaneAuto",
+            "keys": "alt+shift+d"
+        }
+    ],
+    "newTabMenu": [
+        {
+            "type": "remainingProfiles"
+        }
+    ],
+    "profiles": {
+        "defaults": {},
+        "list": [
+            {
+                "colorScheme": "Campbell",
+                "commandline": "C:\\tools\\cmd_line\\naner\\vendor\\powershell\\pwsh.exe -NoProfile -NoExit -EncodedCommand JgAgACcAQwA6AFwAdABvAG8AbABzAFwAYwBtAGQAXwBsAGkAbgBlAFwAbgBhAG4AZQByAFwAdgBlAG4AZABvAHIAXABiAGkAbgBcAG4AYQBuAGUAcgAuAGUAeABlACcAIAAtAC0AZQB4AHAAbwByAHQALQBlAG4AdgAgAC0ALQBuAG8ALQBjAG8AbQBtAGUAbgB0AHMAIAB8ACAASQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuADsAIAAuACAAIgAkAGUAbgB2ADoATgBBAE4ARQBSAF8AUgBPAE8AVABcAGgAbwBtAGUAXAAuAGMAbwBuAGYAaQBnAFwAcABvAHcAZQByAHMAaABlAGwAbABcAHAAcgBvAGYAaQBsAGUALgBwAHMAMQAiAA==",
+                "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}",
+                "hidden": false,
+                // "icon": "C:\\tools\\cmd_line\\naner\\icons\\naner.ico",
+                "icon": "C:\\tools\\cmd_line\\naner\\icons\\icon.png",
+                "name": "Naner (Unified)",
+                "startingDirectory": "%USERPROFILE%"
+            },
+            {
+                "colorScheme": "Campbell",
+                "commandline": "C:\\tools\\cmd_line\\naner\\vendor\\powershell\\pwsh.exe -NoProfile -NoExit -EncodedCommand JgAgACcAQwA6AFwAdABvAG8AbABzAFwAYwBtAGQAXwBsAGkAbgBlAFwAbgBhAG4AZQByAFwAdgBlAG4AZABvAHIAXABiAGkAbgBcAG4AYQBuAGUAcgAuAGUAeABlACcAIAAtAC0AZQB4AHAAbwByAHQALQBlAG4AdgAgAC0ALQBuAG8ALQBjAG8AbQBtAGUAbgB0AHMAIAB8ACAASQBuAHYAbwBrAGUALQBFAHgAcAByAGUAcwBzAGkAbwBuAA==",
+                "guid": "{574e775e-4f2a-5b96-ac1e-a2962a402336}",
+                "hidden": false,
+                "icon": "C:\\tools\\cmd_line\\naner\\icons\\powershell.ico",
+                "name": "Naner PowerShell",
+                "startingDirectory": "%USERPROFILE%"
+            },
+            {
+                "colorScheme": "Campbell",
+                "commandline": "\"C:\\tools\\cmd_line\\naner\\vendor\\msys64\\usr\\bin\\bash.exe\" --login -i",
+                "guid": "{2c4de342-38b7-51cf-b940-2309a097f518}",
+                "hidden": false,
+                "icon": "C:\\tools\\cmd_line\\naner\\icons\\bash.ico",
+                "name": "Naner Bash",
+                "startingDirectory": "~"
+            },
+            {
+                "colorScheme": "Campbell",
+                "commandline": "cmd.exe /k",
+                "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+                "hidden": false,
+                "icon": "C:\\tools\\cmd_line\\naner\\icons\\cmd.ico",
+                "name": "Naner CMD",
+                "startingDirectory": "%USERPROFILE%"
+            },
+            {
+                "guid": "{b453ae62-4e3d-5e58-b989-0a998ec441b8}",
+                "hidden": false,
+                "name": "Azure Cloud Shell",
+                "source": "Windows.Terminal.Azure"
+            },
+            {
+                "guid": "{08ca958b-5e7f-5c01-aa23-824a29bfbc2c}",
+                "hidden": false,
+                "name": "podman-machine-default",
+                "source": "Microsoft.WSL"
+            }
+        ]
+    },
+    "schemes": [],
+    "themes": []
+}

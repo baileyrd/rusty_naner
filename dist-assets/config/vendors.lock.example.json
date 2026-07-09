@@ -1,0 +1,106 @@
+{
+  "version": "1.0.0",
+  "generated": "2026-01-07T12:00:00Z",
+  "nanerVersion": "1.0.0",
+  "platform": {
+    "os": "Microsoft Windows 10.0.22631",
+    "psVersion": "7.4.6",
+    "architecture": "X64"
+  },
+  "vendors": {
+    "SevenZip": {
+      "name": "7-Zip",
+      "version": "24.08",
+      "url": "https://www.7-zip.org/a/7z2408-x64.msi",
+      "fileName": "7z2408-x64.msi",
+      "size": "~2",
+      "installed": true,
+      "installedDate": "2026-01-07T10:30:00Z",
+      "extractDir": "7zip",
+      "sha256": "abc123def456789...example-hash"
+    },
+    "PowerShell": {
+      "name": "PowerShell",
+      "version": "7.4.6",
+      "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip",
+      "fileName": "PowerShell-7.4.6-win-x64.zip",
+      "size": "~100",
+      "installed": true,
+      "installedDate": "2026-01-07T10:32:00Z",
+      "extractDir": "powershell",
+      "sha256": "xyz789abc123456...example-hash"
+    },
+    "WindowsTerminal": {
+      "name": "Windows Terminal",
+      "version": "1.21.2361.0",
+      "url": "https://github.com/microsoft/terminal/releases/download/v1.21.2361.0/Microsoft.WindowsTerminal_Win10_1.21.2361.0_8wekyb3d8bbwe.msixbundle",
+      "fileName": "Microsoft.WindowsTerminal_Win10_1.21.2361.0_8wekyb3d8bbwe.msixbundle",
+      "size": "~20",
+      "installed": true,
+      "installedDate": "2026-01-07T10:35:00Z",
+      "extractDir": "terminal",
+      "sha256": "def456xyz789123...example-hash"
+    },
+    "MSYS2": {
+      "name": "MSYS2",
+      "version": "2024-01-13",
+      "url": "https://repo.msys2.org/distrib/msys2-x86_64-20240113.tar.xz",
+      "fileName": "msys2-x86_64-20240113.tar.xz",
+      "size": "~80",
+      "installed": true,
+      "installedDate": "2026-01-07T10:40:00Z",
+      "extractDir": "msys64",
+      "sha256": "123xyz456abc789...example-hash"
+    },
+    "NodeJS": {
+      "name": "Node.js",
+      "version": "20.11.0",
+      "url": "https://nodejs.org/dist/v20.11.0/node-v20.11.0-win-x64.zip",
+      "fileName": "node-v20.11.0-win-x64.zip",
+      "size": "~30",
+      "installed": true,
+      "installedDate": "2026-01-07T10:45:00Z",
+      "extractDir": "nodejs"
+    },
+    "Miniconda": {
+      "name": "Miniconda Python",
+      "version": "latest",
+      "url": "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe",
+      "fileName": "Miniconda3-latest-Windows-x86_64.exe",
+      "size": "~90",
+      "installed": true,
+      "installedDate": "2026-01-07T10:50:00Z",
+      "extractDir": "miniconda"
+    },
+    "Go": {
+      "name": "Go",
+      "version": "1.21.5",
+      "url": "https://go.dev/dl/go1.21.5.windows-amd64.zip",
+      "fileName": "go1.21.5.windows-amd64.zip",
+      "size": "~130",
+      "installed": true,
+      "installedDate": "2026-01-07T10:55:00Z",
+      "extractDir": "go"
+    },
+    "Rust": {
+      "name": "Rust",
+      "version": "latest",
+      "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe",
+      "fileName": "rustup-init.exe",
+      "size": "~10",
+      "installed": true,
+      "installedDate": "2026-01-07T11:00:00Z",
+      "extractDir": "rust"
+    },
+    "Ruby": {
+      "name": "Ruby",
+      "version": "3.3.6-1",
+      "url": "https://github.com/oneclick/rubyinstaller2/releases/download/RubyInstaller-3.3.6-1/rubyinstaller-3.3.6-1-x64.7z",
+      "fileName": "rubyinstaller-3.3.6-1-x64.7z",
+      "size": "~15",
+      "installed": true,
+      "installedDate": "2026-01-07T11:05:00Z",
+      "extractDir": "ruby"
+    }
+  }
+}

@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Naner Plugin Manifest",
+  "description": "Schema for Naner plugin manifest (plugin.json)",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "description",
+    "author"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique plugin identifier (lowercase, hyphen-separated)",
+      "pattern": "^[a-z0-9-]+$",
+      "examples": [
+        "java-jdk",
+        "dotnet-sdk",
+        "postgres-client"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-readable plugin name"
+    },
+    "version": {
+      "type": "string",
+      "description": "Plugin version (semver format)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "examples": [
+        "1.0.0",
+        "2.1.3"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of the plugin"
+    },
+    "author": {
+      "type": "string",
+      "description": "Plugin author name or organization"
+    },
+    "homepage": {
+      "type": "string",
+      "description": "Plugin homepage or repository URL",
+      "format": "uri"
+    },
+    "license": {
+      "type": "string",
+      "description": "Plugin license (SPDX identifier)",
+      "examples": [
+        "MIT",
+        "Apache-2.0",
+        "GPL-3.0"
+      ]
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether the plugin is currently enabled",
+      "default": false
+    },
+    "nanerVersion": {
+      "type": "string",
+      "description": "Minimum required Naner version (semver)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "dependencies": {
+      "type": "array",
+      "description": "List of required plugin dependencies",
+      "items": {
+        "type": "string"
+      },
+      "examples": [
+        ["base-tools"],
+        ["java-jdk", "maven"]
+      ]
+    },
+    "vendors": {
+      "type": "array",
+      "description": "Vendor dependencies to install",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "extractDir",
+          "releaseSource"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "extractDir": {
+            "type": "string"
+          },
+          "releaseSource": {
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "github",
+                  "web-scrape",
+                  "static"
+                ]
+              },
+              "repo": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              },
+              "assetPattern": {
+                "type": "string"
+              },
+              "pattern": {
+                "type": "string"
+              },
+              "fallback": {
+                "type": "object"
+              }
+            }
+          },
+          "postInstallFunction": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Environment variables and PATH modifications",
+      "properties": {
+        "variables": {
+          "type": "object",
+          "description": "Environment variables to set",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "pathPrecedence": {
+          "type": "array",
+          "description": "Paths to add to PATH (in order)",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Available plugin hooks",
+      "properties": {
+        "install": {
+          "type": "boolean",
+          "description": "Has install.ps1 hook"
+        },
+        "uninstall": {
+          "type": "boolean",
+          "description": "Has uninstall.ps1 hook"
+        },
+        "enable": {
+          "type": "boolean",
+          "description": "Has enable.ps1 hook"
+        },
+        "disable": {
+          "type": "boolean",
+          "description": "Has disable.ps1 hook"
+        },
+        "envSetup": {
+          "type": "boolean",
+          "description": "Has env-setup.ps1 hook"
+        }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "description": "Plugin-specific configuration options",
+      "additionalProperties": true
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tags for categorization and search",
+      "items": {
+        "type": "string"
+      },
+      "examples": [
+        ["java", "jvm", "development"],
+        ["database", "postgresql", "client"]
+      ]
+    }
+  }
+}
