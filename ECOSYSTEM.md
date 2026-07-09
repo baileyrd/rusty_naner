@@ -326,6 +326,10 @@ Priority-ordered per project. Size guesses: S < 1 day, M = days, L = a week+.
 
 ### 5.1 rusty_term
 
+> Full per-gap specs (current behavior with `file:line` evidence at HEAD
+> `78a5a92`, targets, implementation sketches, acceptance criteria, sequencing):
+> [docs/rusty_term-gaps.md](docs/rusty_term-gaps.md).
+
 | # | Gap | Why it matters | Unblocks | Size |
 |---|---|---|---|---|
 | 1 | `--cwd <dir>` (or `--starting-directory`): plumb through `Backend::spawn_shell` and pass to `CreateProcessW`'s `lpCurrentDirectory` / chdir-after-fork | The launcher contract's biggest hole; profile `StartingDirectory` is core naner behavior | Level 1 | S–M |
