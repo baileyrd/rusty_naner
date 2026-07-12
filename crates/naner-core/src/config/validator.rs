@@ -140,6 +140,22 @@ fn validate_profile(
         }
     }
 
+    // Additive check: `Terminal` has no C# counterpart; absent/empty means
+    // Windows Terminal, unknown values warn (like nonstandard Shell values).
+    if let Some(terminal) = &profile.terminal
+        && !terminal.trim().is_empty()
+    {
+        const VALID_TERMINALS: [&str; 2] = ["WindowsTerminal", "RustyTerm"];
+        if !VALID_TERMINALS
+            .iter()
+            .any(|t| t.eq_ignore_ascii_case(terminal))
+        {
+            report.warnings.push(format!(
+                "{prefix}.Terminal '{terminal}' is not a recognized terminal type (WindowsTerminal, RustyTerm)"
+            ));
+        }
+    }
+
     if profile.starting_directory.trim().is_empty() {
         report
             .errors
@@ -299,6 +315,43 @@ mod tests {
                 .iter()
                 .any(|w| w.contains("'rush' is not a standard shell type"))
         );
+    }
+
+    #[test]
+    fn unknown_terminal_is_a_warning_not_error() {
+        let config = load_json(
+            r#"{
+                "DefaultProfile": "T",
+                "Profiles": { "T": { "Name": "T", "Shell": "PowerShell", "Terminal": "Kitty" } }
+            }"#,
+        )
+        .unwrap();
+        let report = validate(&config, "/root");
+        assert!(report.is_valid());
+        assert!(report.warnings.contains(
+            &"Profiles[T].Terminal 'Kitty' is not a recognized terminal type (WindowsTerminal, RustyTerm)"
+                .to_string()
+        ));
+    }
+
+    #[test]
+    fn recognized_terminals_do_not_warn() {
+        for terminal in ["WindowsTerminal", "RustyTerm", "rustyterm", ""] {
+            let config = load_json(&format!(
+                r#"{{
+                    "DefaultProfile": "T",
+                    "Profiles": {{ "T": {{ "Name": "T", "Shell": "PowerShell", "Terminal": "{terminal}" }} }}
+                }}"#,
+            ))
+            .unwrap();
+            let report = validate(&config, "/root");
+            assert!(report.is_valid());
+            assert!(
+                !report.warnings.iter().any(|w| w.contains(".Terminal")),
+                "unexpected warning for {terminal:?}: {:?}",
+                report.warnings
+            );
+        }
     }
 
     #[test]

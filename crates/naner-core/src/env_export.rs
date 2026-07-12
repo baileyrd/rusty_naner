@@ -4,7 +4,7 @@
 //! (`naner --export-env | Invoke-Expression`) — the caller trims the result
 //! and prints it prefix-free.
 
-use indexmap::IndexMap;
+use crate::collections::OrderedMap;
 
 /// C# builds the script with `AppendLine` (`Environment.NewLine`).
 #[cfg(windows)]
@@ -19,9 +19,20 @@ pub enum ShellFormat {
     Cmd,
 }
 
-#[derive(Debug, thiserror::Error)]
-#[error("Unknown format: {0}. Supported formats: powershell, bash, cmd")]
+#[derive(Debug)]
 pub struct UnknownFormat(pub String);
+
+impl std::fmt::Display for UnknownFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Unknown format: {}. Supported formats: powershell, bash, cmd",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for UnknownFormat {}
 
 /// Parse a `-f/--format` value (`EnvironmentExporter.ParseFormat`).
 pub fn parse_format(format: &str) -> Result<ShellFormat, UnknownFormat> {
@@ -36,7 +47,7 @@ pub fn parse_format(format: &str) -> Result<ShellFormat, UnknownFormat> {
 /// Render the export script (`EnvironmentExporter.Export`). PATH is emitted
 /// first; a variable literally named PATH (any case) in the map is skipped.
 pub fn export(
-    environment_variables: &IndexMap<String, String>,
+    environment_variables: &OrderedMap<String>,
     path: &str,
     format: ShellFormat,
     no_comments: bool,
@@ -46,13 +57,13 @@ pub fn export(
         path,
         format,
         no_comments,
-        &chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
+        &crate::timestamp::now_local(),
     )
 }
 
 /// [`export`] with an explicit timestamp, for deterministic tests.
 pub fn export_at(
-    environment_variables: &IndexMap<String, String>,
+    environment_variables: &OrderedMap<String>,
     path: &str,
     format: ShellFormat,
     no_comments: bool,
@@ -157,7 +168,7 @@ fn convert_single_path_to_unix(windows_path: &str) -> String {
 mod tests {
     use super::*;
 
-    fn vars(pairs: &[(&str, &str)]) -> IndexMap<String, String> {
+    fn vars(pairs: &[(&str, &str)]) -> OrderedMap<String> {
         pairs
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))

@@ -11,9 +11,9 @@ mod launcher;
 use std::path::Path;
 
 use clap::Parser;
-// naner-core re-exports its IndexMap so binaries don't need a second direct
-// dependency on the crate.
-use naner_core::config::IndexMap;
+// naner-core re-exports its OrderedMap so binaries don't need a second
+// direct dependency on the collections module path.
+use naner_core::config::OrderedMap;
 use naner_core::{config, console, constants, env_export, logger, paths};
 
 fn main() {
@@ -221,7 +221,7 @@ fn handle_export_env(
         }
     };
 
-    let mut env_vars: IndexMap<String, String> = IndexMap::new();
+    let mut env_vars: OrderedMap<String> = OrderedMap::new();
     for key in ["NANER_ROOT", "NANER_ENVIRONMENT", "NANER_HOME", "HOME"] {
         if let Ok(value) = std::env::var(key)
             && !value.is_empty()

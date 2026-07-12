@@ -20,7 +20,7 @@ use crate::{constants, logger};
 
 #[derive(Debug, Deserialize)]
 struct VendorsJsonRoot {
-    vendors: Option<indexmap::IndexMap<String, VendorJsonEntry>>,
+    vendors: Option<crate::collections::OrderedMap<VendorJsonEntry>>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -171,7 +171,7 @@ impl VendorConfigurationLoader {
 }
 
 /// `ConvertToVendorDefinitions`.
-fn convert(vendors: indexmap::IndexMap<String, VendorJsonEntry>) -> Vec<VendorDefinition> {
+fn convert(vendors: crate::collections::OrderedMap<VendorJsonEntry>) -> Vec<VendorDefinition> {
     let mut definitions = Vec::new();
 
     for (key, entry) in vendors {

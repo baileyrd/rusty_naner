@@ -56,6 +56,8 @@ pub mod executables {
     pub const POWERSHELL: &str = "pwsh.exe";
     pub const BASH: &str = "bash.exe";
     pub const SEVEN_ZIP: &str = "7z.exe";
+    /// Additive (no C# counterpart): the rusty_term terminal binary.
+    pub const RUSTY_TERM: &str = "rusty_term.exe";
 }
 
 pub mod vendor_names {
@@ -74,6 +76,10 @@ pub mod vendor_names {
     pub const RUST: &str = "Rust";
     pub const RUBY: &str = "Ruby";
     pub const DOTNET_SDK: &str = ".NET SDK";
+    /// Additive (no C# counterpart): experimental rusty_term terminal.
+    pub const RUSTY_TERM: &str = "Rusty Term";
+    /// Additive (no C# counterpart): experimental rush shell.
+    pub const RUSH: &str = "Rush";
 }
 
 // ===== HTTP configuration =====

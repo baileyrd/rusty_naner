@@ -192,6 +192,46 @@
       },
       "postInstallFunction": "Ruby.PostInstall"
     },
+    "RustyTerm": {
+      "name": "Rusty Term",
+      "description": "Experimental Rust-based terminal emulator",
+      "extractDir": "rustyterm",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "baileyrd/rusty_term",
+        "assetPattern": "*win-x64.zip",
+        "fallback": {
+          "version": "0.1.0",
+          "url": "https://github.com/baileyrd/rusty_term/releases/download/v0.1.0/rusty_term-0.1.0-win-x64.zip",
+          "fileName": "rusty_term-0.1.0-win-x64.zip",
+          "size": "~10"
+        }
+      },
+      "postInstallFunction": "RustyTerm.PostInstall"
+    },
+    "Rush": {
+      "name": "Rush",
+      "description": "Experimental Rust-based shell",
+      "extractDir": "rush",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "baileyrd/rush",
+        "assetPattern": "*win-x64.zip",
+        "fallback": {
+          "version": "0.1.1",
+          "url": "https://github.com/baileyrd/rush/releases/download/v0.1.1/rush-0.1.1-win-x64.zip",
+          "fileName": "rush-0.1.1-win-x64.zip",
+          "size": "~5"
+        }
+      },
+      "postInstallFunction": "Rush.PostInstall"
+    },
     "DotNetSDK": {
       "name": ".NET SDK",
       "description": "Software development kit for building .NET applications (required for C# migration)",

@@ -330,12 +330,11 @@ impl<'a> UnifiedVendorInstaller<'a> {
         }
 
         // RegexOptions.IgnoreCase.
-        let regex = regex_lite::Regex::new(&format!("(?i){}", scrape.pattern))
-            .map_err(|e| e.to_string())?;
+        let regex = crate::regex_shim::compile_ci(&scrape.pattern)?;
         let Some(captures) = regex.captures(&html) else {
             return Ok(None);
         };
-        let relative = captures.get(1).map(|m| m.as_str()).unwrap_or_default();
+        let relative = captures.get(1).unwrap_or_default();
         let full_url = format!(
             "{}/{}",
             scrape.base_url.trim_end_matches('/'),
@@ -576,11 +575,11 @@ fn glob_matches(name: &str, pattern: &str) -> bool {
 /// `ExtractVersionFromFileName`: first `(\d+\.?\d*\.?\d*\.?\d*)` match, else
 /// "latest".
 fn version_from_file_name(file_name: &str) -> String {
-    let regex = regex_lite::Regex::new(r"(\d+\.?\d*\.?\d*\.?\d*)").unwrap();
+    let regex = crate::regex_shim::compile(r"(\d+\.?\d*\.?\d*\.?\d*)").unwrap();
     regex
         .captures(file_name)
         .and_then(|c| c.get(1))
-        .map(|m| m.as_str().to_string())
+        .map(|s| s.to_string())
         .unwrap_or_else(|| "latest".to_string())
 }
 

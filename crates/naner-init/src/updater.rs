@@ -232,7 +232,7 @@ impl<'a> NanerUpdater<'a> {
 
         let marker = format!(
             "# Naner Initialization Marker\n# Created: {}\n# Version: {tag}\n",
-            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+            naner_core::timestamp::now_local()
         );
         if std::fs::write(
             self.naner_root.join(constants::INITIALIZATION_MARKER_FILE),

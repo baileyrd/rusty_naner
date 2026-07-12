@@ -21,7 +21,8 @@ pub use loader::{ConfigError, find_configuration_file, load};
 pub use validator::{ValidationReport, validate};
 pub use yaml::load_yaml;
 
-pub use indexmap::IndexMap;
+// Re-exported so binaries don't need a second direct dependency.
+pub use crate::collections::OrderedMap;
 use serde::Deserialize;
 
 /// Root configuration model (`NanerConfig`), mapping `config/naner.json`.
@@ -29,7 +30,7 @@ use serde::Deserialize;
 #[serde(rename_all = "PascalCase")]
 pub struct NanerConfig {
     #[serde(default, alias = "vendorPaths", alias = "vendorpaths")]
-    pub vendor_paths: IndexMap<String, String>,
+    pub vendor_paths: OrderedMap<String>,
 
     #[serde(default, alias = "environment")]
     pub environment: EnvironmentConfig,
@@ -42,7 +43,7 @@ pub struct NanerConfig {
     pub default_profile: String,
 
     #[serde(default, alias = "profiles")]
-    pub profiles: IndexMap<String, ProfileConfig>,
+    pub profiles: OrderedMap<ProfileConfig>,
 
     #[serde(default, alias = "windowsTerminal", alias = "windowsterminal")]
     pub windows_terminal: WindowsTerminalConfig,
@@ -51,7 +52,7 @@ pub struct NanerConfig {
     pub advanced: AdvancedConfig,
 
     #[serde(default, alias = "customProfiles", alias = "customprofiles")]
-    pub custom_profiles: IndexMap<String, ProfileConfig>,
+    pub custom_profiles: OrderedMap<ProfileConfig>,
 }
 
 /// `EnvironmentConfig`: PATH precedence and environment variables.
@@ -74,7 +75,7 @@ pub struct EnvironmentConfig {
         alias = "environmentVariables",
         alias = "environmentvariables"
     )]
-    pub environment_variables: IndexMap<String, String>,
+    pub environment_variables: OrderedMap<String>,
 }
 
 impl Default for EnvironmentConfig {
@@ -82,7 +83,7 @@ impl Default for EnvironmentConfig {
         Self {
             unified_path: true,
             path_precedence: Vec::new(),
-            environment_variables: IndexMap::new(),
+            environment_variables: OrderedMap::new(),
         }
     }
 }
@@ -205,6 +206,12 @@ pub struct ProfileConfig {
 
     #[serde(default, alias = "customShell", alias = "customshell")]
     pub custom_shell: Option<CustomShellConfig>,
+
+    /// Additive (no C# counterpart): which terminal hosts the profile.
+    /// `None` (the default) means Windows Terminal — existing configs are
+    /// untouched. Recognized values: `WindowsTerminal`, `RustyTerm`.
+    #[serde(default, alias = "terminal")]
+    pub terminal: Option<String>,
 }
 
 impl Default for ProfileConfig {
@@ -218,6 +225,7 @@ impl Default for ProfileConfig {
             color_scheme: defaults::color_scheme(),
             use_vendor_path: true,
             custom_shell: None,
+            terminal: None,
         }
     }
 }

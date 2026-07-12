@@ -10,13 +10,17 @@
 
 pub mod archives;
 pub mod checksum;
+pub mod collections;
 pub mod config;
 pub mod console;
 pub mod constants;
+pub mod digest;
 pub mod env_export;
 pub mod github;
 pub mod http;
 pub mod logger;
 pub mod paths;
+pub mod regex_shim;
+pub mod timestamp;
 pub mod vendors;
 pub mod version;

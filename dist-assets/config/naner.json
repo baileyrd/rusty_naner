@@ -137,5 +137,28 @@
     "VerboseLogging": false,
     "DebugMode": false
   },
-  "CustomProfiles": {}
+  "CustomProfiles": {
+    // Opt-in examples (comments are stripped by the loader — uncomment to
+    // enable). Both need their vendors enabled in vendors.json first.
+    // "RustyTerm": {
+    //   "Name": "Rusty Term",
+    //   "Description": "Experimental rusty_term terminal hosting PowerShell",
+    //   "Shell": "PowerShell",
+    //   "Terminal": "RustyTerm",
+    //   "StartingDirectory": "%USERPROFILE%",
+    //   "ColorScheme": "Campbell",
+    //   "UseVendorPath": true
+    // },
+    // "Rush": {
+    //   "Name": "Rush",
+    //   "Description": "Experimental rush shell in Windows Terminal",
+    //   "Shell": "Custom",
+    //   "StartingDirectory": "%USERPROFILE%",
+    //   "ColorScheme": "Campbell",
+    //   "UseVendorPath": true,
+    //   "CustomShell": {
+    //     "ExecutablePath": "%NANER_ROOT%\\vendor\\rush\\rush.exe"
+    //   }
+    // }
+  }
 }

@@ -7,9 +7,7 @@
 use std::io::Read;
 use std::path::Path;
 
-use md5::Md5;
-use sha1::Sha1;
-use sha2::{Digest, Sha256, Sha384, Sha512};
+use crate::digest::{Digest, Md5, Sha1, Sha256, Sha384, Sha512};
 
 /// `ChecksumInfo` from the vendor model.
 #[derive(Debug, Clone, Default)]
@@ -74,7 +72,7 @@ pub fn verify(file_path: &Path, info: &ChecksumInfo) -> VerificationResult {
 pub fn compute(file_path: &Path, algorithm: &str) -> Result<String, String> {
     let mut file = std::fs::File::open(file_path).map_err(|e| e.to_string())?;
 
-    fn hash_stream<D: Digest + Default>(file: &mut std::fs::File) -> Result<Vec<u8>, String> {
+    fn hash_stream<D: Digest>(file: &mut std::fs::File) -> Result<Vec<u8>, String> {
         let mut hasher = D::default();
         let mut buffer = [0u8; 65536];
         loop {
@@ -84,7 +82,7 @@ pub fn compute(file_path: &Path, algorithm: &str) -> Result<String, String> {
             }
             hasher.update(&buffer[..n]);
         }
-        Ok(hasher.finalize().to_vec())
+        Ok(hasher.finalize())
     }
 
     let bytes = match algorithm.to_uppercase().as_str() {

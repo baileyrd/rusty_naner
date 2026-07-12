@@ -6,35 +6,59 @@
 
 use std::path::{Path, PathBuf};
 
-use indexmap::IndexMap;
+use crate::collections::OrderedMap;
 
 use super::{NanerConfig, apply_env_overrides, validate};
 use crate::{constants, logger, paths};
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum ConfigError {
     /// No file in the search order exists.
-    #[error(
-        "No configuration file found. Please create naner.json or naner.yaml in the config directory."
-    )]
     NotFound,
 
     /// An explicit path was given but no provider handles its extension.
-    #[error("No configuration provider found for: {0}. Supported formats: JSON, YAML")]
     UnsupportedFormat(String),
 
-    #[error("Configuration file not found: {0}")]
     FileNotFound(String),
 
-    #[error("{0}")]
     Parse(String),
 
     /// Validation errors (the `ThrowIfInvalid` message).
-    #[error("{0}")]
     Invalid(String),
 
-    #[error("{0}")]
-    Io(#[from] std::io::Error),
+    Io(std::io::Error),
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigError::NotFound => f.write_str(
+                "No configuration file found. Please create naner.json or naner.yaml in the config directory.",
+            ),
+            ConfigError::UnsupportedFormat(path) => write!(
+                f,
+                "No configuration provider found for: {path}. Supported formats: JSON, YAML"
+            ),
+            ConfigError::FileNotFound(path) => write!(f, "Configuration file not found: {path}"),
+            ConfigError::Parse(msg) | ConfigError::Invalid(msg) => f.write_str(msg),
+            ConfigError::Io(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            ConfigError::Io(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
+impl From<std::io::Error> for ConfigError {
+    fn from(err: std::io::Error) -> Self {
+        ConfigError::Io(err)
+    }
 }
 
 /// Find the first configuration file in `<root>/config` per the search
@@ -102,7 +126,7 @@ fn load_file(path: &Path) -> Result<NanerConfig, ConfigError> {
 /// `ConfigurationManager.ExpandConfigPaths`: vendor paths, PATH precedence,
 /// and environment-variable values all get the three-pass expansion.
 fn expand_config_paths(config: &mut NanerConfig, naner_root: &str) {
-    let expanded: IndexMap<String, String> = config
+    let expanded: OrderedMap<String> = config
         .vendor_paths
         .iter()
         .map(|(k, v)| (k.clone(), paths::expand_naner_path(v, naner_root)))
@@ -113,7 +137,7 @@ fn expand_config_paths(config: &mut NanerConfig, naner_root: &str) {
         *entry = paths::expand_naner_path(entry, naner_root);
     }
 
-    let expanded: IndexMap<String, String> = config
+    let expanded: OrderedMap<String> = config
         .environment
         .environment_variables
         .iter()

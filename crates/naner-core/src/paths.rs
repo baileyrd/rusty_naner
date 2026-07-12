@@ -7,11 +7,18 @@ use crate::constants;
 
 /// Error from [`find_naner_root`], carrying the verbose diagnostic message
 /// the C# implementation throws (printed verbatim by the launcher).
-#[derive(Debug, thiserror::Error)]
-#[error("{message}")]
+#[derive(Debug)]
 pub struct RootNotFound {
     pub message: String,
 }
+
+impl std::fmt::Display for RootNotFound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for RootNotFound {}
 
 /// Find the Naner root directory. Port of `PathUtilities.FindNanerRoot`:
 ///
