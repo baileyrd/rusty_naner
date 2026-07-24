@@ -665,8 +665,8 @@ dependencies = [
 
 [[package]]
 name = "rusty_regx"
-version = "0.1.0"
-source = "git+https://github.com/baileyrd/rusty_regx?branch=main#aa07ea0be7123eaaf2b4b38aa2a9ebb56419c107"
+version = "0.5.0"
+source = "git+https://github.com/baileyrd/rusty_regx?rev=1538e6633cb837c74c2a72f0cc63621438d8f714#1538e6633cb837c74c2a72f0cc63621438d8f714"
 
 [[package]]
 name = "ryu"
