@@ -63,10 +63,35 @@ published through the Phase 5 release workflow. Phases 0–5 done:
   (B1–B6, [docs/post-parity-fix-wave.md](docs/post-parity-fix-wave.md)) and
   tier-3 output changes.
 
-- [MIGRATION_ANALYSIS.md](MIGRATION_ANALYSIS.md) — detailed analysis of the existing C#
-  codebase and the phased migration plan.
-- [ECOSYSTEM.md](ECOSYSTEM.md) — assessment of the sibling Rust projects
-  ([rusty_term](https://github.com/baileyrd/rusty_term),
-  [rusty_lsp](https://github.com/baileyrd/rusty_lsp),
-  [rush](https://github.com/baileyrd/rush)) and the roadmap for integrating them with
-  naner into a full-Rust terminal environment.
+## Features & Capabilities
+
+`rusty_naner` includes comprehensive terminal environment launcher features, developer inspection tools, self-healing, profile export/import, atomic extraction, and ecosystem integrations:
+
+### Core CLI Subcommands
+- **`naner doctor [--porcelain] [--conflicts]`**: Health checks `%NANER_ROOT%`, vendor directories, config health, and reports `PATH` binary collisions.
+- **`naner schema [config|vendors]`**: Generates official JSON Schema definitions for `naner.json` and `vendors.json` for instant IDE autocompletion.
+- **`naner completions <shell>`**: Generates tab-completion scripts for PowerShell, Bash, Zsh, and Fish.
+- **`naner shell-integration <shell>`**: Emits OSC 133 prompt-marking and command lifecycle hooks for **rusty_term** / `l13` / MCP protocols.
+- **`naner setup-shell [pwsh|bash|cmd]`**: Profile initialization snippet generator for host shells.
+- **`naner repair`**: Cleans broken staging directories and re-bootstraps missing essential vendor tools.
+- **`naner profile [list|export|import]`**: Exports and merges standalone profile definitions.
+- **`naner checksum update <vendor>`**: Inspects and computes SHA-256 digests.
+- **`naner diff [profile]`**: Compares host environment variables against target profile environment definitions.
+- **`naner bench [profile]`**: Startup latency profiler measuring execution timings for root discovery, config loading, profile resolution, and PATH assembly in milliseconds.
+- **`naner config migrate`**: Upgrades configuration files into canonical `naner.json` schema.
+- **`naner pack [dir] --out bundle.zip`**: Bundles distribution assets into portable zip packages.
+- **`naner self-update`**: Queries GitHub releases and performs atomic self-replacement.
+
+### Infrastructure & Subsystem Enhancements
+- **Corporate Proxy & CA Support**: Auto-detects and respects `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` environment variables.
+- **Privacy Telemetry Opt-Out Enforcer**: Injects default telemetry opt-out variables (`DOTNET_CLI_TELEMETRY_OPTOUT=1`, `POWERSHELL_TELEMETRY_OPTOUT=1`, `AZURE_CORE_COLLECT_TELEMETRY=0`).
+- **Dynamic Architecture Resolution (`%{ARCH}`)**: Dynamically expands `%{ARCH}` into `arm64` or `x64` based on host target compilation.
+- **Atomic Staged Extraction**: Extracts archives to `vendor/.staging/<name>` prior to atomic directory swap.
+- **Download Asset Caching**: Auto-detects and reuses cached download assets for offline/air-gapped environments.
+- **Job Object Breakaway Isolation**: Spawns terminal targets with `CREATE_BREAKAWAY_FROM_JOB` (0x01000000) on Windows.
+- **Event Hooks & Window Effects**: Supports `PreLaunch` / `PostLaunch` script hooks and fluent window backdrop effects (`Mica`, `Acrylic`, `Tabbed`).
+
+---
+
+- [MIGRATION_ANALYSIS.md](MIGRATION_ANALYSIS.md) — detailed analysis of the existing C# codebase and the phased migration plan.
+- [ECOSYSTEM.md](ECOSYSTEM.md) — assessment of the sibling Rust projects ([rusty_term](https://github.com/baileyrd/rusty_term), [rusty_lsp](https://github.com/baileyrd/rusty_lsp), [rush](https://github.com/baileyrd/rush)) and the roadmap for integrating them into a full-Rust terminal environment.

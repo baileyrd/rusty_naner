@@ -31,6 +31,17 @@ pub fn apply_env_overrides_from(
             .map(|(_, v)| v.as_str())
     };
 
+    // Ensure privacy telemetry opt-out variables are set by default
+    if !config.environment.environment_variables.contains_key("DOTNET_CLI_TELEMETRY_OPTOUT") {
+        config.environment.environment_variables.insert("DOTNET_CLI_TELEMETRY_OPTOUT".to_string(), "1".to_string());
+    }
+    if !config.environment.environment_variables.contains_key("POWERSHELL_TELEMETRY_OPTOUT") {
+        config.environment.environment_variables.insert("POWERSHELL_TELEMETRY_OPTOUT".to_string(), "1".to_string());
+    }
+    if !config.environment.environment_variables.contains_key("AZURE_CORE_COLLECT_TELEMETRY") {
+        config.environment.environment_variables.insert("AZURE_CORE_COLLECT_TELEMETRY".to_string(), "0".to_string());
+    }
+
     if let Some(profile) = get("NANER_DEFAULT_PROFILE")
         && !profile.is_empty()
     {

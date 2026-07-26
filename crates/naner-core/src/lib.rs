@@ -18,6 +18,7 @@ pub mod digest;
 pub mod env_export;
 pub mod github;
 pub mod http;
+pub mod lockfile;
 pub mod logger;
 pub mod paths;
 pub mod regex_shim;

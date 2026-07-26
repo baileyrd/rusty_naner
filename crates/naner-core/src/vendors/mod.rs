@@ -135,5 +135,29 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
             ),
             ..Default::default()
         },
+        VendorDefinition {
+            name: constants::vendor_names::RUSTY_TERM.into(),
+            extract_dir: "rusty_term".into(),
+            source_type: VendorSourceType::GitHub,
+            github_owner: Some("baileyrd".into()),
+            github_repo: Some("rusty_term".into()),
+            asset_pattern: Some("*win-x64.zip".into()),
+            fallback_url: Some(
+                "https://github.com/baileyrd/rusty_term/releases/download/v0.1.0/rusty_term-v0.1.0-win-x64.zip".into(),
+            ),
+            ..Default::default()
+        },
+        VendorDefinition {
+            name: constants::vendor_names::RUSH.into(),
+            extract_dir: "rush".into(),
+            source_type: VendorSourceType::GitHub,
+            github_owner: Some("baileyrd".into()),
+            github_repo: Some("rush".into()),
+            asset_pattern: Some("*win-x64.zip".into()),
+            fallback_url: Some(
+                "https://github.com/baileyrd/rush/releases/download/v0.1.0/rush-v0.1.0-win-x64.zip".into(),
+            ),
+            ..Default::default()
+        },
     ]
 }

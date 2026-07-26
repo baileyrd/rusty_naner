@@ -405,14 +405,14 @@ mod tests {
     fn missing_or_invalid_file_falls_back_to_defaults() {
         let (_tmp, loader) = loader_with(None);
         let vendors = loader.load_vendors();
-        assert_eq!(vendors.len(), 4);
+        assert_eq!(vendors.len(), 6);
         assert_eq!(vendors[0].name, "7-Zip"); // 7-Zip first: extraction dependency
 
         let (_tmp, loader) = loader_with(Some("{ not json"));
-        assert_eq!(loader.load_vendors().len(), 4);
+        assert_eq!(loader.load_vendors().len(), 6);
 
         let (_tmp, loader) = loader_with(Some(r#"{ "vendors": {} }"#));
-        assert_eq!(loader.load_vendors().len(), 4);
+        assert_eq!(loader.load_vendors().len(), 6);
     }
 
     #[test]

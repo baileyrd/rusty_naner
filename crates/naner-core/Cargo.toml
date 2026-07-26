@@ -7,31 +7,23 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+rusty_regx = { path = "../../../rusty_regx" }
+rusty_request = { path = "../../../rusty_request" }
+rusty_compress = { path = "../../../rusty_compress" }
+rusty_json = { path = "../../../rusty_json" }
+rusty_std = { path = "../../../rusty_std" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# serde_yaml is archived; the _ng fork is the maintained continuation
-# (MIGRATION_ANALYSIS §2.3). YAML is a fallback format behind JSON.
 serde_yaml_ng = "0.10"
-# Blocking HTTP without an async runtime (MIGRATION_ANALYSIS §2.2: the C#
-# async is incidental; everything blocks). native-tls = schannel on Windows
-# (system cert store + proxy behavior closest to .NET, §2.3) and OpenSSL on
-# Linux; it also keeps the Windows cross-check C-free (rustls' ring backend
-# can't cross-compile from Linux).
 ureq = { version = "2", default-features = false, features = ["native-tls", "gzip"] }
 native-tls = "0.2"
-# Archive handling: native zip + tar.xz (pure Rust so the Windows cross-check
-# works); 7z/msi/exe stay shell-outs (MIGRATION_ANALYSIS §2.3).
 zip = { version = "2", default-features = false, features = ["deflate"] }
 tar = "0.4"
 lzma-rs = "0.3"
-# Web-scrape / filename version patterns: the in-house POSIX-ERE engine
-# (see src/regex_shim.rs for the shorthand/case-insensitive adapter).
-rusty_regx = { git = "https://github.com/baileyrd/rusty_regx", rev = "1538e6633cb837c74c2a72f0cc63621438d8f714" }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
-# Retired runtime dep, kept dev-only to differential-test regex_shim against.
 regex-lite = "0.1"

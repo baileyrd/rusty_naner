@@ -109,12 +109,35 @@ impl<'a> TerminalLauncher<'a> {
 
         self.setup_path_environment();
 
+        if let Some(script) = &profile.pre_launch {
+            if !script.is_empty() {
+                let expanded = paths::expand_naner_path(script, &self.naner_root.to_string_lossy());
+                if self.debug_mode {
+                    logger::status(&format!("Executing PreLaunch hook: {expanded}"));
+                }
+                let _ = std::process::Command::new("powershell")
+                    .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", &expanded])
+                    .status();
+            }
+        }
+
         if self.debug_mode {
             logger::status(&format!("Launching {}...", profile.name));
         }
 
         match spawn_terminal(&terminal_path, &arguments, self.naner_root) {
             Ok(()) => {
+                if let Some(script) = &profile.post_launch {
+                    if !script.is_empty() {
+                        let expanded = paths::expand_naner_path(script, &self.naner_root.to_string_lossy());
+                        if self.debug_mode {
+                            logger::status(&format!("Executing PostLaunch hook: {expanded}"));
+                        }
+                        let _ = std::process::Command::new("powershell")
+                            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", &expanded])
+                            .status();
+                    }
+                }
                 if self.debug_mode {
                     logger::success(&format!("Launched: {}", profile.name));
                 }
@@ -345,9 +368,11 @@ fn find_executable_in_path(executable_name: &str) -> Option<PathBuf> {
 #[cfg(windows)]
 fn spawn_terminal(wt_path: &Path, arguments: &str, working_dir: &Path) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
+    // CREATE_BREAKAWAY_FROM_JOB = 0x01000000
     std::process::Command::new(wt_path)
         .raw_arg(arguments)
         .current_dir(working_dir)
+        .creation_flags(0x01000000)
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())

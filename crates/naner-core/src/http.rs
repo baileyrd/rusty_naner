@@ -36,13 +36,26 @@ impl UreqHttp {
         // native-tls: schannel on Windows, OpenSSL elsewhere. A connector
         // build failure would mean a broken TLS stack; surface it loudly.
         let tls = native_tls::TlsConnector::new().expect("failed to initialize TLS");
-        let agent = ureq::AgentBuilder::new()
+        let mut builder = ureq::AgentBuilder::new()
             .tls_connector(std::sync::Arc::new(tls))
             .timeout(std::time::Duration::from_secs(
                 constants::DEFAULT_HTTP_TIMEOUT_MINUTES * 60,
             ))
-            .user_agent(&constants::default_user_agent())
-            .build();
+            .user_agent(&constants::default_user_agent());
+
+        let proxy_url = std::env::var("HTTPS_PROXY")
+            .or_else(|_| std::env::var("https_proxy"))
+            .or_else(|_| std::env::var("HTTP_PROXY"))
+            .or_else(|_| std::env::var("http_proxy"))
+            .ok();
+
+        if let Some(proxy_str) = proxy_url {
+            if let Ok(proxy) = ureq::Proxy::new(&proxy_str) {
+                builder = builder.proxy(proxy);
+            }
+        }
+
+        let agent = builder.build();
         Self { agent }
     }
 
@@ -72,6 +85,10 @@ impl Http for UreqHttp {
     }
 
     fn download(&self, url: &str, output_path: &Path) -> bool {
+        if output_path.is_file() && output_path.metadata().map_or(0, |m| m.len()) > 0 {
+            logger::info(&format!("    Using cached download asset: {}", output_path.display()));
+            return true;
+        }
         match self.request(url).call() {
             Ok(response) => {
                 let total_bytes: u64 = response

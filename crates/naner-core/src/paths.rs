@@ -148,7 +148,9 @@ pub fn expand_naner_path_with(
         return path.to_string();
     }
 
-    let expanded = replace_case_insensitive(path, "%NANER_ROOT%", naner_root);
+    let host_arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+    let expanded = replace_case_insensitive(path, "%{ARCH}", host_arch);
+    let expanded = replace_case_insensitive(&expanded, "%NANER_ROOT%", naner_root);
     let expanded = expand_windows_env(&expanded, &lookup);
     expand_psenv(&expanded, &lookup)
 }

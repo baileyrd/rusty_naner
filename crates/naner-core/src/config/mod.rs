@@ -23,10 +23,10 @@ pub use yaml::load_yaml;
 
 // Re-exported so binaries don't need a second direct dependency.
 pub use crate::collections::OrderedMap;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Root configuration model (`NanerConfig`), mapping `config/naner.json`.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct NanerConfig {
     #[serde(default, alias = "vendorPaths", alias = "vendorpaths")]
@@ -56,7 +56,7 @@ pub struct NanerConfig {
 }
 
 /// `EnvironmentConfig`: PATH precedence and environment variables.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct EnvironmentConfig {
     /// Parsed but never read (inert; kept for schema compatibility).
@@ -90,7 +90,7 @@ impl Default for EnvironmentConfig {
 
 /// `AdvancedConfig`: power-user switches. `preserve_path` and
 /// `verbose_logging` are inert (parsed, never read) — as in C#.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct AdvancedConfig {
     #[serde(default, alias = "preservePath", alias = "preservepath")]
@@ -122,7 +122,7 @@ impl Default for AdvancedConfig {
 }
 
 /// `WindowsTerminalConfig`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct WindowsTerminalConfig {
     #[serde(
@@ -167,7 +167,7 @@ impl Default for WindowsTerminalConfig {
 }
 
 /// `ProfileConfig`: one terminal profile.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ProfileConfig {
     #[serde(default, alias = "name")]
@@ -207,6 +207,17 @@ pub struct ProfileConfig {
     #[serde(default, alias = "customShell", alias = "customshell")]
     pub custom_shell: Option<CustomShellConfig>,
 
+    /// Additive: pre-launch and post-launch event hook script paths.
+    #[serde(default, alias = "preLaunch", alias = "prelaunch")]
+    pub pre_launch: Option<String>,
+
+    #[serde(default, alias = "postLaunch", alias = "postlaunch")]
+    pub post_launch: Option<String>,
+
+    /// Additive: window backdrop styling (`Mica`, `Acrylic`, `Tabbed`).
+    #[serde(default, alias = "windowEffect", alias = "windoweffect")]
+    pub window_effect: Option<String>,
+
     /// Additive (no C# counterpart): which terminal hosts the profile.
     /// `None` (the default) means Windows Terminal — existing configs are
     /// untouched. Recognized values: `WindowsTerminal`, `RustyTerm`.
@@ -225,13 +236,16 @@ impl Default for ProfileConfig {
             color_scheme: defaults::color_scheme(),
             use_vendor_path: true,
             custom_shell: None,
+            pre_launch: None,
+            post_launch: None,
+            window_effect: None,
             terminal: None,
         }
     }
 }
 
 /// `CustomShellConfig`: explicit executable + arguments.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct CustomShellConfig {
     #[serde(default, alias = "executablePath", alias = "executablepath")]

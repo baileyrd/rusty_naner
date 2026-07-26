@@ -155,6 +155,20 @@ impl<'de, V: Deserialize<'de>> Deserialize<'de> for OrderedMap<V> {
     }
 }
 
+impl<V: serde::Serialize> serde::Serialize for OrderedMap<V> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(self.entries.len()))?;
+        for (k, v) in &self.entries {
+            map.serialize_entry(k, v)?;
+        }
+        map.end()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

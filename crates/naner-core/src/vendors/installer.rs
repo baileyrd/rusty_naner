@@ -115,16 +115,32 @@ impl<'a> UnifiedVendorInstaller<'a> {
         }
 
         logger::status(&format!("  Installing {}...", vendor.name));
+        let staging_root = self.vendor_dir.join(".staging");
+        let staging_target = staging_root.join(&vendor.extract_dir);
+        let _ = std::fs::remove_dir_all(&staging_target);
+        let _ = std::fs::create_dir_all(&staging_target);
+
         let seven_zip = self.vendor_dir.join("7zip").join("7z.exe");
         if !archives::extract_archive(
             &download_path,
-            &target_dir,
+            &staging_target,
             &vendor.name,
             Some(&seven_zip),
             vendor.installer_args.as_deref(),
         ) {
             logger::warning(&format!("Failed to install {}, skipping...", vendor.name));
+            let _ = std::fs::remove_dir_all(&staging_target);
             return false;
+        }
+
+        if !is_windows_terminal(&vendor.name) && target_dir.is_dir() {
+            let _ = std::fs::remove_dir_all(&target_dir);
+        }
+        let _ = std::fs::create_dir_all(&target_dir);
+        if let Err(_err) = std::fs::rename(&staging_target, &target_dir) {
+            // Fallback for cross-device rename
+            let _ = fs_extra_copy(&staging_target, &target_dir);
+            let _ = std::fs::remove_dir_all(&staging_target);
         }
 
         // Post-install (Windows Terminal portable mode only).
@@ -622,6 +638,21 @@ fn read_version(target_dir: &Path) -> Option<String> {
     std::fs::read_to_string(target_dir.join(VENDOR_VERSION_FILE))
         .ok()
         .map(|s| s.trim().to_string())
+}
+fn fs_extra_copy(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if src.is_dir() {
+        std::fs::create_dir_all(dst)?;
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let ty = entry.file_type()?;
+            if ty.is_dir() {
+                fs_extra_copy(&entry.path(), &dst.join(entry.file_name()))?;
+            } else {
+                std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
