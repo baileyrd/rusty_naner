@@ -72,15 +72,14 @@ published through the Phase 5 release workflow. Phases 0–5 done:
 - **`naner schema [config|vendors]`**: Generates official JSON Schema definitions for `naner.json` and `vendors.json` for instant IDE autocompletion.
 - **`naner completions <shell>`**: Generates tab-completion scripts for PowerShell, Bash, Zsh, and Fish.
 - **`naner shell-integration <shell>`**: Emits OSC 133 prompt-marking and command lifecycle hooks for **rusty_term** / `l13` / MCP protocols.
-- **`naner setup-shell [pwsh|bash|cmd]`**: Profile initialization snippet generator for host shells.
+- **`naner setup-shell [pwsh|bash|cmd] [--dry-run]`**: Adds the naner environment export to the shell's startup file, idempotently and with a backup. `cmd` has no startup file to edit, so it prints the line and says why.
 - **`naner repair`**: Cleans broken staging directories and re-bootstraps missing essential vendor tools.
-- **`naner profile [list|export|import]`**: Exports and merges standalone profile definitions.
-- **`naner checksum update <vendor>`**: Inspects and computes SHA-256 digests.
+- **`naner profile [list|export|import]`**: Lists profiles, exports one to JSON, and imports one back. `import` writes into `CustomProfiles` (so a built-in of the same name is never overwritten in place), keeps a timestamped backup, and supports `--as <name>` and `--dry-run`.
 - **`naner diff [profile]`**: Compares host environment variables against target profile environment definitions.
 - **`naner bench [profile]`**: Startup latency profiler measuring execution timings for root discovery, config loading, profile resolution, and PATH assembly in milliseconds.
 - **`naner migrate [--dry-run]`**: Rewrites the configuration file in canonical JSON form. Keeps a timestamped backup, preserves top-level keys the model does not own (`$schema` among them), and writes via a temp file so an interrupted run cannot truncate the config. Comments cannot survive the round-trip and it says so before proceeding.
-- **`naner pack [dir] --out bundle.zip`**: Bundles distribution assets into portable zip packages.
-- **`naner self-update`**: Queries GitHub releases and performs atomic self-replacement.
+- **`naner pack [dir] --out bundle.zip`**: Bundles a naner installation (`bin/`, `config/`, `home/`, `icons/`, `naner.bat`) into a portable zip, skipping transient files. Defaults to the discovered root; `[dir]` overrides it.
+- **`naner self-update`**: Hands over to `naner-init`, which performs the update. It is a separate executable because `naner.exe` cannot replace itself while running.
 - **`naner lock [--refresh [vendor...]] [--porcelain]`**: Inspects `naner.lock`, the pin of exactly which vendor artifacts this environment installs, and drops pins so the next install re-resolves.
 
 ### Infrastructure & Subsystem Enhancements
