@@ -109,13 +109,13 @@ pub fn execute(args: &[String]) -> i32 {
 
     let existing = fs::read_to_string(&profile).unwrap_or_default();
     let Some(updated) = upsert_block(&existing, &block) else {
-        logger::success("Already integrated — nothing to change.");
+        logger::success("Already integrated - nothing to change.");
         return 0;
     };
 
     if dry_run {
         logger::newline();
-        logger::info("Dry run — nothing written. The block would be:");
+        logger::info("Dry run - nothing written. The block would be:");
         logger::newline();
         println!("{block}");
         return 0;

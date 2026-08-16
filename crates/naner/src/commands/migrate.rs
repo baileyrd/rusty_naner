@@ -128,7 +128,7 @@ pub fn execute(args: &[String]) -> i32 {
 
     if dry_run {
         logger::newline();
-        logger::info("Dry run — nothing written. Output would be:");
+        logger::info("Dry run - nothing written. Output would be:");
         logger::newline();
         print!("{output}");
         return 0;

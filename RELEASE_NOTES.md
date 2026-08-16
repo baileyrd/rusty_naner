@@ -9,7 +9,34 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since [v0.6.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.6.0).
+Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.6.0).
+
+### Keep `--export-env` output machine-readable; drop non-ASCII from the console
+**2026-08-16**
+
+- **Fixed:** on a tree that is not initialized, `naner --export-env` printed the
+  first-run notice to **stdout** and exited **0**. That stdout is documented for
+  `| Invoke-Expression` and `eval "$(...)"`, so the calling shell was handed
+  English prose to execute — `First: The term 'First' is not recognized...` — and
+  the success code told any wrapper the export had worked. The first-run gate
+  fires before the launcher arguments are parsed, which is why a diagnostic
+  reached a machine-readable channel at all. The notice now goes to stderr in
+  every invocation, and `--export-env` exits 1 when nothing was exported. The
+  interactive first run still exits 0, which is deliberate C# parity and the
+  double-click case (#38).
+- **Fixed:** every non-ASCII character in console output is now ASCII —
+  `logger::failure`'s marker (`[x]`, previously `[✗]`, and therefore every error
+  message in both binaries), the first-run bullets, `diagnose`/`doctor`'s
+  check marks, the copyright sign, and the em dashes in the dry-run notices. A
+  Windows console on the default cp1252 code page renders UTF-8 as mojibake.
+  Setting the console code page instead would have fixed the attached case and
+  not the redirected one, since a pipe's encoding belongs to whatever reads it
+  (#39).
+- **Provenance:** both found by working `docs/VALIDATION.md` Step 1 mode 3
+  against v0.6.0 on Windows — the step that exists to catch exactly this, and
+  which had never been run from outside an initialized tree. Neither is a v0.6.0
+  regression; `handle_first_run` was ported verbatim from the C# and has behaved
+  this way throughout.
 
 ---
 

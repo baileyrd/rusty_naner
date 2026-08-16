@@ -1,5 +1,5 @@
 //! Port of the C# `Logger`/`ConsoleLogger` (Naner.Core). The output contract
-//! (MIGRATION_ANALYSIS §1.3): `[*]` cyan status, `[OK]` green, `[✗]` red,
+//! (MIGRATION_ANALYSIS §1.3): `[*]` cyan status, `[OK]` green, `[x]` red,
 //! gray 4-space-indented info, `[DEBUG]` yellow (only in debug mode), header
 //! with `=` underline — all on stdout; `[!]` yellow warnings are the ONLY
 //! thing on stderr.
@@ -55,9 +55,14 @@ pub fn success(message: &str) {
     }
 }
 
-/// `[✗]` red failure line (stdout — not stderr; only warnings go to stderr).
+/// `[x]` red failure line (stdout — not stderr; only warnings go to stderr).
+///
+/// ASCII `x` rather than `✗`: Rust emits UTF-8, and a Windows console on the
+/// default cp1252 code page renders that as mojibake. Setting the console code
+/// page would fix the attached case and not the redirected one, since a pipe's
+/// encoding belongs to whatever reads it.
 pub fn failure(message: &str) {
-    println!("{}", paint("91", &format!("[✗] {message}")));
+    println!("{}", paint("91", &format!("[x] {message}")));
 }
 
 /// Gray, 4-space-indented info line (stdout).
@@ -87,7 +92,17 @@ pub fn newline() {
 
 /// Cyan header with a full-width `=` underline, then a blank line (stdout).
 pub fn header(text: &str) {
-    println!("{}", paint("96", text));
-    println!("{}", paint("96", &"=".repeat(text.chars().count())));
-    println!();
+    print!("{}", header_text(text));
+}
+
+/// The rendered header, for a caller that must place it somewhere other than
+/// stdout. `naner`'s first-run notice needs it on stderr, because that notice
+/// can fire during `--export-env`, whose stdout is evaluated by the calling
+/// shell rather than read by a person.
+pub fn header_text(text: &str) -> String {
+    format!(
+        "{}\n{}\n\n",
+        paint("96", text),
+        paint("96", &"=".repeat(text.chars().count()))
+    )
 }

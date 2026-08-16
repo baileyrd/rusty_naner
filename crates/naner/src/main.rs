@@ -20,12 +20,14 @@ use naner_core::{config, console, constants, env_export, logger, paths};
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    let machine_readable = is_machine_readable(&args);
+
     // Console decision, exactly as Program.Main: router console commands OR
     // first run OR --debug OR --export-env anywhere in the args.
     let needs_console = console::arg_needs_console(&args, &commands::names::CONSOLE_COMMANDS)
         || first_run::is_first_run()
         || args.iter().any(|a| a.to_lowercase() == "--debug")
-        || args.iter().any(|a| a.to_lowercase() == "--export-env");
+        || machine_readable;
     let _console = console::setup(needs_console);
 
     // Layer 1: router verbs.
@@ -35,7 +37,7 @@ fn main() {
 
     // First-run gate.
     if first_run::is_first_run() {
-        std::process::exit(handle_first_run());
+        std::process::exit(handle_first_run(machine_readable));
     }
 
     // Layer 2: launch options.
@@ -243,31 +245,51 @@ fn handle_export_env(
     0
 }
 
-/// `Program.HandleFirstRun`, output verbatim; exits 0 like the C#.
-fn handle_first_run() -> i32 {
-    let info = first_run::get_first_run_info();
+/// True when this invocation's stdout is a program rather than a message.
+///
+/// Only `--export-env` qualifies on the launcher path: the console verbs that
+/// also produce machine-readable output (`root`, anything `--porcelain`) are
+/// dispatched by `commands::route` before the first-run gate is reached.
+fn is_machine_readable(args: &[String]) -> bool {
+    args.iter().any(|a| a.eq_ignore_ascii_case("--export-env"))
+}
 
-    logger::header("First Run Detected");
-    println!();
+/// `Program.HandleFirstRun`. Text preserved verbatim; stream and exit code are
+/// not.
+///
+/// The notice goes to **stderr**. `--export-env` writes a shell program to
+/// stdout, meant for `Invoke-Expression` or `eval`, and the first-run gate
+/// fires before the launcher arguments are parsed — so on an uninitialized
+/// tree this prose was being handed to the calling shell to execute.
+///
+/// The exit code stays `0` for an interactive first run, which is deliberate
+/// C# parity and the double-click case. For a machine-readable invocation it
+/// is `1`: nothing was exported, and reporting success there tells a wrapper
+/// the environment is set up when it is not.
+fn handle_first_run(machine_readable: bool) -> i32 {
+    eprint!("{}", first_run_notice(&first_run::get_first_run_info()));
+    i32::from(machine_readable)
+}
 
-    println!("The following issues were detected:");
-    println!();
+/// The notice as text, so its content is testable without capturing a stream.
+fn first_run_notice(info: &first_run::FirstRunInfo) -> String {
+    let mut out = logger::header_text("First Run Detected");
+    out.push('\n');
+
+    out.push_str("The following issues were detected:\n\n");
     for message in &info.messages {
-        println!("  • {message}");
+        out.push_str(&format!("  - {message}\n"));
     }
     if let Some(root) = &info.naner_root {
-        println!();
-        println!("  Checked location: {}", root.display());
+        out.push_str(&format!("\n  Checked location: {}\n", root.display()));
     }
-    println!();
+    out.push('\n');
 
-    println!("Please run 'naner-init' to initialize Naner.");
-    println!();
-    println!("naner-init provides:");
-    println!("  • Automatic download of latest Naner from GitHub");
-    println!("  • Automatic updates when new versions are available");
-    println!("  • Simpler setup process");
-    println!();
+    out.push_str("Please run 'naner-init' to initialize Naner.\n\n");
+    out.push_str("naner-init provides:\n");
+    out.push_str("  - Automatic download of latest Naner from GitHub\n");
+    out.push_str("  - Automatic updates when new versions are available\n");
+    out.push_str("  - Simpler setup process\n\n");
 
-    0
+    out
 }
