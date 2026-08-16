@@ -1,0 +1,19 @@
+# Normalize line endings on commit. Without this a Windows-authored shell
+# script reaches a Linux CI runner with CRLF and dies on its own shebang
+# (`/usr/bin/env bash\r: no such file or directory`) — a failure that shows up
+# far from its cause, in a checkout nobody is looking at.
+#
+# This repo builds on windows-latest and ubuntu-latest, so the case is live.
+* text=auto eol=lf
+
+# Windows-only scripts that must keep CRLF to run under cmd.exe / PowerShell.
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+*.ps1  text eol=crlf
+
+# Binary: never touch.
+*.png  binary
+*.ico  binary
+*.zip  binary
+*.exe  binary
+*.msi  binary
