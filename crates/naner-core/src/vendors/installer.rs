@@ -164,14 +164,20 @@ impl<'a> UnifiedVendorInstaller<'a> {
             return false;
         }
 
-        if !is_windows_terminal(&vendor.name) && target_dir.is_dir() {
-            let _ = std::fs::remove_dir_all(&target_dir);
-        }
-        let _ = std::fs::create_dir_all(&target_dir);
-        if let Err(_err) = std::fs::rename(&staging_target, &target_dir) {
-            // Fallback for cross-device rename
-            let _ = fs_extra_copy(&staging_target, &target_dir);
+        // Move the staged tree into place. Windows Terminal merges over its
+        // existing install to preserve `settings/`; everything else is a clean
+        // swap. Either way a failure here is a failed install — reporting
+        // success over a half-populated directory is how a broken vendor gets
+        // recorded as installed and skipped by every later run.
+        let placed = if is_windows_terminal(&vendor.name) {
+            merge_over(&staging_target, &target_dir)
+        } else {
+            swap_into_place(&staging_target, &target_dir)
+        };
+        if let Err(e) = placed {
+            logger::failure(&format!("    Failed to install {}: {e}", vendor.name));
             let _ = std::fs::remove_dir_all(&staging_target);
+            return false;
         }
 
         // Post-install (Windows Terminal portable mode only).
@@ -958,20 +964,106 @@ fn read_version(target_dir: &Path) -> Option<String> {
         .ok()
         .map(|s| s.trim().to_string())
 }
-fn fs_extra_copy(src: &Path, dst: &Path) -> std::io::Result<()> {
-    if src.is_dir() {
-        std::fs::create_dir_all(dst)?;
-        for entry in std::fs::read_dir(src)? {
-            let entry = entry?;
-            let ty = entry.file_type()?;
-            if ty.is_dir() {
-                fs_extra_copy(&entry.path(), &dst.join(entry.file_name()))?;
-            } else {
-                std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
+/// Replace `target` with `staging`, keeping the old tree until the new one is
+/// in place.
+///
+/// The rename is the fast path and the only one that is actually atomic. It
+/// works here because `target` is moved aside first rather than pre-created:
+/// Windows' `MoveFileExW` cannot replace an existing directory, so creating
+/// the destination beforehand — as this used to — guaranteed the rename failed
+/// on the one platform naner ships to, silently demoting every install to a
+/// recursive copy and losing symlinks with it.
+///
+/// The previous tree is restored if placement fails, so a failed install
+/// leaves the working vendor it was replacing.
+fn swap_into_place(staging: &Path, target: &Path) -> std::io::Result<()> {
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let backup = with_suffix(target, ".old");
+    let _ = std::fs::remove_dir_all(&backup); // stale one from an interrupted run
+    let had_previous = target.exists();
+    if had_previous {
+        std::fs::rename(target, &backup)?;
+    }
+
+    let placed = std::fs::rename(staging, target).or_else(|rename_err| {
+        // Cross-device: staging and target normally share `vendor/`, so this
+        // is rare. Copy, then drop staging.
+        copy_tree(staging, target)
+            .inspect_err(|_| {
+                let _ = std::fs::remove_dir_all(target);
+            })
+            .map_err(|copy_err| {
+                std::io::Error::other(format!(
+                    "rename failed ({rename_err}); copy failed ({copy_err})"
+                ))
+            })?;
+        let _ = std::fs::remove_dir_all(staging);
+        Ok(())
+    });
+
+    match placed {
+        Ok(()) => {
+            let _ = std::fs::remove_dir_all(&backup);
+            Ok(())
+        }
+        Err(e) => {
+            if had_previous {
+                let _ = std::fs::rename(&backup, target);
             }
+            Err(e)
+        }
+    }
+}
+
+/// Overlay `staging` onto `target`, leaving files that only exist in `target`.
+///
+/// Windows Terminal only: an update must not lose `settings/`. This cannot be
+/// a swap, so a failure part-way leaves a mixed tree — the caller reports the
+/// failure rather than pretending otherwise, which is the best available
+/// outcome while preserving settings is the requirement.
+fn merge_over(staging: &Path, target: &Path) -> std::io::Result<()> {
+    copy_tree(staging, target)?;
+    let _ = std::fs::remove_dir_all(staging);
+    Ok(())
+}
+
+/// Recursive directory copy, overwriting existing files.
+///
+/// Symlinks are followed and materialised as regular files — the fallback path
+/// only, and only across devices, so the symlink-heavy trees (MSYS2) take the
+/// rename instead.
+fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
+    // A missing source is an error, not a no-op. The version this replaced
+    // returned Ok here, so a vanished staging tree copied nothing and reported
+    // success — the same silent-failure shape this whole path is being fixed
+    // for.
+    if !src.is_dir() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("source is not a directory: {}", src.display()),
+        ));
+    }
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let target = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), &target)?;
         }
     }
     Ok(())
+}
+
+/// `foo` -> `foo.old`, preserving the parent directory.
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(suffix);
+    path.with_file_name(name)
 }
 
 /// Network-dependent checks against the real distributor endpoints. Excluded
@@ -1394,6 +1486,159 @@ mod tests {
 
         let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
         assert!(installer.install_vendor("PowerShell"));
+    }
+
+    // ---- placement / swap failure handling (#14) ----
+
+    fn tree(root: &Path, files: &[(&str, &[u8])]) {
+        for (rel, content) in files {
+            let p = root.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, content).unwrap();
+        }
+    }
+
+    #[test]
+    fn swap_replaces_the_previous_tree_entirely() {
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("staging/pwsh");
+        let target = tmp.path().join("vendor/pwsh");
+        tree(&staging, &[("new.exe", b"new"), ("sub/a.txt", b"a")]);
+        tree(&target, &[("stale.exe", b"old")]);
+
+        swap_into_place(&staging, &target).unwrap();
+
+        assert!(target.join("new.exe").is_file());
+        assert!(target.join("sub/a.txt").is_file());
+        // A swap is a replacement: nothing from the old tree survives.
+        assert!(!target.join("stale.exe").exists());
+        assert!(!staging.exists(), "staging consumed by the rename");
+        assert!(
+            !tmp.path().join("vendor/pwsh.old").exists(),
+            "backup cleaned up on success"
+        );
+    }
+
+    #[test]
+    fn swap_into_a_fresh_location_needs_no_previous_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("staging/go");
+        let target = tmp.path().join("vendor/go");
+        tree(&staging, &[("go.exe", b"go")]);
+
+        swap_into_place(&staging, &target).unwrap();
+        assert!(target.join("go.exe").is_file());
+    }
+
+    /// The bug this issue is about: a failed placement used to be discarded, so
+    /// `.vendor-version` was written and "Installed" logged over a directory
+    /// that never received the new tree.
+    #[test]
+    fn a_failed_placement_is_reported_and_leaves_the_previous_install_intact() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("vendor/pwsh");
+        tree(&target, &[("working.exe", b"the version that works")]);
+
+        // Staging does not exist, so both the rename and the copy fail.
+        let staging = tmp.path().join("staging/pwsh");
+        let err = swap_into_place(&staging, &target).unwrap_err();
+        assert!(
+            err.to_string().contains("rename failed"),
+            "error should name both attempts: {err}"
+        );
+
+        // The previously working install is restored, not left deleted.
+        assert_eq!(
+            std::fs::read(target.join("working.exe")).unwrap(),
+            b"the version that works"
+        );
+        assert!(!tmp.path().join("vendor/pwsh.old").exists());
+    }
+
+    #[test]
+    fn a_stale_backup_from_an_interrupted_run_does_not_block_the_swap() {
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("staging/pwsh");
+        let target = tmp.path().join("vendor/pwsh");
+        tree(&staging, &[("new.exe", b"new")]);
+        tree(&target, &[("old.exe", b"old")]);
+        tree(&tmp.path().join("vendor/pwsh.old"), &[("junk", b"junk")]);
+
+        swap_into_place(&staging, &target).unwrap();
+        assert!(target.join("new.exe").is_file());
+        assert!(!tmp.path().join("vendor/pwsh.old").exists());
+    }
+
+    /// Windows Terminal is the one vendor that must not be swapped — an update
+    /// extracts over-top so `settings/` survives.
+    #[test]
+    fn merge_preserves_files_the_new_tree_does_not_carry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let staging = tmp.path().join("staging/wt");
+        let target = tmp.path().join("vendor/wt");
+        tree(&staging, &[("wt.exe", b"v2")]);
+        tree(
+            &target,
+            &[("wt.exe", b"v1"), ("settings/settings.json", b"{mine}")],
+        );
+
+        merge_over(&staging, &target).unwrap();
+
+        assert_eq!(std::fs::read(target.join("wt.exe")).unwrap(), b"v2");
+        assert_eq!(
+            std::fs::read(target.join("settings/settings.json")).unwrap(),
+            b"{mine}",
+            "user settings must survive a Windows Terminal update"
+        );
+    }
+
+    /// End-to-end: the installer must not report success, write
+    /// `.vendor-version`, or pin the vendor when placement fails.
+    ///
+    /// The failure is injected on the Windows Terminal merge path, where a
+    /// directory sitting where the new tree has a file makes the copy fail
+    /// deterministically on every platform. Contrived, but it exercises the
+    /// real branch — before this change, all three assertions below failed.
+    #[test]
+    fn install_fails_loudly_when_the_tree_cannot_be_placed() {
+        let root = tempfile::tempdir().unwrap();
+        let vendor = VendorDefinition {
+            name: "Windows Terminal".into(),
+            key: "WindowsTerminal".into(),
+            extract_dir: "windows-terminal".into(),
+            source_type: VendorSourceType::StaticUrl,
+            static_url: Some("https://static.example/wt.zip".into()),
+            file_name: Some("wt.zip".into()),
+            ..Default::default()
+        };
+
+        let mut http = StubHttp::default();
+        http.files.insert(
+            "https://static.example/wt.zip".into(),
+            zip_bytes("wt.exe", b"new"),
+        );
+
+        // `wt.exe` already exists as a directory, so copying the file over it
+        // cannot succeed.
+        std::fs::create_dir_all(root.path().join("vendor/windows-terminal/wt.exe")).unwrap();
+
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
+        // skip_if_exists would short-circuit on the non-empty dir; go through
+        // the update path so placement is actually attempted.
+        let installed = installer.update_vendor("Windows Terminal");
+
+        assert!(!installed, "a failed placement must not report success");
+        assert!(
+            !root
+                .path()
+                .join("vendor/windows-terminal/.vendor-version")
+                .exists(),
+            "no version marker for an install that did not happen"
+        );
+        assert!(
+            NanerLockfile::load(root.path()).is_none(),
+            "a failed install must not be pinned"
+        );
     }
 
     // ---- lockfile pinning (#20) ----

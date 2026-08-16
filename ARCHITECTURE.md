@@ -59,6 +59,7 @@ control. Each has exactly one component responsible for translating across it
 | HTTP (vendor downloads) | `core::http::UreqHttp` | `Http` trait | `get_text` → `Err` on transport failure, `Ok(status, _)` for non-2xx; `download` → `false`, partial file deleted |
 | HTTP (GitHub releases) | `core::github::GitHubReleasesClient` | `ReleasesApi` trait | Returns `None` on any non-2xx or parse failure; `download_asset` → `false` |
 | Archive extraction | `core::archives` | — (dispatch on extension) | `false` on unsupported format or extraction error; staging dir removed |
+| Vendor tree placement | `installer::swap_into_place` / `merge_over` | — | Swap is atomic via rename, and restores the previous tree if placement fails; the Windows Terminal merge cannot be atomic (it must preserve `settings/`), so a part-way failure leaves a mixed tree and is reported as a failed install |
 | Artifact integrity | `core::checksum` + resolver-supplied digests | `ChecksumInfo` | An upstream digest mismatch blocks installation; a missing digest logs and proceeds |
 | Environment pinning | `core::lockfile::NanerLockfile` | `naner.lock` | Unreadable, malformed or future-versioned lock reads as unlocked, with the reason reported; a failed write warns but does not fail the install |
 | Config file | `core::config::loader` | JSON / YAML providers | `ConfigError`; validation errors block the load, warnings are logged |
@@ -78,9 +79,7 @@ by default.
 **Known boundary debt.** Proxy configuration is currently read by `core::http` but
 not by `core::github`, so responsibility for the "outbound HTTP" boundary is split
 across two components rather than owned by one — a `ATLAS-BOUND-0001` violation
-tracked as [#18](https://github.com/baileyrd/rusty_naner/issues/18). Vendor install
-reports success when the staging swap fails, which contradicts its declared failure
-contract — [#14](https://github.com/baileyrd/rusty_naner/issues/14).
+tracked as [#18](https://github.com/baileyrd/rusty_naner/issues/18).
 
 ## Data flow
 

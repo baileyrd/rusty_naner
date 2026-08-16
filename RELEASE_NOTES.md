@@ -12,6 +12,34 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #28 — Stop reporting success when the vendor tree cannot be placed
+**2026-08-16**
+
+- **Fixed:** a failed staging swap was discarded (`let _ = fs_extra_copy(..)`),
+  so `.vendor-version` was written and `Installed <vendor>` logged over a
+  directory that never received the new tree. Because "installed" is judged by
+  a non-empty directory, every later run then skipped the broken vendor. The
+  placement result is now propagated: a failure logs the reason, returns false,
+  and neither stamps a version nor pins the vendor.
+- **Fixed:** the swap was not atomic on Windows. The target directory was
+  re-created immediately before `fs::rename`, and `MoveFileExW` cannot replace
+  an existing directory — so the rename failed every time on the one platform
+  naner ships to, silently demoting every install to a recursive copy and
+  losing symlinks with it. The previous tree is now moved aside instead, which
+  lets the rename succeed; the copy path is left only for a genuine
+  cross-device move, which two directories under `vendor/` will not hit.
+  MSYS2, whose tree is full of symlinks and ~400 MB, benefits most.
+- **Changed:** a failed install no longer destroys the install it was replacing
+  — the previous tree is restored. The Windows Terminal merge still cannot be
+  atomic, because preserving `settings/` rules out a swap; a part-way failure
+  there leaves a mixed tree and is reported as a failure rather than papered
+  over.
+- **Fixed:** the recursive copy treated a missing source as success. That was
+  the same silent-failure shape, one level down, and it is now an error.
+- 6 new tests (158 passed). The end-to-end one was checked against the old
+  behaviour first and fails on it, so it is a regression test rather than a
+  restatement of what the code already does.
+
 ### PR #27 — Make the lockfile real; drop the inert window-effect field
 **2026-08-16**
 

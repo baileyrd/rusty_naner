@@ -30,6 +30,13 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
 ### Fixed
+- Vendor install no longer reports success when the staged tree cannot be
+  placed; the failure is logged and no version marker or lock pin is written.
+- The staged-tree swap is atomic again on Windows: the target is moved aside
+  rather than re-created before the rename, which previously guaranteed the
+  rename failed and demoted every install to a recursive copy.
+- A failed placement restores the previous install instead of leaving a
+  half-populated directory.
 - Workspace did not build from a clean checkout — four unused path dependencies
   removed and `rusty_regx` repinned to its commit SHA.
 - Panic and silent path corruption in the case-insensitive `%NANER_ROOT%` /

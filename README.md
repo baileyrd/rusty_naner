@@ -90,7 +90,7 @@ published through the Phase 5 release workflow. Phases 0–5 done:
 - **Corporate Proxy & CA Support**: Auto-detects and respects `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` environment variables.
 - **Privacy Telemetry Opt-Out Enforcer**: Injects default telemetry opt-out variables (`DOTNET_CLI_TELEMETRY_OPTOUT=1`, `POWERSHELL_TELEMETRY_OPTOUT=1`, `AZURE_CORE_COLLECT_TELEMETRY=0`).
 - **Dynamic Architecture Resolution (`%{ARCH}`)**: Dynamically expands `%{ARCH}` into `arm64` or `x64` based on host target compilation.
-- **Atomic Staged Extraction**: Extracts archives to `vendor/.staging/<name>` prior to atomic directory swap.
+- **Atomic Staged Extraction**: Extracts archives to `vendor/.staging/<name>`, then swaps the tree into place with a single rename. The previous install is moved aside rather than deleted, so a failed placement restores it instead of leaving a half-populated directory. Windows Terminal is the exception — it merges over its existing install so `settings/` survives an update, which cannot be atomic.
 - **Download Asset Caching**: Auto-detects and reuses cached download assets for offline/air-gapped environments.
 - **Job Object Breakaway Isolation**: Spawns terminal targets with `CREATE_BREAKAWAY_FROM_JOB` (0x01000000) on Windows.
 - **Event Hooks**: Supports `PreLaunch` / `PostLaunch` script hooks, run before the terminal is spawned and after it starts.
