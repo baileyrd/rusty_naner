@@ -55,6 +55,12 @@ Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/rel
   the whole point of a pin -- so the line asserted a check that never ran, on
   the one screen where a user is deciding whether to trust what they are about
   to install. It now prints only on the resolving path, where it is true.
+- **Fixed:** a failed install still printed "Restart your terminal to use the
+  newly installed tools." A corrupted pin was correctly caught, the install
+  correctly refused, the exit code correctly non-zero -- and then naner advised
+  a restart for tools that were never placed. The advice is about a PATH that
+  changed, so it now prints only when something was installed. A partial run
+  still gets it; a run where everything failed does not.
 - **Provenance:** all found by working `docs/VALIDATION.md` Step 1 mode 3
   against v0.6.0 on Windows — the step that exists to catch exactly this, and
   which had never been run from outside an initialized tree. Neither is a v0.6.0

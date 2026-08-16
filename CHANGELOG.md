@@ -18,6 +18,8 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   `self-update` and the vendor list, with a test that now enforces it (#39).
 - A pinned install no longer prints `Latest version:`, which claimed a currency
   check that a pin by definition does not perform.
+- "Restart your terminal to use the newly installed tools." is no longer printed
+  when every install failed and nothing was placed.
 
 ## [0.6.0] - 2026-08-16
 ### Added
