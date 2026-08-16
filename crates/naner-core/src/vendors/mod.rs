@@ -68,12 +68,33 @@ pub struct VendorDefinition {
     pub fallback_version: Option<String>,
     pub fallback_file_name: Option<String>,
 
-    // Checksum (B2 fixed: populated from an optional vendors.json object)
+    // Checksum (B2 fixed: populated from an optional vendors.json object).
+    // A value here pins the artifact and outranks anything a resolver
+    // discovers upstream.
     pub checksum: Option<ChecksumInfo>,
+
+    /// Where to fetch a digest for a dynamically-resolved artifact, for
+    /// sources that publish one outside the resolution response itself.
+    /// The `golang-api` / `nodejs-api` / `dotnet-api` resolvers need no
+    /// config — each has exactly one place to look.
+    pub checksum_source: Option<ChecksumSource>,
 
     // Executable installers
     pub install_type: Option<String>,
     pub installer_args: Option<Vec<String>>,
+}
+
+/// How to obtain an upstream digest for an artifact whose URL is only known
+/// after resolution.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ChecksumSource {
+    /// A file alongside the download, named `<download-url><suffix>` — the
+    /// form `static.rust-lang.org` uses (`rustup-init.exe.sha256`).
+    Sidecar { suffix: String },
+    /// A digest embedded in a listing page, captured by group 1 of `pattern`
+    /// after `{FILE}` is replaced with the resolved file name — the form
+    /// `repo.anaconda.com/miniconda/` uses.
+    Scrape { url: String, pattern: String },
 }
 
 /// `VendorDefinitionFactory`: the hardcoded essential set used when

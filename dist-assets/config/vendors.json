@@ -126,6 +126,11 @@
         "fileName": "Miniconda3-latest-Windows-x86_64.exe",
         "size": "~50"
       },
+      "checksumSource": {
+        "type": "scrape",
+        "url": "https://repo.anaconda.com/miniconda/",
+        "pattern": "{FILE}</a></td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td>([0-9a-f]{64})"
+      },
       "postInstallFunction": "Miniconda.PostInstall"
     },
     "Go": {
@@ -161,6 +166,7 @@
         "fileName": "rustup-init.exe",
         "size": "~10"
       },
+      "checksumSource": { "type": "sidecar", "suffix": ".sha256" },
       "postInstallFunction": "Rust.PostInstall",
       "installType": "installer",
       "installerArgs": [

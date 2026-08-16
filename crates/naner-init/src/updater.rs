@@ -6,10 +6,14 @@
 
 use std::path::{Path, PathBuf};
 
-use naner_core::github::ReleasesApi;
-use naner_core::{archives, constants, logger, version};
+use naner_core::github::{GitHubRelease, ReleasesApi};
+use naner_core::{archives, checksum, constants, logger, version};
 
 const NANER_BUNDLE_NAME: &str = "naner-bundle.zip";
+
+/// `sha256sum`-style manifest published alongside the release assets by the
+/// release workflow. Every asset this updater installs must appear in it.
+const SHA256SUMS_NAME: &str = "SHA256SUMS";
 
 pub struct NanerUpdater<'a> {
     naner_root: PathBuf,
@@ -56,6 +60,69 @@ impl<'a> NanerUpdater<'a> {
 
     pub fn target_version(&self) -> &str {
         &self.init_version
+    }
+
+    /// Verify `file` against the release's `SHA256SUMS` manifest.
+    ///
+    /// Fails closed. The release workflow enforces tag == embedded version,
+    /// so a release this binary is willing to install from is always one the
+    /// same workflow built — a missing or non-matching manifest means the
+    /// artifact is not what the release says it is, not that the release is
+    /// merely old.
+    fn verify_asset(&self, release: &GitHubRelease, file: &Path, asset_name: &str) -> bool {
+        let sums_asset = release.assets.as_deref().and_then(|assets| {
+            assets.iter().find(|a| {
+                a.name
+                    .as_deref()
+                    .is_some_and(|n| n.eq_ignore_ascii_case(SHA256SUMS_NAME))
+            })
+        });
+        let Some(sums_url) = sums_asset
+            .and_then(|a| a.url.as_deref().or(a.browser_download_url.as_deref()))
+            .filter(|u| !u.is_empty())
+        else {
+            logger::failure(&format!("{SHA256SUMS_NAME} not found in release assets"));
+            logger::info("Refusing to install an unverified download.");
+            return false;
+        };
+
+        let sums_path = file.with_extension("sha256sums");
+        if !self
+            .github
+            .download_asset(sums_url, &sums_path, SHA256SUMS_NAME)
+        {
+            logger::failure(&format!("Could not download {SHA256SUMS_NAME}"));
+            return false;
+        }
+        let sums = std::fs::read_to_string(&sums_path).unwrap_or_default();
+        let _ = std::fs::remove_file(&sums_path);
+
+        let Some(expected) = sha256_for(&sums, asset_name) else {
+            logger::failure(&format!("{asset_name} is not listed in {SHA256SUMS_NAME}"));
+            return false;
+        };
+
+        let info = checksum::ChecksumInfo {
+            algorithm: "SHA256".into(),
+            value: expected,
+            required: true,
+        };
+        let result = checksum::verify(file, &info);
+        if result.success {
+            logger::success(&format!("Verified {asset_name}"));
+            return true;
+        }
+
+        logger::failure(&format!("Checksum verification failed for {asset_name}!"));
+        logger::failure(&format!(
+            "Expected: {}",
+            result.expected.as_deref().unwrap_or_default()
+        ));
+        logger::failure(&format!(
+            "Actual:   {}",
+            result.actual.as_deref().unwrap_or_default()
+        ));
+        false
     }
 
     /// `CheckForUpdateAsync`: canonical-form inequality against the embedded
@@ -133,6 +200,11 @@ impl<'a> NanerUpdater<'a> {
             return false;
         }
 
+        if !self.verify_asset(&release, &temp_path, constants::executables::NANER) {
+            let _ = std::fs::remove_file(&temp_path);
+            return false;
+        }
+
         if naner_path.is_file()
             && let Err(e) = std::fs::remove_file(&naner_path)
         {
@@ -205,6 +277,11 @@ impl<'a> NanerUpdater<'a> {
 
         logger::newline();
         logger::status("Extracting bundle...");
+        if !self.verify_asset(&release, &temp_bundle, NANER_BUNDLE_NAME) {
+            let _ = std::fs::remove_file(&temp_bundle);
+            return false;
+        }
+
         let extract_result = archives::extract_zip_plain(&temp_bundle, &self.naner_root);
         let _ = std::fs::remove_file(&temp_bundle);
         match extract_result {
@@ -282,6 +359,18 @@ impl<'a> NanerUpdater<'a> {
     }
 }
 
+/// Look up `asset_name` in a `sha256sum`-style manifest (`<hex>  <name>`).
+/// The name column may be `*name` when the sum was taken in binary mode.
+fn sha256_for(sums: &str, asset_name: &str) -> Option<String> {
+    sums.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        let name = parts.next()?.trim_start_matches('*');
+        (name.eq_ignore_ascii_case(asset_name) && hash.chars().all(|c| c.is_ascii_hexdigit()))
+            .then(|| hash.to_string())
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,6 +381,9 @@ mod tests {
         release: Option<GitHubRelease>,
         /// Bytes served for any download_asset call; None = download fails.
         asset_bytes: Option<Vec<u8>>,
+        /// Body served when the updater asks for SHA256SUMS; None = the
+        /// manifest download itself fails.
+        sums: Option<String>,
     }
 
     impl ReleasesApi for StubApi {
@@ -301,18 +393,40 @@ mod tests {
         fn get_release_by_tag(&self, _tag: &str) -> Option<GitHubRelease> {
             self.release.clone()
         }
-        fn download_asset(&self, _url: &str, output_path: &Path, _name: &str) -> bool {
-            match &self.asset_bytes {
-                Some(bytes) => {
-                    std::fs::File::create(output_path)
-                        .unwrap()
-                        .write_all(bytes)
-                        .unwrap();
-                    true
+        fn download_asset(&self, _url: &str, output_path: &Path, name: &str) -> bool {
+            let bytes = if name.eq_ignore_ascii_case(SHA256SUMS_NAME) {
+                match &self.sums {
+                    Some(body) => body.clone().into_bytes(),
+                    None => return false,
                 }
-                None => false,
-            }
+            } else {
+                match &self.asset_bytes {
+                    Some(bytes) => bytes.clone(),
+                    None => return false,
+                }
+            };
+            std::fs::File::create(output_path)
+                .unwrap()
+                .write_all(&bytes)
+                .unwrap();
+            true
         }
+    }
+
+    /// A `SHA256SUMS` body listing `name` with the real digest of `bytes`.
+    fn sums_for(name: &str, bytes: &[u8]) -> String {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), bytes).unwrap();
+        let hash = naner_core::checksum::compute(tmp.path(), "SHA256").unwrap();
+        format!("{}  {name}\n", hash.to_lowercase())
+    }
+
+    /// The manifest asset every release now carries.
+    fn sums_asset() -> (&'static str, &'static str) {
+        (
+            SHA256SUMS_NAME,
+            "https://api.github.com/repos/x/y/releases/assets/99",
+        )
     }
 
     fn release_with(assets: Vec<(&str, &str)>) -> GitHubRelease {
@@ -355,11 +469,15 @@ mod tests {
     fn initialize_extracts_bundle_and_writes_markers() {
         let root = tempfile::tempdir().unwrap();
         let api = StubApi {
-            release: Some(release_with(vec![(
-                "naner-bundle.zip",
-                "https://api.github.com/repos/x/y/releases/assets/1",
-            )])),
+            release: Some(release_with(vec![
+                (
+                    "naner-bundle.zip",
+                    "https://api.github.com/repos/x/y/releases/assets/1",
+                ),
+                sums_asset(),
+            ])),
             asset_bytes: Some(bundle_zip()),
+            sums: Some(sums_for(NANER_BUNDLE_NAME, &bundle_zip())),
         };
         let updater = NanerUpdater::new(root.path(), &api);
 
@@ -392,6 +510,7 @@ mod tests {
         let api = StubApi {
             release: Some(release_with(vec![("other.zip", "https://x/other.zip")])),
             asset_bytes: Some(vec![]),
+            sums: None,
         };
         let updater = NanerUpdater::new(root.path(), &api);
         assert!(!updater.initialize());
@@ -407,11 +526,15 @@ mod tests {
         std::fs::write(vendor_bin.join(".naner-version"), "v0.0.1").unwrap();
 
         let api = StubApi {
-            release: Some(release_with(vec![(
-                "naner.exe",
-                "https://api.github.com/repos/x/y/releases/assets/2",
-            )])),
+            release: Some(release_with(vec![
+                (
+                    "naner.exe",
+                    "https://api.github.com/repos/x/y/releases/assets/2",
+                ),
+                sums_asset(),
+            ])),
             asset_bytes: Some(b"new exe".to_vec()),
+            sums: Some(sums_for(constants::executables::NANER, b"new exe")),
         };
         let updater = NanerUpdater::new(root.path(), &api);
 
@@ -432,12 +555,153 @@ mod tests {
         assert!(!vendor_bin.join("naner.exe.tmp").exists());
     }
 
+    fn exe_release() -> GitHubRelease {
+        release_with(vec![
+            (
+                "naner.exe",
+                "https://api.github.com/repos/x/y/releases/assets/2",
+            ),
+            sums_asset(),
+        ])
+    }
+
+    /// Stage an installed naner.exe so a refused update is visibly a refusal
+    /// rather than a no-op on an empty tree.
+    fn root_with_installed_exe() -> tempfile::TempDir {
+        let root = tempfile::tempdir().unwrap();
+        let bin = root.path().join("vendor/bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        std::fs::write(bin.join(constants::executables::NANER), b"original exe").unwrap();
+        root
+    }
+
+    #[test]
+    fn tampered_naner_exe_is_refused_and_the_installed_binary_survives() {
+        let root = root_with_installed_exe();
+        let api = StubApi {
+            release: Some(exe_release()),
+            // Served bytes differ from what the manifest attests.
+            asset_bytes: Some(b"trojan".to_vec()),
+            sums: Some(sums_for(constants::executables::NANER, b"new exe")),
+        };
+        let updater = NanerUpdater::new(root.path(), &api);
+
+        assert!(
+            !updater.update_naner_exe(),
+            "mismatch must abort the update"
+        );
+        let installed = root
+            .path()
+            .join("vendor/bin")
+            .join(constants::executables::NANER);
+        assert_eq!(
+            std::fs::read(&installed).unwrap(),
+            b"original exe",
+            "the existing binary must not be replaced or deleted"
+        );
+        // The rejected download must not be left lying around.
+        assert!(
+            !root
+                .path()
+                .join("vendor/bin")
+                .join(format!("{}.tmp", constants::executables::NANER))
+                .exists()
+        );
+    }
+
+    #[test]
+    fn release_without_a_manifest_is_refused() {
+        let root = root_with_installed_exe();
+        let api = StubApi {
+            // No SHA256SUMS asset in the release at all.
+            release: Some(release_with(vec![(
+                "naner.exe",
+                "https://api.github.com/repos/x/y/releases/assets/2",
+            )])),
+            asset_bytes: Some(b"new exe".to_vec()),
+            sums: None,
+        };
+        let updater = NanerUpdater::new(root.path(), &api);
+        assert!(!updater.update_naner_exe());
+        assert_eq!(
+            std::fs::read(
+                root.path()
+                    .join("vendor/bin")
+                    .join(constants::executables::NANER)
+            )
+            .unwrap(),
+            b"original exe"
+        );
+    }
+
+    #[test]
+    fn asset_absent_from_the_manifest_is_refused() {
+        let root = root_with_installed_exe();
+        let api = StubApi {
+            release: Some(exe_release()),
+            asset_bytes: Some(b"new exe".to_vec()),
+            // Manifest is well-formed but lists a different file.
+            sums: Some(sums_for("something-else.zip", b"new exe")),
+        };
+        let updater = NanerUpdater::new(root.path(), &api);
+        assert!(!updater.update_naner_exe());
+    }
+
+    #[test]
+    fn tampered_bundle_is_refused_and_leaves_the_root_uninitialized() {
+        let root = tempfile::tempdir().unwrap();
+        let api = StubApi {
+            release: Some(release_with(vec![
+                (
+                    "naner-bundle.zip",
+                    "https://api.github.com/repos/x/y/releases/assets/1",
+                ),
+                sums_asset(),
+            ])),
+            asset_bytes: Some(bundle_zip()),
+            sums: Some(sums_for(NANER_BUNDLE_NAME, b"a different bundle")),
+        };
+        let updater = NanerUpdater::new(root.path(), &api);
+
+        assert!(!updater.initialize());
+        assert!(!updater.is_initialized());
+        // Nothing extracted from an unverified archive.
+        assert!(!root.path().join("vendor/bin/naner.exe").exists());
+        assert!(
+            !root
+                .path()
+                .join(NANER_BUNDLE_NAME.to_owned() + ".tmp")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn manifest_lookup_is_name_exact_and_tolerates_binary_mode() {
+        let sums = "\
+aa11111111111111111111111111111111111111111111111111111111111111  naner.exe
+bb22222222222222222222222222222222222222222222222222222222222222 *naner-bundle.zip
+";
+        assert_eq!(
+            sha256_for(sums, "naner.exe").as_deref(),
+            Some("aa11111111111111111111111111111111111111111111111111111111111111")
+        );
+        // Binary-mode `*` prefix is stripped.
+        assert_eq!(
+            sha256_for(sums, "naner-bundle.zip").as_deref(),
+            Some("bb22222222222222222222222222222222222222222222222222222222222222")
+        );
+        // A name that merely appears in the file must not match another row.
+        assert_eq!(sha256_for(sums, "naner"), None);
+        assert_eq!(sha256_for(sums, "naner-init.exe"), None);
+    }
+
     #[test]
     fn installed_version_fallbacks() {
         let root = tempfile::tempdir().unwrap();
         let api = StubApi {
             release: None,
             asset_bytes: None,
+            sums: None,
         };
         let updater = NanerUpdater::new(root.path(), &api);
 
@@ -463,6 +727,7 @@ mod tests {
                 "https://api.github.com/repos/x/y/releases/assets/2",
             )])),
             asset_bytes: None, // download fails
+            sums: None,
         };
         let updater = NanerUpdater::new(root.path(), &api);
         assert!(!updater.update_naner_exe());

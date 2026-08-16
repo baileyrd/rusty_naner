@@ -220,6 +220,12 @@ impl ReleasesApi for GitHubReleasesClient {
             logger::failure("Download failed: flush error");
             return false;
         }
+        if total_bytes > 0 && total_read != total_bytes {
+            logger::failure(&format!(
+                "Download failed: expected {total_bytes} bytes, received {total_read}"
+            ));
+            return false;
+        }
         if total_bytes > 0 {
             print!("\r  Progress: 100%");
             println!();

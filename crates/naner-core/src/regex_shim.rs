@@ -59,6 +59,26 @@ pub fn compile(pattern: &str) -> Result<Regex, String> {
     Regex::new(&translate(pattern)).map_err(|e| e.to_string())
 }
 
+/// Backslash-escape every ERE metacharacter in `literal` so it matches
+/// itself. Used to splice a resolved file name (which routinely contains `.`,
+/// and may contain `+` or `-`) into a checksum-scrape pattern.
+///
+/// `translate` passes `\<metachar>` through verbatim, so escaping here is
+/// safe under both `compile` and `compile_ci`.
+pub fn escape(literal: &str) -> String {
+    const META: &[char] = &[
+        '.', '^', '$', '*', '+', '?', '(', ')', '[', ']', '{', '}', '|', '\\',
+    ];
+    let mut out = String::with_capacity(literal.len());
+    for c in literal.chars() {
+        if META.contains(&c) {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

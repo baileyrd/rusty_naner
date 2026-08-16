@@ -83,6 +83,8 @@ published through the Phase 5 release workflow. Phases 0–5 done:
 - **`naner self-update`**: Queries GitHub releases and performs atomic self-replacement.
 
 ### Infrastructure & Subsystem Enhancements
+- **Download Integrity Verification**: every vendor download is checked against a digest published by the distributor itself where one exists — Go and Node.js (SHA-256), the .NET SDK (SHA-512, via the channel manifest that also supplies the authoritative URL), `rustup-init.exe` (`.sha256` sidecar) and Miniconda (repository listing). A vendor may also pin a digest via `checksum` in `vendors.json`, which takes precedence. A mismatch against an upstream digest blocks installation. Sources that publish no digest (MSYS2, GitHub release assets) install unverified unless pinned.
+- **Verified Self-Update**: `naner-init` verifies `naner.exe` and `naner-bundle.zip` against the `SHA256SUMS` manifest published with each release before replacing anything on disk, and refuses to install if the manifest is missing or does not match.
 - **Corporate Proxy & CA Support**: Auto-detects and respects `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` environment variables.
 - **Privacy Telemetry Opt-Out Enforcer**: Injects default telemetry opt-out variables (`DOTNET_CLI_TELEMETRY_OPTOUT=1`, `POWERSHELL_TELEMETRY_OPTOUT=1`, `AZURE_CORE_COLLECT_TELEMETRY=0`).
 - **Dynamic Architecture Resolution (`%{ARCH}`)**: Dynamically expands `%{ARCH}` into `arm64` or `x64` based on host target compilation.
