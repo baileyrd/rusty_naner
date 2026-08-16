@@ -15,6 +15,7 @@ use super::{
     WindowsTerminalConfigurator, is_windows_terminal,
 };
 use crate::http::Http;
+use crate::lockfile::{LockedVendor, NanerLockfile};
 use crate::{archives, checksum, logger};
 
 /// `VendorDownloadInfo`.
@@ -57,11 +58,22 @@ impl<'a> UnifiedVendorInstaller<'a> {
     }
 
     /// `InstallVendorAsync(name)` — skip when already installed.
+    ///
+    /// Honours `naner.lock`: a pinned vendor installs the exact artifact
+    /// recorded there rather than re-resolving to whatever upstream now calls
+    /// latest. That is what makes an environment reproducible, and it is the
+    /// only verification MSYS2 and the GitHub-sourced vendors get, since their
+    /// distributors publish no digest (ADR-0002).
     pub fn install_vendor(&self, vendor_name: &str) -> bool {
-        self.install_vendor_inner(vendor_name, true)
+        self.install_vendor_inner(vendor_name, true, true)
     }
 
-    fn install_vendor_inner(&self, vendor_name: &str, skip_if_exists: bool) -> bool {
+    fn install_vendor_inner(
+        &self,
+        vendor_name: &str,
+        skip_if_exists: bool,
+        use_lock: bool,
+    ) -> bool {
         let Some(vendor) = self.find(vendor_name) else {
             logger::failure(&format!("Unknown vendor: {vendor_name}"));
             return false;
@@ -74,10 +86,24 @@ impl<'a> UnifiedVendorInstaller<'a> {
             return true;
         }
 
-        logger::status(&format!("Fetching latest {}...", vendor.name));
+        let pinned = use_lock
+            .then(|| NanerLockfile::load(&self.naner_root))
+            .flatten()
+            .and_then(|lock| lock.get(&vendor.key).cloned());
 
-        // Resolve (with resolution-level fallback).
-        let Some(mut info) = self.fetch_download_info(vendor) else {
+        let Some(mut info) = (match &pinned {
+            Some(locked) => {
+                logger::status(&format!(
+                    "Using pinned {} ({})",
+                    vendor.name, locked.version
+                ));
+                Some(locked_download_info(locked))
+            }
+            None => {
+                logger::status(&format!("Fetching latest {}...", vendor.name));
+                self.fetch_download_info(vendor)
+            }
+        }) else {
             logger::warning(&format!("Failed to fetch {}, skipping...", vendor.name));
             return false;
         };
@@ -163,8 +189,54 @@ impl<'a> UnifiedVendorInstaller<'a> {
             logger::debug("Failed to save vendor version", false);
         }
 
+        self.record_lock_entry(vendor, &info, &download_path, pinned.is_some());
+
         logger::success(&format!("  Installed {}", vendor.name));
         true
+    }
+
+    /// Pin what was just installed, so the next install reproduces it.
+    ///
+    /// Best-effort by design: a lock that cannot be written must not fail an
+    /// otherwise-successful install, but it is reported rather than swallowed —
+    /// silently not pinning is exactly the failure this file exists to prevent.
+    fn record_lock_entry(
+        &self,
+        vendor: &VendorDefinition,
+        info: &VendorDownloadInfo,
+        download_path: &Path,
+        already_pinned: bool,
+    ) {
+        // Re-installing from an existing pin changes nothing; don't rewrite the
+        // file (and don't re-hash a 400 MB archive) for a no-op.
+        if already_pinned {
+            return;
+        }
+
+        let sha256 = match checksum::compute(download_path, "SHA256") {
+            Ok(hex) => Some(hex.to_lowercase()),
+            Err(e) => {
+                logger::debug(&format!("Could not hash for {LOCKFILE_LABEL}: {e}"), false);
+                None
+            }
+        };
+
+        let mut lock = NanerLockfile::load_or_default(&self.naner_root);
+        lock.record(
+            &vendor.key,
+            LockedVendor {
+                version: info.version.clone().unwrap_or_default(),
+                url: info.url.clone(),
+                sha256,
+            },
+        );
+        match lock.save(&self.naner_root) {
+            Ok(()) => logger::debug(
+                &format!("  Pinned {} in {LOCKFILE_LABEL}", vendor.name),
+                false,
+            ),
+            Err(e) => logger::warning(&format!("    Could not update {LOCKFILE_LABEL}: {e}")),
+        }
     }
 
     /// `UpdateVendorAsync`: delete-and-reinstall, except Windows Terminal
@@ -200,7 +272,10 @@ impl<'a> UnifiedVendorInstaller<'a> {
             }
         }
 
-        self.install_vendor_inner(vendor_name, false)
+        // An update is an explicit request for a newer artifact, so it ignores
+        // the pin and rewrites it. Honouring the lock here would make
+        // `update-vendors` a no-op on every pinned vendor.
+        self.install_vendor_inner(vendor_name, false, false)
     }
 
     /// `InstallAllVendorsAsync` (essential bootstrap path).
@@ -666,6 +741,31 @@ impl<'a> UnifiedVendorInstaller<'a> {
             logger::warning(&format!("    Actual:   {actual}"));
             true
         }
+    }
+}
+
+/// Label used in log lines about the lockfile.
+const LOCKFILE_LABEL: &str = crate::lockfile::LOCKFILE_NAME;
+
+/// Build download info from a lockfile pin.
+///
+/// The pinned digest becomes the download's checksum and is `required`: the
+/// whole point of a pin is that a different artifact at that URL is a failure,
+/// not a silent upgrade. A pin without a digest still fixes the URL and version.
+fn locked_download_info(locked: &LockedVendor) -> VendorDownloadInfo {
+    VendorDownloadInfo {
+        url: locked.url.clone(),
+        file_name: file_name_of(&locked.url),
+        version: Some(locked.version.clone()),
+        checksum: locked
+            .sha256
+            .as_deref()
+            .filter(|v| !v.is_empty())
+            .map(|value| checksum::ChecksumInfo {
+                algorithm: "SHA256".into(),
+                value: value.to_string(),
+                required: true,
+            }),
     }
 }
 
@@ -1294,6 +1394,174 @@ mod tests {
 
         let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
         assert!(installer.install_vendor("PowerShell"));
+    }
+
+    // ---- lockfile pinning (#20) ----
+
+    /// Only the *pinned* URL is routable, so a successful install proves
+    /// resolution was skipped entirely rather than merely agreeing.
+    fn stub_with_only_pinned_url(payload: &[u8]) -> StubHttp {
+        let mut http = StubHttp::default();
+        http.files.insert(
+            "https://pinned.example/pwsh-7.4.0.zip".into(),
+            payload.to_vec(),
+        );
+        http
+    }
+
+    fn write_pin(root: &Path, sha256: Option<&str>) {
+        let mut lock = NanerLockfile::default();
+        lock.record(
+            "PowerShell",
+            LockedVendor {
+                version: "7.4.0".into(),
+                url: "https://pinned.example/pwsh-7.4.0.zip".into(),
+                sha256: sha256.map(str::to_string),
+            },
+        );
+        lock.save(root).unwrap();
+    }
+
+    fn sha256_of(bytes: &[u8]) -> String {
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), bytes).unwrap();
+        crate::checksum::compute(tmp.path(), "SHA256")
+            .unwrap()
+            .to_lowercase()
+    }
+
+    #[test]
+    fn a_pinned_vendor_installs_the_pin_without_resolving() {
+        let root = tempfile::tempdir().unwrap();
+        let payload = zip_bytes("pwsh.exe", b"pinned build");
+        write_pin(root.path(), Some(&sha256_of(&payload)));
+
+        // No route for the GitHub API or the "latest" asset — if the installer
+        // resolved, it would fail.
+        let http = stub_with_only_pinned_url(&payload);
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
+        assert!(installer.install_vendor("PowerShell"));
+
+        let target = root.path().join("vendor/powershell");
+        assert!(target.join("pwsh.exe").is_file());
+        assert_eq!(
+            std::fs::read_to_string(target.join(".vendor-version")).unwrap(),
+            "7.4.0"
+        );
+    }
+
+    #[test]
+    fn a_pin_whose_digest_does_not_match_blocks_the_install() {
+        let root = tempfile::tempdir().unwrap();
+        let payload = zip_bytes("pwsh.exe", b"pinned build");
+        // Same URL, different bytes than the pin attests.
+        write_pin(root.path(), Some(&"a".repeat(64)));
+
+        let http = stub_with_only_pinned_url(&payload);
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
+        assert!(!installer.install_vendor("PowerShell"));
+        assert!(!root.path().join("vendor/powershell/pwsh.exe").exists());
+    }
+
+    /// The MSYS2 / GitHub-asset case: no upstream digest exists, so the first
+    /// install cannot be verified — but it must still be pinned, because that
+    /// is what makes every later install verifiable.
+    #[test]
+    fn an_unpinned_install_records_url_version_and_digest() {
+        let root = tempfile::tempdir().unwrap();
+        let payload = zip_bytes("pwsh.exe", b"fake");
+        let mut http = StubHttp::default();
+        http.text.insert(
+            "https://api.github.com/repos/PowerShell/PowerShell/releases/latest".into(),
+            (200, RELEASE_JSON.into()),
+        );
+        http.files.insert(
+            "https://gh.example/PowerShell-7.5.0-win-x64.zip".into(),
+            payload.clone(),
+        );
+
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
+        assert!(installer.install_vendor("PowerShell"));
+
+        let lock = NanerLockfile::load(root.path()).expect("lock written");
+        let entry = lock.get("PowerShell").expect("vendor pinned");
+        assert_eq!(entry.version, "v7.5.0");
+        assert_eq!(entry.url, "https://gh.example/PowerShell-7.5.0-win-x64.zip");
+        assert_eq!(entry.sha256.as_deref(), Some(sha256_of(&payload).as_str()));
+    }
+
+    /// A pin without a digest still fixes the artifact; it just cannot verify
+    /// the bytes. It must not be treated as "no pin".
+    #[test]
+    fn a_digestless_pin_still_fixes_the_url_and_version() {
+        let root = tempfile::tempdir().unwrap();
+        let payload = zip_bytes("pwsh.exe", b"pinned build");
+        write_pin(root.path(), None);
+
+        let http = stub_with_only_pinned_url(&payload);
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
+        assert!(installer.install_vendor("PowerShell"));
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("vendor/powershell/.vendor-version")).unwrap(),
+            "7.4.0"
+        );
+    }
+
+    /// `update-vendors` means "get me a newer one" — honouring the pin would
+    /// make it a permanent no-op on every pinned vendor.
+    #[test]
+    fn update_ignores_the_pin_and_repins_what_it_resolved() {
+        let root = tempfile::tempdir().unwrap();
+        write_pin(root.path(), Some(&"a".repeat(64)));
+
+        let mut http = StubHttp::default();
+        http.text.insert(
+            "https://api.github.com/repos/PowerShell/PowerShell/releases/latest".into(),
+            (200, RELEASE_JSON.into()),
+        );
+        let payload = zip_bytes("pwsh.exe", b"newer");
+        http.files.insert(
+            "https://gh.example/PowerShell-7.5.0-win-x64.zip".into(),
+            payload.clone(),
+        );
+
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
+        assert!(installer.update_vendor("PowerShell"));
+
+        let entry = NanerLockfile::load(root.path())
+            .unwrap()
+            .get("PowerShell")
+            .cloned()
+            .expect("re-pinned");
+        assert_eq!(entry.version, "v7.5.0");
+        assert_eq!(entry.sha256.as_deref(), Some(sha256_of(&payload).as_str()));
+    }
+
+    /// A vendors.json `checksum` is the operator's explicit assertion and still
+    /// outranks the pin, so a compromised lock cannot overrule it.
+    #[test]
+    fn a_pinned_checksum_in_config_still_outranks_the_lock() {
+        let locked = LockedVendor {
+            version: "7.4.0".into(),
+            url: "https://pinned.example/pwsh-7.4.0.zip".into(),
+            sha256: Some("b".repeat(64)),
+        };
+        let download = locked_download_info(&locked);
+        assert_eq!(download.checksum.as_ref().unwrap().value, "b".repeat(64));
+        assert!(download.checksum.as_ref().unwrap().required);
+
+        let vendor = VendorDefinition {
+            checksum: Some(checksum::ChecksumInfo {
+                algorithm: "SHA256".into(),
+                value: "c".repeat(64),
+                required: true,
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolved_checksum(&vendor, &download).unwrap().value,
+            "c".repeat(64)
+        );
     }
 
     #[test]

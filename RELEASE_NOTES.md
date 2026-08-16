@@ -12,6 +12,34 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #27 — Make the lockfile real; drop the inert window-effect field
+**2026-08-16**
+
+- **Added:** `naner.lock` now does something. A successful install pins the
+  vendor's exact version, URL and SHA-256; later installs reproduce and verify
+  that artifact instead of re-resolving to upstream latest. This is the only
+  verification MSYS2 and the six GitHub-sourced vendors get — their distributors
+  publish no digest, so #25's upstream-digest work could not reach them.
+- **Added:** `naner lock [--refresh [vendor...]] [--porcelain]` to inspect pins
+  and drop them. `--refresh` accepts a vendor's display name or key.
+- **Changed:** `update-vendors` deliberately ignores the pin and rewrites it —
+  honouring it there would make the command a permanent no-op on every pinned
+  vendor. Reasoning in
+  [ADR-0003](./docs/adr/0003-the-lockfile-pins-rather-than-records.md).
+- **Removed:** `ProfileConfig::WindowEffect`. It was parsed and never read, and
+  the README advertised backdrop effects (`Mica`, `Acrylic`, `Tabbed`) that
+  nothing implemented. There is no delivery mechanism for it in the current
+  design: the launch path passes CLI arguments, while a Windows Terminal backdrop
+  is a `settings.json` profile property, and naner writes those settings only at
+  install time via string substitution — deliberately not a JSON round-trip, so
+  JSONC comments survive. README corrected rather than left overstating.
+- **Known limitation:** the *first* install of a vendor without an upstream
+  digest remains trust-on-first-use. The lock records what arrived; it cannot
+  know whether that was the right thing. Pinning makes the second and later
+  installs trustworthy, which is a real but weaker guarantee — said plainly in
+  the module docs, the README and `naner lock`'s own output.
+- 13 new tests (152 passed, 5 network-dependent tests `#[ignore]`d).
+
 ### PR #26 — Apply the standard governance file set
 **2026-08-16**
 

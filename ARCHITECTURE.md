@@ -60,6 +60,7 @@ control. Each has exactly one component responsible for translating across it
 | HTTP (GitHub releases) | `core::github::GitHubReleasesClient` | `ReleasesApi` trait | Returns `None` on any non-2xx or parse failure; `download_asset` → `false` |
 | Archive extraction | `core::archives` | — (dispatch on extension) | `false` on unsupported format or extraction error; staging dir removed |
 | Artifact integrity | `core::checksum` + resolver-supplied digests | `ChecksumInfo` | An upstream digest mismatch blocks installation; a missing digest logs and proceeds |
+| Environment pinning | `core::lockfile::NanerLockfile` | `naner.lock` | Unreadable, malformed or future-versioned lock reads as unlocked, with the reason reported; a failed write warns but does not fail the install |
 | Config file | `core::config::loader` | JSON / YAML providers | `ConfigError`; validation errors block the load, warnings are logged |
 | Filesystem layout | `core::paths` | — | `RootNotFound` carries the full search diagnostic |
 | Process spawn | `naner::launcher` | `TerminalKind` | Non-zero exit with a message; spawn is fire-and-forget once it succeeds |
@@ -149,7 +150,7 @@ are argued in [MIGRATION_ANALYSIS.md](./MIGRATION_ANALYSIS.md) §2.2–§2.5.
   packages *within* a vendor (MSYS2's pacman included).
 - **Running as a service.** No daemon, no background process, no persistent state
   beyond files on disk.
-- **Reproducible installs.** Dynamic resolvers deliberately track upstream latest.
-  Pinning every artifact would need the lockfile in
-  [#20](https://github.com/baileyrd/rusty_naner/issues/20); until then only the
-  `fallback` URLs and explicitly pinned `checksum` entries are fixed.
+- **Reproducible installs by default.** Dynamic resolvers track upstream latest
+  until a vendor is pinned. `naner.lock` makes an environment reproducible once
+  written, but naner does not ship a pre-populated lock — the first install of
+  each vendor still resolves.
