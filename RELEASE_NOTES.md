@@ -18,7 +18,7 @@ Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/rel
 - **Changed:** the router's dispatch decision is now a pure `Verb::parse`,
   separate from running the command. `route` could not be tested directly —
   calling it would actually install vendors or hit the network — so the table
-  had no coverage at all. Six tests now cover it, including two that would
+  had no coverage at all. Seven tests now cover it, including two that would
   have caught real classes of mistake: a name listed in `CONSOLE_COMMANDS`
   that does not route, and a verb that routes but is *missing* from that list,
   which would run with no console attached on a GUI launch.
@@ -32,6 +32,13 @@ Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/rel
 - **Added:** `.editorconfig` matching what rustfmt already produces, with CRLF
   preserved for `.bat`/`.cmd`/`.ps1` so an editor does not undo
   `.gitattributes` on save.
+- **Added:** a `cargo-deny` gate (`deny.toml` plus a CI job) covering
+  advisories, licences and sources. It earns its place here specifically
+  because the workspace carries a git dependency, `rusty_regx`, which no
+  registry advisory feed watches on its own; `sources` also fails the build if
+  a second, unvetted git dependency appears. The licence allow list is exactly
+  what the current tree resolves to rather than a generous pre-approval, so a
+  dependency under a new licence stops the build and gets a decision.
 
 ### PR #35 — Make the stub commands do what they claim
 **2026-08-16**

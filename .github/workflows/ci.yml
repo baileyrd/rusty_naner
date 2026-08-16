@@ -43,3 +43,15 @@ jobs:
       - name: Release build (Windows artifacts smoke check)
         if: runner.os == 'Windows'
         run: cargo build --release --workspace
+
+  deny:
+    name: supply chain
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Advisories, licences and sources, per deny.toml. Linux-only: the answer
+      # does not vary by runner, and the dependency graph it reads is the same
+      # Cargo.lock both legs compile.
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources

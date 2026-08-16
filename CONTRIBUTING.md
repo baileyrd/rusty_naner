@@ -22,6 +22,14 @@
    Tests that hit the network are `#[ignore]`d and excluded from CI; run them with
    `cargo test -- --ignored` when touching a vendor resolver, since they are the
    only check that catches an upstream manifest changing shape.
+
+   If you add or bump a dependency, also run the supply-chain gate:
+   ```
+   cargo deny check
+   ```
+   It checks advisories, licences and sources against `deny.toml`. A new
+   dependency under a licence not yet in the allow list will fail it — add the
+   licence in the same PR, so the decision is reviewed alongside the dependency.
 6. Open a PR and fill in the template, including how you verified the change.
    The default template covers most changes. Two specialised ones exist for cases
    with different verification obligations — append the query parameter to the PR
