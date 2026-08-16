@@ -17,7 +17,10 @@ pub fn execute(args: &[String]) -> i32 {
     };
 
     let cfg_file = config::find_configuration_file(&naner_root);
-    let cfg = match cfg_file.as_ref().and_then(|f| config::load(&naner_root, Some(f)).ok()) {
+    let cfg = match cfg_file
+        .as_ref()
+        .and_then(|f| config::load(&naner_root, Some(f)).ok())
+    {
         Some(c) => c,
         None => {
             logger::failure("Could not load naner configuration file");

@@ -2,8 +2,8 @@
 //! Startup latency profiler: measures execution timings for root discovery,
 //! config loading, PATH assembly, and argument building in milliseconds.
 
-use std::time::Instant;
 use naner_core::{config, constants, logger, paths};
+use std::time::Instant;
 
 pub fn execute(args: &[String]) -> i32 {
     let profile_name = args.first().map(|s| s.as_str()).unwrap_or("Unified");
@@ -26,7 +26,10 @@ pub fn execute(args: &[String]) -> i32 {
 
     let start_cfg = Instant::now();
     let cfg_file = config::find_configuration_file(&naner_root);
-    let cfg = match cfg_file.as_ref().and_then(|f| config::load(&naner_root, Some(f)).ok()) {
+    let cfg = match cfg_file
+        .as_ref()
+        .and_then(|f| config::load(&naner_root, Some(f)).ok())
+    {
         Some(c) => c,
         None => {
             logger::failure("Could not load naner configuration file");
@@ -56,12 +59,27 @@ pub fn execute(args: &[String]) -> i32 {
     let total_elapsed = start_total.elapsed();
 
     logger::status("Performance Benchmark Results:");
-    println!("  - Root Discovery:     {: >6.2?} ms", root_elapsed.as_secs_f64() * 1000.0);
-    println!("  - Config Load:         {: >6.2?} ms", cfg_elapsed.as_secs_f64() * 1000.0);
-    println!("  - Profile Resolution:  {: >6.2?} ms", profile_elapsed.as_secs_f64() * 1000.0);
-    println!("  - PATH Assembly:       {: >6.2?} ms", path_elapsed.as_secs_f64() * 1000.0);
+    println!(
+        "  - Root Discovery:     {: >6.2?} ms",
+        root_elapsed.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  - Config Load:         {: >6.2?} ms",
+        cfg_elapsed.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  - Profile Resolution:  {: >6.2?} ms",
+        profile_elapsed.as_secs_f64() * 1000.0
+    );
+    println!(
+        "  - PATH Assembly:       {: >6.2?} ms",
+        path_elapsed.as_secs_f64() * 1000.0
+    );
     println!("  ----------------------------------------");
-    println!("  Total Setup Latency:   {: >6.2?} ms", total_elapsed.as_secs_f64() * 1000.0);
+    println!(
+        "  Total Setup Latency:   {: >6.2?} ms",
+        total_elapsed.as_secs_f64() * 1000.0
+    );
 
     logger::newline();
     logger::success("Benchmark complete.");

@@ -40,9 +40,15 @@ pub fn execute(args: &[String]) -> i32 {
 
     let vendor_path = naner_root.join("vendor").join(&vendor_def.extract_dir);
     if vendor_path.is_dir() {
-        logger::success(&format!("Vendor directory exists at {}", vendor_path.display()));
+        logger::success(&format!(
+            "Vendor directory exists at {}",
+            vendor_path.display()
+        ));
     } else {
-        logger::warning(&format!("Vendor directory not found at {}", vendor_path.display()));
+        logger::warning(&format!(
+            "Vendor directory not found at {}",
+            vendor_path.display()
+        ));
     }
 
     logger::success(&format!("Checksum scan complete for {}.", vendor_def.name));

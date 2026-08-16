@@ -8,7 +8,10 @@ use naner_core::{config, constants, logger, paths};
 use serde_json::json;
 
 pub fn execute(args: &[String]) -> i32 {
-    let action = args.first().map(|s| s.to_lowercase()).unwrap_or_else(|| "list".to_string());
+    let action = args
+        .first()
+        .map(|s| s.to_lowercase())
+        .unwrap_or_else(|| "list".to_string());
 
     let naner_root = match paths::find_naner_root(None, constants::MAX_NANER_ROOT_SEARCH_DEPTH) {
         Ok(r) => r,
@@ -20,7 +23,10 @@ pub fn execute(args: &[String]) -> i32 {
     };
 
     let cfg_file = config::find_configuration_file(&naner_root);
-    let cfg = match cfg_file.as_ref().and_then(|f| config::load(&naner_root, Some(f)).ok()) {
+    let cfg = match cfg_file
+        .as_ref()
+        .and_then(|f| config::load(&naner_root, Some(f)).ok())
+    {
         Some(c) => c,
         None => {
             logger::failure("Could not load naner configuration file");
@@ -55,17 +61,18 @@ pub fn execute(args: &[String]) -> i32 {
 
             let out_json = serde_json::to_string_pretty(&json!({
                 "Profile": profile
-            })).unwrap();
+            }))
+            .unwrap();
 
-            if let Some(pos) = args.iter().position(|a| a == "--out" || a == "-o") {
-                if let Some(out_path) = args.get(pos + 1) {
-                    if let Err(err) = fs::write(Path::new(out_path), &out_json) {
-                        logger::failure(&format!("Failed to write profile export: {err}"));
-                        return 1;
-                    }
-                    logger::success(&format!("Exported profile '{profile_name}' to {out_path}"));
-                    return 0;
+            if let Some(pos) = args.iter().position(|a| a == "--out" || a == "-o")
+                && let Some(out_path) = args.get(pos + 1)
+            {
+                if let Err(err) = fs::write(Path::new(out_path), &out_json) {
+                    logger::failure(&format!("Failed to write profile export: {err}"));
+                    return 1;
                 }
+                logger::success(&format!("Exported profile '{profile_name}' to {out_path}"));
+                return 0;
             }
 
             println!("{out_json}");
@@ -104,10 +111,13 @@ pub fn execute(args: &[String]) -> i32 {
                         return 1;
                     }
                 }
-            } else if let Ok(parsed) = serde_json::from_value::<config::ProfileConfig>(val.clone()) {
+            } else if let Ok(parsed) = serde_json::from_value::<config::ProfileConfig>(val.clone())
+            {
                 parsed
             } else {
-                logger::failure("Import JSON must contain a 'Profile' object or valid Profile fields");
+                logger::failure(
+                    "Import JSON must contain a 'Profile' object or valid Profile fields",
+                );
                 return 1;
             };
 
@@ -117,8 +127,12 @@ pub fn execute(args: &[String]) -> i32 {
                 "ImportedProfile".to_string()
             };
 
-            let target_cfg_path = cfg_file.unwrap_or_else(|| naner_root.join("config").join("naner.json"));
-            logger::success(&format!("Validated imported profile '{key}'. Target config: {}", target_cfg_path.display()));
+            let target_cfg_path =
+                cfg_file.unwrap_or_else(|| naner_root.join("config").join("naner.json"));
+            logger::success(&format!(
+                "Validated imported profile '{key}'. Target config: {}",
+                target_cfg_path.display()
+            ));
             0
         }
         other => {

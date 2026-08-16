@@ -1,9 +1,9 @@
 //! Command: `naner completions <shell>`
 //! Generates tab completion scripts for bash, zsh, powershell, fish using clap_complete.
 
-use std::io;
 use clap::Command;
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
+use std::io;
 
 pub fn execute(args: &[String]) -> i32 {
     let shell_str = match args.first() {
