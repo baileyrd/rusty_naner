@@ -54,6 +54,11 @@ Nothing yet.
   `settings.json` from the template, which destroyed every colour scheme, key
   binding and custom profile on each run while reporting that it preserved them
   (#50).
+- `install MSYS2` fetches the newest archive on the index rather than the first,
+  which on an ascending directory listing was the oldest -- a base two years
+  stale, under a line reading "Fetching latest" (#47).
+- `update-vendors` honours `enabled` in `vendors.json`, and says which vendors it
+  skipped. It previously reinstalled disabled vendors on every run (#48).
 - Built-in vendor definitions now carry a `key`. Without one they shared a
   single `naner.lock` entry, losing pins and -- on a tree with no readable
   `vendors.json` -- resolving one vendor's artifact as another's pin (#53).

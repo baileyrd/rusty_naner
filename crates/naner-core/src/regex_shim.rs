@@ -17,7 +17,7 @@
 //! or on an unsupported construct (`\b`, lookaround, lazy quantifiers), must
 //! be reviewed before it is added to `vendors.json`.
 
-use rusty_regx::Regex;
+pub use rusty_regx::Regex;
 
 /// Translate `regex-lite`-flavoured shorthand classes into POSIX-ERE bracket
 /// expressions that `rusty_regx` understands. Backslash escapes for literal

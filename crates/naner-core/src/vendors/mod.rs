@@ -196,7 +196,9 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
             source_type: VendorSourceType::WebScrape,
             web_scrape: Some(WebScrapeConfig {
                 url: "https://repo.msys2.org/distrib/x86_64/".into(),
-                pattern: r#"href="(msys2-base-x86_64-\d+\.tar\.xz)""#.into(),
+                // Group 2 is the date, so the newest archive on the index is
+                // picked by numeric comparison rather than by page order.
+                pattern: r#"href="(msys2-base-x86_64-(\d{8})\.tar\.xz)""#.into(),
                 base_url: "https://repo.msys2.org/distrib/x86_64/".into(),
             }),
             fallback_url: Some(

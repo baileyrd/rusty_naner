@@ -63,8 +63,13 @@ pub fn execute_update(args: &[String]) -> i32 {
     logger::info(&format!("Naner Root: {}", naner_root.display()));
     logger::newline();
 
-    // C# uses the hardcoded factory set for update-vendors (not vendors.json).
-    let vendors = essential_vendor_definitions();
+    // C# uses the hardcoded factory set for update-vendors (not vendors.json),
+    // but honours the manifest's `enabled` -- see below.
+    let vendors = enabled_essential_vendors(&VendorConfigurationLoader::new(&naner_root));
+    if vendors.is_empty() {
+        logger::warning("Every essential vendor is disabled in vendors.json; nothing to update.");
+        return 0;
+    }
     let http = UreqHttp::new();
     let installer = UnifiedVendorInstaller::new(&naner_root, vendors, &http);
     installer.update_all_vendors();
@@ -72,6 +77,43 @@ pub fn execute_update(args: &[String]) -> i32 {
     logger::newline();
     logger::success("Vendor updates completed!");
     0
+}
+
+/// The built-in essential set, minus anything `vendors.json` switches off.
+///
+/// `update-vendors` deliberately maintains a fixed set of *definitions* rather
+/// than reading them from the manifest: those carry sources, asset globs and
+/// fallback URLs that a user's `vendors.json` may be older than. But `enabled`
+/// is the user's decision about what belongs on their machine, and a flag
+/// honoured by `install` and ignored by `update-vendors` means nothing -- a
+/// vendor switched off comes straight back on the next update, silently.
+///
+/// A manifest that cannot be read disables nothing. `load_all_vendors` falls
+/// back to this same set when the file is missing, empty or unparseable, so
+/// there is nothing to filter against; failing closed there would quietly stop
+/// maintaining vendors the user actually has.
+fn enabled_essential_vendors(loader: &VendorConfigurationLoader) -> Vec<VendorDefinition> {
+    let disabled: Vec<String> = loader
+        .load_all_vendors()
+        .into_iter()
+        .filter(|v| !v.enabled)
+        .map(|v| v.key.to_lowercase())
+        .collect();
+
+    let (keep, skip): (Vec<_>, Vec<_>) = essential_vendor_definitions()
+        .into_iter()
+        .partition(|v| !disabled.contains(&v.key.to_lowercase()));
+
+    // Say what was skipped. Silently doing less than asked is the same class of
+    // problem as silently doing more.
+    if !skip.is_empty() {
+        let names: Vec<&str> = skip.iter().map(|v| v.name.as_str()).collect();
+        logger::info(&format!(
+            "Skipping (disabled in vendors.json): {}",
+            names.join(", ")
+        ));
+    }
+    keep
 }
 
 fn strip_quiet(args: &[String]) -> (Vec<String>, bool) {
@@ -384,7 +426,8 @@ fn show_install_help(optional: &[&VendorDefinition]) {
 
 #[cfg(test)]
 mod tests {
-    use super::restart_hint_applies;
+    use super::{enabled_essential_vendors, restart_hint_applies};
+    use naner_core::vendors::{VendorConfigurationLoader, essential_vendor_definitions};
 
     /// The bug: a checksum mismatch aborted the only install, and naner still
     /// said "Restart your terminal to use the newly installed tools." Nothing
@@ -411,5 +454,46 @@ mod tests {
     #[test]
     fn attempting_nothing_advises_nothing() {
         assert!(!restart_hint_applies(0, 0));
+    }
+
+    /// `update-vendors` used to install Rusty Term and Rush on every run,
+    /// though `vendors.json` ships both `"enabled": false`. `install --list`
+    /// showed them disabled and `install <name>` refused them, so the flag was
+    /// honoured on one of the two paths that install things and ignored on the
+    /// other.
+    #[test]
+    fn a_disabled_vendor_is_not_updated() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::write(
+            config.join("vendors.json"),
+            r#"{"vendors":{
+                 "SevenZip":{"name":"7-Zip","extractDir":"7zip","enabled":true},
+                 "RustyTerm":{"name":"Rusty Term","extractDir":"rusty_term","enabled":false},
+                 "Rush":{"name":"Rush","extractDir":"rush","enabled":false}
+               }}"#,
+        )
+        .unwrap();
+
+        let kept = enabled_essential_vendors(&VendorConfigurationLoader::new(dir.path()));
+        let keys: Vec<&str> = kept.iter().map(|v| v.key.as_str()).collect();
+
+        assert!(keys.contains(&"SevenZip"));
+        assert!(!keys.contains(&"RustyTerm"), "disabled vendor was updated");
+        assert!(!keys.contains(&"Rush"), "disabled vendor was updated");
+        // A vendor the manifest does not mention at all is still maintained --
+        // absence is not a decision to switch something off.
+        assert!(keys.contains(&"PowerShell"));
+    }
+
+    /// An unreadable manifest disables nothing. `load_all_vendors` falls back
+    /// to this same built-in set, so there is nothing to filter against, and
+    /// failing closed would silently stop maintaining vendors the user has.
+    #[test]
+    fn an_unreadable_manifest_disables_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let kept = enabled_essential_vendors(&VendorConfigurationLoader::new(dir.path()));
+        assert_eq!(kept.len(), essential_vendor_definitions().len());
     }
 }
