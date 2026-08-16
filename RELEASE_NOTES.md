@@ -12,6 +12,34 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #31 — Honour the `enabled` flag; generate the vendor list
+**2026-08-16**
+
+- **Fixed:** `enabled` in `vendors.json` was parsed and then ignored, so
+  `install --all` installed the seven vendors the shipped config switches off,
+  and `install --list` advertised them. It is now honoured.
+- **Changed:** listing deliberately still shows disabled vendors, marked
+  `[--]` (`disabled` in `--porcelain`). Hiding them would make them
+  undiscoverable — a user could never find the name to switch on. Installing
+  one by name now says it is disabled rather than "unknown vendor", which
+  would send them hunting for a typo.
+- **Changed:** dependencies install regardless of `enabled`. They were not
+  chosen from a menu; they are needed by something the user did choose, and
+  failing the install instead would be the larger surprise.
+- **Fixed:** omitting `enabled` means *enabled*. `#[serde(default)]` yields a
+  bool `false`, so the very change that started reading the field would
+  otherwise have switched off every entry that does not mention it — and the
+  seven built-in essential definitions never set it, so a missing
+  `vendors.json` would have installed nothing at all. Both defaults are now
+  explicit and covered by tests.
+- **Fixed:** `naner install` with no arguments generated its vendor list from
+  the loaded definitions. The literal it replaced had drifted — it never
+  gained `rustyterm` or `rush`, so the two newest vendors were undiscoverable.
+- **Fixed:** `doctor --conflicts` announced a total and then silently printed
+  five. It now says how many it is showing, and sorts first so the truncated
+  view is the same list every run rather than an arbitrary five out of a
+  `HashMap`.
+
 ### PR #30 — One owner for outbound HTTP; cache CI dependencies
 **2026-08-16**
 

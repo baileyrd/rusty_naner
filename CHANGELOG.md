@@ -31,6 +31,11 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
 ### Fixed
+- `enabled` in `vendors.json` is honoured; disabled vendors are still listed
+  (marked) so they stay discoverable, but are not installed.
+- `naner install` generates its vendor list instead of using a stale literal.
+- `doctor --conflicts` reports how many collisions it is showing and sorts
+  them, so the truncated view is deterministic.
 - Proxy settings are honoured on every outbound request, not just vendor
   downloads; `naner-init` bootstrap and update previously ignored them.
 - A broken TLS stack no longer aborts the process; it warns and falls back.

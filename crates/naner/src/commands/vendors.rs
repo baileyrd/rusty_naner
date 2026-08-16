@@ -32,11 +32,16 @@ pub fn execute_install(args: &[String]) -> i32 {
     match first.as_deref() {
         Some(LIST_FLAG) => {
             let porcelain = args.iter().any(|a| a.eq_ignore_ascii_case(PORCELAIN_FLAG));
-            show_vendor_list(&loader, &all_vendors, porcelain)
+            // Listing deliberately includes disabled vendors: hiding them
+            // would make them undiscoverable, so a user could never find the
+            // name to switch on. They are marked, and install refuses them.
+            show_vendor_list(&loader, &loader.load_all_vendors(), porcelain)
         }
         Some(ALL_FLAG) => install_all_optional(&naner_root, &loader, all_vendors),
         None => {
-            show_install_help();
+            let every: Vec<VendorDefinition> = loader.load_all_vendors();
+            let optional: Vec<&VendorDefinition> = every.iter().filter(|v| !v.required).collect();
+            show_install_help(&optional);
             0
         }
         _ => install_specific(&naner_root, &loader, all_vendors, &args),
@@ -107,14 +112,15 @@ fn show_vendor_list(
 ) -> i32 {
     if porcelain {
         for vendor in all_vendors {
-            let installed = loader.is_vendor_installed(vendor);
+            let state = if !vendor.enabled {
+                "disabled"
+            } else if loader.is_vendor_installed(vendor) {
+                "installed"
+            } else {
+                "missing"
+            };
             let version = loader.vendor_version(vendor).unwrap_or_default();
-            println!(
-                "{}\t{}\t{}",
-                vendor.name,
-                if installed { "installed" } else { "missing" },
-                version
-            );
+            println!("{}\t{}\t{}", vendor.name, state, version);
         }
         return 0;
     }
@@ -128,8 +134,9 @@ fn show_vendor_list(
         }
         println!("{label}");
         for vendor in vendors {
-            let installed = loader.is_vendor_installed(vendor);
-            let (status, color) = if installed {
+            let (status, color) = if !vendor.enabled {
+                ("[--]", "90")
+            } else if loader.is_vendor_installed(vendor) {
                 ("[OK]", "92")
             } else {
                 ("[ ]", "37")
@@ -150,6 +157,9 @@ fn show_vendor_list(
         all_vendors.iter().filter(|v| !v.required).collect(),
     );
 
+    if all_vendors.iter().any(|v| !v.enabled) {
+        println!("[--] is disabled in vendors.json — set \"enabled\": true to install it.");
+    }
     println!("Use 'naner install <name>' to install a vendor.");
     println!("Use 'naner install --all' to install all optional vendors.");
     logger::newline();
@@ -209,10 +219,20 @@ fn install_specific(
 ) -> i32 {
     let mut to_install: Vec<VendorDefinition> = Vec::new();
     let mut not_found: Vec<&String> = Vec::new();
+    let mut disabled = 0usize;
 
     for name in vendor_names {
         match loader.vendor_by_key(name) {
-            Some(vendor) => to_install.push(vendor),
+            Some(vendor) if vendor.enabled => to_install.push(vendor),
+            // Present but switched off: say so, rather than "unknown vendor",
+            // which would send the user looking for a typo.
+            Some(vendor) => {
+                logger::failure(&format!(
+                    "{} is disabled in vendors.json (set \"enabled\": true to install it)",
+                    vendor.name
+                ));
+                disabled += 1;
+            }
             None => not_found.push(name),
         }
     }
@@ -221,6 +241,8 @@ fn install_specific(
         for name in &not_found {
             logger::failure(&format!("Unknown vendor: {name}"));
         }
+    }
+    if !not_found.is_empty() || disabled > 0 {
         logger::newline();
         logger::info("Use 'naner install --list' to see available vendors.");
         if to_install.is_empty() {
@@ -278,6 +300,9 @@ fn install_with_dependencies(
     loader: &VendorConfigurationLoader,
     vendor: &VendorDefinition,
 ) -> bool {
+    // Dependencies install regardless of `enabled`: they were not chosen from
+    // a menu, they are needed by something the user did choose, and failing the
+    // install instead would be the larger surprise.
     for dep_key in &vendor.dependencies {
         if let Some(dep) = loader.vendor_by_key(dep_key)
             && !loader.is_vendor_installed(&dep)
@@ -293,7 +318,7 @@ fn install_with_dependencies(
 }
 
 /// `ShowInstallHelp`.
-fn show_install_help() {
+fn show_install_help(optional: &[&VendorDefinition]) {
     logger::header("Install Vendor Packages");
     logger::newline();
 
@@ -315,7 +340,26 @@ fn show_install_help() {
     println!("  naner install --all        # Install all optional vendors");
     logger::newline();
 
+    // Rendered from the loaded definitions rather than a literal. The literal
+    // this replaced had drifted: it never gained rustyterm or rush, so the two
+    // newest vendors were undiscoverable from `naner install` with no args.
+    let enabled: Vec<String> = optional
+        .iter()
+        .filter(|v| v.enabled)
+        .map(|v| v.key.to_lowercase())
+        .collect();
+    let disabled = optional.len() - enabled.len();
+
     println!("AVAILABLE VENDORS:");
-    println!("  nodejs, miniconda, go, rust, ruby, dotnetsdk");
+    if enabled.is_empty() {
+        println!("  (none enabled)");
+    } else {
+        println!("  {}", enabled.join(", "));
+    }
+    if disabled > 0 {
+        println!(
+            "  ({disabled} more disabled in vendors.json — 'naner install --list' shows them)"
+        );
+    }
     logger::newline();
 }

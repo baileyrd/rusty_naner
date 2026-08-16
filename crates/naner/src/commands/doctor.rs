@@ -104,15 +104,25 @@ pub fn execute(args: &[String]) -> i32 {
                     }
                 }
             }
-            let conflicts: Vec<_> = seen
+            // Sorted so a truncated view is the same list every run — a
+            // HashMap's iteration order is arbitrary, so `.take(5)` used to
+            // show an arbitrary five.
+            let mut conflicts: Vec<_> = seen
                 .into_iter()
                 .filter(|(_, paths)| paths.len() > 1)
                 .collect();
+            conflicts.sort_by(|a, b| a.0.cmp(&b.0));
+
+            const SHOWN: usize = 5;
             if conflicts.is_empty() {
                 logger::success("No binary PATH collisions detected.");
             } else {
-                logger::warning(&format!("Found {} binary collisions:", conflicts.len()));
-                for (name, paths) in conflicts.iter().take(5) {
+                let shown = conflicts.len().min(SHOWN);
+                logger::warning(&format!(
+                    "Found {} binary collisions (showing {shown}):",
+                    conflicts.len()
+                ));
+                for (name, paths) in conflicts.iter().take(SHOWN) {
                     logger::info(&format!("  - {name}:"));
                     for p in paths {
                         logger::info(&format!("      -> {p}"));
