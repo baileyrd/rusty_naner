@@ -31,6 +31,10 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
 ### Fixed
+- `naner schema config` no longer describes a non-existent `Services` block,
+  and now covers `WindowsTerminal`, `Advanced`, `CustomProfiles`, `PreLaunch`
+  and `PostLaunch`; `schema vendors` gains `installType`, `installerArgs`,
+  `checksumSource` and a `releaseSource.type` enum.
 - `enabled` in `vendors.json` is honoured; disabled vendors are still listed
   (marked) so they stay discoverable, but are not installed.
 - `naner install` generates its vendor list instead of using a stale literal.
