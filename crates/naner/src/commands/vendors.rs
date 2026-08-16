@@ -358,7 +358,7 @@ fn show_install_help(optional: &[&VendorDefinition]) {
     }
     if disabled > 0 {
         println!(
-            "  ({disabled} more disabled in vendors.json — 'naner install --list' shows them)"
+            "  ({disabled} more disabled in vendors.json - 'naner install --list' shows them)"
         );
     }
     logger::newline();
