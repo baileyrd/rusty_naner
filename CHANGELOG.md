@@ -16,6 +16,19 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 - `naner-init` verifies release assets against a `SHA256SUMS` manifest, now
   published by the release workflow, and fails closed.
 
+- `naner.lock`: a successful install pins the vendor's exact version, URL and
+  SHA-256; later installs reproduce and verify it. Covers MSYS2 and the
+  GitHub-sourced vendors, which publish no upstream digest.
+- `naner lock [--refresh [vendor...]] [--porcelain]` to inspect and drop pins.
+
+### Changed
+- `update-vendors` ignores any existing pin and rewrites it, so updating is not a
+  no-op on pinned vendors.
+
+### Removed
+- `ProfileConfig::WindowEffect`, which was parsed and never read. The README's
+  claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
+
 ### Fixed
 - Workspace did not build from a clean checkout — four unused path dependencies
   removed and `rusty_regx` repinned to its commit SHA.

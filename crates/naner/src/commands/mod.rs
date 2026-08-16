@@ -10,6 +10,7 @@ pub mod diagnose;
 pub mod diff;
 pub mod doctor;
 pub mod help;
+pub mod lock;
 pub mod migrate;
 pub mod pack;
 pub mod profile;
@@ -47,8 +48,9 @@ pub mod names {
     pub const INSTALL: &str = "install";
     pub const DEBUG: &str = "--debug";
     pub const ROOT: &str = "root";
+    pub const LOCK: &str = "lock";
 
-    pub const CONSOLE_COMMANDS: [&str; 24] = [
+    pub const CONSOLE_COMMANDS: [&str; 25] = [
         VERSION,
         VERSION_SHORT,
         HELP,
@@ -73,6 +75,7 @@ pub mod names {
         INSTALL,
         DEBUG,
         ROOT,
+        LOCK,
     ];
 }
 
@@ -102,6 +105,7 @@ pub fn route(args: &[String]) -> Option<i32> {
         names::UPDATE_VENDORS => Some(vendors::execute_update(rest)),
         names::INSTALL => Some(vendors::execute_install(rest)),
         names::ROOT => Some(root::execute()),
+        names::LOCK => Some(lock::execute(rest)),
         _ => None,
     }
 }

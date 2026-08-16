@@ -214,10 +214,6 @@ pub struct ProfileConfig {
     #[serde(default, alias = "postLaunch", alias = "postlaunch")]
     pub post_launch: Option<String>,
 
-    /// Additive: window backdrop styling (`Mica`, `Acrylic`, `Tabbed`).
-    #[serde(default, alias = "windowEffect", alias = "windoweffect")]
-    pub window_effect: Option<String>,
-
     /// Additive (no C# counterpart): which terminal hosts the profile.
     /// `None` (the default) means Windows Terminal — existing configs are
     /// untouched. Recognized values: `WindowsTerminal`, `RustyTerm`.
@@ -238,7 +234,6 @@ impl Default for ProfileConfig {
             custom_shell: None,
             pre_launch: None,
             post_launch: None,
-            window_effect: None,
             terminal: None,
         }
     }
