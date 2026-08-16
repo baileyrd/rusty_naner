@@ -108,10 +108,17 @@ impl<'a> UnifiedVendorInstaller<'a> {
             return false;
         };
 
-        logger::info(&format!(
-            "  Latest version: {}",
-            info.version.as_deref().unwrap_or("Unknown")
-        ));
+        // Only on the resolving path. A pinned install checked nothing about
+        // what is current, and the "Using pinned" line above already carries
+        // the version -- printing "Latest version" under it reads as though
+        // naner confirmed the pin is up to date, which is the opposite of what
+        // a pin means.
+        if pinned.is_none() {
+            logger::info(&format!(
+                "  Latest version: {}",
+                info.version.as_deref().unwrap_or("Unknown")
+            ));
+        }
         logger::status(&format!("  Downloading {}...", info.file_name));
 
         if std::fs::create_dir_all(&self.download_dir).is_err() {

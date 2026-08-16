@@ -16,6 +16,8 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   in the shipped config had the same wrong path (#42).
 - Five further non-ASCII characters missed by the first sweep, in `lock`,
   `self-update` and the vendor list, with a test that now enforces it (#39).
+- A pinned install no longer prints `Latest version:`, which claimed a currency
+  check that a pin by definition does not perform.
 
 ## [0.6.0] - 2026-08-16
 ### Added
