@@ -31,6 +31,10 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
 ### Fixed
+- `naner migrate` no longer writes environment overrides, telemetry defaults
+  or expanded paths into the config file, no longer drops `$schema`/`title`/
+  `description`, keeps a timestamped backup, writes atomically, and gained
+  `--dry-run`.
 - `naner schema config` no longer describes a non-existent `Services` block,
   and now covers `WindowsTerminal`, `Advanced`, `CustomProfiles`, `PreLaunch`
   and `PostLaunch`; `schema vendors` gains `installType`, `installerArgs`,

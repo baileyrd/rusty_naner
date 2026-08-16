@@ -17,7 +17,7 @@ mod yaml;
 
 pub use env_overrides::{apply_env_overrides, apply_env_overrides_from};
 pub use json::{load_json, strip_json_comments};
-pub use loader::{ConfigError, find_configuration_file, load};
+pub use loader::{ConfigError, find_configuration_file, load, load_verbatim};
 pub use validator::{ValidationReport, validate};
 pub use yaml::load_yaml;
 

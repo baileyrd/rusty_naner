@@ -100,6 +100,17 @@ pub fn load(naner_root: &Path, config_path: Option<&Path>) -> Result<NanerConfig
     Ok(config)
 }
 
+/// Parse a config file exactly as written, with no environment overrides and
+/// no placeholder expansion.
+///
+/// For tooling that rewrites the user's file. `load` folds in `NANER_ENV_*`,
+/// `NANER_DEFAULT_PROFILE` and the telemetry opt-out defaults, and expands
+/// `%NANER_ROOT%` to a concrete path — all correct for running naner, all
+/// wrong to write back to disk, where they would silently become permanent.
+pub fn load_verbatim(path: &Path) -> Result<NanerConfig, ConfigError> {
+    load_file(path)
+}
+
 fn load_file(path: &Path) -> Result<NanerConfig, ConfigError> {
     let ext = path
         .extension()

@@ -12,6 +12,31 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #33 — Stop `naner migrate` writing the environment into the config
+**2026-08-16**
+
+- **Fixed:** migrate serialized the *loaded* config, which `config::load`
+  builds by folding in `NANER_ENV_*`, `NANER_DEFAULT_PROFILE` and the
+  telemetry opt-out defaults, and by expanding `%NANER_ROOT%` to a concrete
+  path. All correct for running naner; all wrong to write back to disk.
+  `NANER_DEFAULT_PROFILE=Bash naner migrate` permanently rewrote the user's
+  `DefaultProfile`. It now parses the file verbatim via a new
+  `config::load_verbatim`.
+- **Fixed:** `$schema`, `title` and `description` were dropped. Losing
+  `$schema` breaks the IDE completion `naner schema` exists to provide. Any
+  top-level key the model does not own is now carried across, ahead of the
+  canonical body so an editor still finds it first.
+- **Added:** a timestamped `.bak` beside the config, written before anything
+  is overwritten, and refusal to proceed if the backup cannot be written.
+- **Added:** `--dry-run`, which prints the result and writes nothing.
+- **Changed:** the file is written to a temp path and renamed, so an
+  interrupted run cannot truncate the config the launcher needs to start.
+- **Changed:** `serde_json::to_string_pretty(&cfg).unwrap()` no longer panics
+  on a serialization failure; it reports and exits non-zero.
+- **Known limitation:** comments still cannot survive a serde round-trip. The
+  command now warns before overwriting a commented file, and the backup makes
+  it recoverable.
+
 ### PR #32 — Make `naner schema` describe the config that exists
 **2026-08-16**
 

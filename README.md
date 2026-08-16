@@ -78,7 +78,7 @@ published through the Phase 5 release workflow. Phases 0–5 done:
 - **`naner checksum update <vendor>`**: Inspects and computes SHA-256 digests.
 - **`naner diff [profile]`**: Compares host environment variables against target profile environment definitions.
 - **`naner bench [profile]`**: Startup latency profiler measuring execution timings for root discovery, config loading, profile resolution, and PATH assembly in milliseconds.
-- **`naner config migrate`**: Upgrades configuration files into canonical `naner.json` schema.
+- **`naner migrate [--dry-run]`**: Rewrites the configuration file in canonical JSON form. Keeps a timestamped backup, preserves top-level keys the model does not own (`$schema` among them), and writes via a temp file so an interrupted run cannot truncate the config. Comments cannot survive the round-trip and it says so before proceeding.
 - **`naner pack [dir] --out bundle.zip`**: Bundles distribution assets into portable zip packages.
 - **`naner self-update`**: Queries GitHub releases and performs atomic self-replacement.
 - **`naner lock [--refresh [vendor...]] [--porcelain]`**: Inspects `naner.lock`, the pin of exactly which vendor artifacts this environment installs, and drops pins so the next install re-resolves.
