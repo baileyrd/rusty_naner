@@ -5,6 +5,10 @@ Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
 Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 
 ## [Unreleased]
+
+Nothing yet.
+
+## [0.6.0] - 2026-08-16
 ### Added
 - `rust-toolchain.toml` pinning the compiler version, and `.editorconfig`.
 - `cargo-deny` supply-chain gate (`deny.toml` + CI job) over advisories,
@@ -19,7 +23,6 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   in `vendors.json` and pinned `checksum` entries taking precedence.
 - `naner-init` verifies release assets against a `SHA256SUMS` manifest, now
   published by the release workflow, and fails closed.
-
 - `naner.lock`: a successful install pins the vendor's exact version, URL and
   SHA-256; later installs reproduce and verify it. Covers MSYS2 and the
   GitHub-sourced vendors, which publish no upstream digest.
@@ -35,12 +38,6 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   automatic digest verification and `naner lock`.
 - `ProfileConfig::WindowEffect`, which was parsed and never read. The README's
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
-
-### Security
-- Terminal arguments are escaped, so a caller-supplied `--directory` cannot
-  inject flags into the spawned terminal's command line.
-- Environment variable names must be valid identifiers, so a crafted name
-  cannot become shell code in `--export-env` output.
 
 ### Fixed
 - `naner profile import` writes the profile instead of only validating it;
@@ -89,6 +86,10 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 ### Security
 - Vendor artifacts and self-update binaries are integrity-checked before use;
   previously nothing was verified beyond TLS transport trust.
+- Terminal arguments are escaped, so a caller-supplied `--directory` cannot
+  inject flags into the spawned terminal's command line.
+- Environment variable names must be valid identifiers, so a crafted name
+  cannot become shell code in `--export-env` output.
 
 ## [0.5.0] - 2026-07-09
 ### Added
