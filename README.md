@@ -93,7 +93,7 @@ published through the Phase 5 release workflow. Phases 0–5 done:
 - **Atomic Staged Extraction**: Extracts archives to `vendor/.staging/<name>`, then swaps the tree into place with a single rename. The previous install is moved aside rather than deleted, so a failed placement restores it instead of leaving a half-populated directory. Windows Terminal is the exception — it merges over its existing install so `settings/` survives an update, which cannot be atomic.
 - **Download Asset Caching**: Reuses an already-downloaded vendor asset instead of re-fetching it, for offline/air-gapped environments. Transfers stage to `<name>.part` and are published with a rename, so an interrupted run leaves no file under the name the cache trusts. When a digest is known the cached file must match it — a stale entry is discarded and re-fetched rather than failing the install.
 - **Job Object Breakaway Isolation**: Spawns terminal targets with `CREATE_BREAKAWAY_FROM_JOB` (0x01000000) on Windows.
-- **Event Hooks**: Supports `PreLaunch` / `PostLaunch` script hooks, run before the terminal is spawned and after it starts.
+- **Event Hooks**: Supports `PreLaunch` / `PostLaunch` script hooks. A failing `PreLaunch` hook aborts the launch — it is a gate, not a notification; `PostLaunch` only warns, since the terminal is already up. Both run under `-ExecutionPolicy Bypass`, deliberately, because the default policy would refuse a script the config owner supplied on purpose.
 
 ---
 

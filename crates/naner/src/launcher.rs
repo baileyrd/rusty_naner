@@ -113,18 +113,12 @@ impl<'a> TerminalLauncher<'a> {
             && !script.is_empty()
         {
             let expanded = paths::expand_naner_path(script, &self.naner_root.to_string_lossy());
-            if self.debug_mode {
-                logger::status(&format!("Executing PreLaunch hook: {expanded}"));
+            // A pre-launch hook that cannot stop the launch is not a gate.
+            if let Err(err) = run_hook("PreLaunch", &expanded, self.debug_mode) {
+                logger::failure(&format!("PreLaunch hook failed: {err}"));
+                logger::info("Terminal not launched.");
+                return 1;
             }
-            let _ = std::process::Command::new("powershell")
-                .args([
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    &expanded,
-                ])
-                .status();
         }
 
         if self.debug_mode {
@@ -138,18 +132,10 @@ impl<'a> TerminalLauncher<'a> {
                 {
                     let expanded =
                         paths::expand_naner_path(script, &self.naner_root.to_string_lossy());
-                    if self.debug_mode {
-                        logger::status(&format!("Executing PostLaunch hook: {expanded}"));
+                    // Warn only: the terminal is already up by now.
+                    if let Err(err) = run_hook("PostLaunch", &expanded, self.debug_mode) {
+                        logger::warning(&format!("PostLaunch hook failed: {err}"));
                     }
-                    let _ = std::process::Command::new("powershell")
-                        .args([
-                            "-NoProfile",
-                            "-ExecutionPolicy",
-                            "Bypass",
-                            "-File",
-                            &expanded,
-                        ])
-                        .status();
                 }
                 if self.debug_mode {
                     logger::success(&format!("Launched: {}", profile.name));
@@ -213,7 +199,7 @@ impl<'a> TerminalLauncher<'a> {
         let mut args = String::from("--gui ");
 
         if !profile.name.is_empty() {
-            args.push_str(&format!("--title \"{}\" ", profile.name));
+            args.push_str(&format!("--title {} ", quote_argument(&profile.name)));
         }
 
         let start_dir = starting_directory_override.unwrap_or(&profile.starting_directory);
@@ -221,7 +207,7 @@ impl<'a> TerminalLauncher<'a> {
             // Same double expansion pass as the wt builder — preserved.
             let expanded = paths::expand_naner_path(start_dir, &root);
             let expanded = paths::expand_naner_path(&expanded, &root);
-            args.push_str(&format!("--cwd \"{expanded}\" "));
+            args.push_str(&format!("--cwd {} ", quote_argument(&expanded)));
         }
 
         // rusty_term only knows --maximized/--fullscreen; naner's "default"
@@ -245,14 +231,14 @@ impl<'a> TerminalLauncher<'a> {
                     Some(shell_args) if !shell_args.is_empty() => {
                         let expanded = paths::expand_naner_path(shell_args, &root);
                         let expanded = paths::expand_naner_path(&expanded, &root);
-                        args.push_str(&format!("-- \"{shell_path}\" {expanded}"));
+                        args.push_str(&format!("-- {} {expanded}", quote_argument(&shell_path)));
                     }
-                    _ => args.push_str(&format!("-- \"{shell_path}\"")),
+                    _ => args.push_str(&format!("-- {}", quote_argument(&shell_path))),
                 }
             }
             _ => {
                 if let Some(shell_path) = self.default_shell_path(&profile.shell) {
-                    args.push_str(&format!("-- \"{shell_path}\""));
+                    args.push_str(&format!("-- {}", quote_argument(&shell_path)));
                 }
             }
         }
@@ -275,7 +261,7 @@ impl<'a> TerminalLauncher<'a> {
         }
 
         if !profile.name.is_empty() {
-            args.push_str(&format!("--title \"{}\" ", profile.name));
+            args.push_str(&format!("--title {} ", quote_argument(&profile.name)));
         }
 
         let start_dir = starting_directory_override.unwrap_or(&profile.starting_directory);
@@ -284,7 +270,10 @@ impl<'a> TerminalLauncher<'a> {
             // %VAR% expansion pass — preserved.
             let expanded = paths::expand_naner_path(start_dir, &root);
             let expanded = paths::expand_naner_path(&expanded, &root);
-            args.push_str(&format!("--startingDirectory \"{expanded}\" "));
+            args.push_str(&format!(
+                "--startingDirectory {} ",
+                quote_argument(&expanded)
+            ));
         }
 
         match &profile.custom_shell {
@@ -294,14 +283,14 @@ impl<'a> TerminalLauncher<'a> {
                     Some(shell_args) if !shell_args.is_empty() => {
                         let expanded = paths::expand_naner_path(shell_args, &root);
                         let expanded = paths::expand_naner_path(&expanded, &root);
-                        args.push_str(&format!("-- \"{shell_path}\" {expanded}"));
+                        args.push_str(&format!("-- {} {expanded}", quote_argument(&shell_path)));
                     }
-                    _ => args.push_str(&format!("-- \"{shell_path}\"")),
+                    _ => args.push_str(&format!("-- {}", quote_argument(&shell_path))),
                 }
             }
             _ => {
                 if let Some(shell_path) = self.default_shell_path(&profile.shell) {
-                    args.push_str(&format!("-- \"{shell_path}\""));
+                    args.push_str(&format!("-- {}", quote_argument(&shell_path)));
                 }
             }
         }
@@ -351,6 +340,73 @@ impl<'a> TerminalLauncher<'a> {
             logger::debug(&format!("PATH set to: {}...", &unified[..cut]), true);
         }
     }
+}
+
+/// Run a profile hook, reporting why it did not succeed.
+///
+/// `-ExecutionPolicy Bypass` is deliberate: a hook is a script the config
+/// owner supplied on purpose, and the default policy would refuse to run it.
+/// Worth naming as a weakening rather than leaving it to look accidental.
+fn run_hook(kind: &str, script: &str, debug: bool) -> Result<(), String> {
+    if debug {
+        logger::status(&format!("Executing {kind} hook: {script}"));
+    }
+    if !Path::new(script).is_file() {
+        return Err(format!("script not found: {script}"));
+    }
+    let status = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script])
+        .status()
+        .map_err(|e| format!("could not run {script}: {e}"))?;
+    if status.success() {
+        return Ok(());
+    }
+    Err(match status.code() {
+        Some(code) => format!("{script} exited with code {code}"),
+        None => format!("{script} terminated by signal"),
+    })
+}
+
+/// Quote a value for the Windows command line.
+///
+/// The argument string is handed to `Command::raw_arg`, so an embedded `"`
+/// used to end the quoted section and inject further arguments into the
+/// terminal's command line. `--directory` comes straight from the CLI, so this
+/// is reachable by anything that invokes naner with a caller-supplied path,
+/// not only by editing the config.
+///
+/// Follows the Windows convention `CommandLineToArgvW` parses: backslashes are
+/// literal except when they precede a quote, where they must be doubled.
+fn quote_argument(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    let mut backslashes = 0usize;
+    for c in value.chars() {
+        match c {
+            '\\' => {
+                backslashes += 1;
+                out.push(c);
+            }
+            '"' => {
+                // Double the run that precedes the quote, then escape it.
+                for _ in 0..backslashes {
+                    out.push('\\');
+                }
+                backslashes = 0;
+                out.push_str("\\\"");
+            }
+            _ => {
+                backslashes = 0;
+                out.push(c);
+            }
+        }
+    }
+    // A trailing run would otherwise escape our own closing quote.
+    for _ in 0..backslashes {
+        out.push('\\');
+    }
+    out.push('"');
+    out
 }
 
 /// Additive: platform name of the rusty_term binary (`rusty_term.exe` on
@@ -670,6 +726,51 @@ mod tests {
         assert_eq!(
             args,
             "--title \"Naner (Unified)\" --startingDirectory \"C:\\work\" -- \"C:\\naner\\vendor\\powershell\\pwsh.exe\" -NoExit -NoLogo"
+        );
+    }
+    // ---- argument quoting (#21) ----
+
+    #[test]
+    fn quoting_neutralises_an_embedded_quote() {
+        // Reachable from `naner -d '<value>'`, which reaches raw_arg unchanged.
+        let injected = r#"C:\x" --title "pwned"#;
+        let quoted = quote_argument(injected);
+        assert!(quoted.starts_with('"') && quoted.ends_with('"'));
+        // Every inner quote is escaped, so none can end the quoted section.
+        let inner = &quoted[1..quoted.len() - 1];
+        for (i, _) in inner.match_indices('"') {
+            assert!(
+                i > 0 && inner.as_bytes()[i - 1] == b'\\',
+                "unescaped quote at {i} in {quoted}"
+            );
+        }
+    }
+
+    #[test]
+    fn quoting_preserves_ordinary_windows_paths() {
+        assert_eq!(quote_argument(r"C:\naner\bin"), r#""C:\naner\bin""#);
+        assert_eq!(quote_argument(""), r#""""#);
+    }
+
+    /// A trailing backslash run would otherwise escape our own closing quote
+    /// and swallow the next argument.
+    #[test]
+    fn a_trailing_backslash_run_is_doubled() {
+        assert_eq!(quote_argument(r"C:\dir\"), r#""C:\dir\\""#);
+    }
+
+    #[test]
+    fn a_directory_override_cannot_inject_arguments() {
+        let cfg = load_json(CONFIG).unwrap();
+        let root = Path::new("C:\\naner");
+        let launcher = TerminalLauncher::new(root, &cfg, false);
+        let args = launcher.build_terminal_arguments(
+            cfg.get_profile("Unified", true).unwrap(),
+            Some(r#"x" --title "injected"#),
+        );
+        assert!(
+            !args.contains("--title \"injected"),
+            "injected flag survived quoting: {args}"
         );
     }
 }

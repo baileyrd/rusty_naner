@@ -12,6 +12,36 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #34 — Escape terminal arguments; validate env var names; make PreLaunch a gate
+**2026-08-16**
+
+- **Fixed:** values interpolated into the terminal's command line were not
+  escaped, and the result goes to `Command::raw_arg`, so an embedded `"` ended
+  the quoted section and injected further arguments. Reachable from
+  `naner -d '<value>'`, so anything invoking naner with a caller-supplied
+  directory was exposed — not only someone editing their own config. Quoting
+  now follows the `CommandLineToArgvW` convention, including the trailing
+  backslash run that would otherwise escape the closing quote. The existing
+  byte-for-bit Windows Terminal argument test still passes, so ordinary
+  inputs are unchanged.
+- **Fixed:** environment variable *names* were interpolated raw into
+  `--export-env` output while only values were escaped. That output is
+  designed to be piped into `Invoke-Expression` / `eval`, so a crafted name
+  became shell code in the consuming session. Names must now match
+  `[A-Za-z_][A-Za-z0-9_]*`, as a validation **error** rather than a warning.
+  Configs travel — `naner pack`, `naner profile export` — so "the user owns
+  their own config" was not the whole story.
+- **Fixed:** the `PreLaunch` hook's exit code was discarded, so a hook that
+  failed still launched the terminal. A pre-launch gate that cannot stop the
+  launch is not a gate. It now aborts with the reason. `PostLaunch` warns
+  instead, since the terminal is already running by then and there is nothing
+  left to prevent. A missing hook script is reported rather than silently
+  succeeding.
+- **Unchanged, deliberately:** hooks still run under `-ExecutionPolicy
+  Bypass`. A hook is a script the config owner supplied on purpose and the
+  default policy would refuse it. That is now documented as a weakening
+  rather than left looking accidental.
+
 ### PR #33 — Stop `naner migrate` writing the environment into the config
 **2026-08-16**
 
