@@ -45,14 +45,9 @@ pub struct GitHubReleasesClient {
 
 impl GitHubReleasesClient {
     pub fn new(owner: &str, repo: &str) -> Self {
-        let tls = native_tls::TlsConnector::new().expect("failed to initialize TLS");
-        let agent = ureq::AgentBuilder::new()
-            .tls_connector(std::sync::Arc::new(tls))
-            .timeout(std::time::Duration::from_secs(
-                constants::DEFAULT_HTTP_TIMEOUT_MINUTES * 60,
-            ))
-            .user_agent(&constants::default_user_agent())
-            .build();
+        // Shared with the vendor pipeline so proxy handling cannot drift
+        // between the two again (#18).
+        let agent = crate::http::build_agent();
         Self {
             agent,
             owner: owner.to_string(),

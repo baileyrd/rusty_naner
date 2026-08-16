@@ -21,6 +21,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      # Without this every run recompiles the whole dependency tree from
+      # scratch on both runners. The Windows leg feels it worst: it is the only
+      # one that does a release build, and the release profile sets lto = true
+      # with codegen-units = 1, so a cold build dominates the job.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Separate entries per OS so the Linux and Windows caches cannot
+          # evict each other.
+          key: ${{ matrix.os }}
       - name: Format
         if: runner.os == 'Linux'
         run: cargo fmt --all --check

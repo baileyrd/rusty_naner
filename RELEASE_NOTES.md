@@ -12,6 +12,28 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #30 — One owner for outbound HTTP; cache CI dependencies
+**2026-08-16**
+
+- **Fixed:** `GitHubReleasesClient` built its own agent and never read the
+  proxy variables, so behind a corporate proxy vendor installs worked while
+  `naner-init` bootstrap, `naner-init` update and `naner self-update` all
+  failed with a bare "Failed to fetch release". Since `naner-init` is the entry
+  point for a fresh install, a proxied user could not get started at all. Both
+  clients now share `http::build_agent`, which is also what
+  `ATLAS-BOUND-0001` asks for — one component owning the boundary.
+- **Added:** `NO_PROXY=*` as a blanket opt-out, and an unusable proxy value is
+  now reported and ignored rather than silently dropped.
+- **Fixed:** `native_tls::TlsConnector::new().expect(...)` appeared in both
+  constructors. `naner.exe` builds with `panic = "abort"` and
+  `windows_subsystem = "windows"`, so a broken TLS stack aborted the process
+  with no message at all on a GUI launch. It now warns and falls back to
+  ureq's default TLS, which fails at request time with something readable.
+- **Changed:** CI caches the Cargo registry and target directory
+  (`Swatinem/rust-cache`), keyed per runner OS. Every run previously rebuilt
+  the whole dependency tree; the Windows leg felt it worst, being the only one
+  that does a release build under `lto = true` and `codegen-units = 1`.
+
 ### PR #29 — Stage downloads so an interrupted run cannot poison the cache
 **2026-08-16**
 
