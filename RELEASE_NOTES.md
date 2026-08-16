@@ -32,7 +32,17 @@ Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/rel
   Setting the console code page instead would have fixed the attached case and
   not the redirected one, since a pipe's encoding belongs to whatever reads it
   (#39).
-- **Provenance:** both found by working `docs/VALIDATION.md` Step 1 mode 3
+- **Fixed:** `setup-shell` generated a block pointing at
+  `<root>\bin\naner.exe`. `naner.exe` lives at `<root>\vendor\bin\naner.exe` —
+  where the release workflow stages it, where `naner-init` installs and updates
+  it, and what `naner.bat` calls. `bin/` is the user's own directory and ships
+  empty. The generated block guards on `Test-Path`/`-f`, so the wrong path
+  failed silently: the block was written, looked right in `--dry-run`, and
+  never ran. `VendorPaths.Naner` in the shipped `naner.json` carried the same
+  wrong path, which the config validator had been reporting as a warning all
+  along — invisible on a GUI launch, where there is no console to read it
+  (#42).
+- **Provenance:** all found by working `docs/VALIDATION.md` Step 1 mode 3
   against v0.6.0 on Windows — the step that exists to catch exactly this, and
   which had never been run from outside an initialized tree. Neither is a v0.6.0
   regression; `handle_first_run` was ported verbatim from the C# and has behaved

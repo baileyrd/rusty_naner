@@ -3,7 +3,7 @@
   "title": "Naner Configuration",
   "description": "Configuration for Naner terminal launcher",
   "VendorPaths": {
-    "Naner": "%NANER_ROOT%\\bin\\naner.exe",
+    "Naner": "%NANER_ROOT%\\vendor\\bin\\naner.exe",
     "SevenZip": "%NANER_ROOT%\\vendor\\7zip\\7z.exe",
     "PowerShell": "%NANER_ROOT%\\vendor\\powershell\\pwsh.exe",
     "WindowsTerminal": "%NANER_ROOT%\\vendor\\terminal\\wt.exe",

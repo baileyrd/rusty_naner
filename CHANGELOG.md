@@ -11,6 +11,9 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   command exits non-zero when nothing was exported (#38).
 - Console output is ASCII, so a Windows console on the default code page no
   longer renders `[x]`, bullets and check marks as mojibake (#39).
+- `setup-shell` writes a block pointing at `vendor\bin\naner.exe` rather than
+  `bin\naner.exe`, so the shell integration actually runs; `VendorPaths.Naner`
+  in the shipped config had the same wrong path (#42).
 
 ## [0.6.0] - 2026-08-16
 ### Added
