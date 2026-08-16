@@ -42,6 +42,14 @@ Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/rel
   wrong path, which the config validator had been reporting as a warning all
   along — invisible on a GUI launch, where there is no console to read it
   (#42).
+- **Fixed:** the ASCII sweep above missed five sites — an em dash each in
+  `naner lock`, `self-update` and the vendor list, and an ellipsis in `lock`'s
+  truncated digest display, which is the string a user reads to check a pin.
+  They were missed because the search keyed on the print macro, and in a
+  multi-line `format!` the macro sits on a different line from the string. A
+  test now walks every source file and fails on the specific characters that
+  render as mojibake, naming file and line. It deliberately does not forbid all
+  non-ASCII: `paths.rs` tests accented and CJK path handling with real input.
 - **Provenance:** all found by working `docs/VALIDATION.md` Step 1 mode 3
   against v0.6.0 on Windows — the step that exists to catch exactly this, and
   which had never been run from outside an initialized tree. Neither is a v0.6.0

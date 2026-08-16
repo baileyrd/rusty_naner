@@ -14,6 +14,8 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 - `setup-shell` writes a block pointing at `vendor\bin\naner.exe` rather than
   `bin\naner.exe`, so the shell integration actually runs; `VendorPaths.Naner`
   in the shipped config had the same wrong path (#42).
+- Five further non-ASCII characters missed by the first sweep, in `lock`,
+  `self-update` and the vendor list, with a test that now enforces it (#39).
 
 ## [0.6.0] - 2026-08-16
 ### Added

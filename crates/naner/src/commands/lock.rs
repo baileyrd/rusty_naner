@@ -43,7 +43,7 @@ fn show(naner_root: &std::path::Path, porcelain: bool) -> i32 {
             return 0;
         }
         logger::info(&format!(
-            "No {} yet — it is written as vendors are installed.",
+            "No {} yet - it is written as vendors are installed.",
             naner_core::lockfile::LOCKFILE_NAME
         ));
         return 0;
@@ -72,7 +72,7 @@ fn show(naner_root: &std::path::Path, porcelain: bool) -> i32 {
     let mut unverifiable = 0;
     for (key, entry) in &lock.vendors {
         let digest = match entry.sha256.as_deref() {
-            Some(sha) if !sha.is_empty() => format!("sha256:{}…", &sha[..sha.len().min(12)]),
+            Some(sha) if !sha.is_empty() => format!("sha256:{}...", &sha[..sha.len().min(12)]),
             _ => {
                 unverifiable += 1;
                 "no digest".to_string()
@@ -84,7 +84,7 @@ fn show(naner_root: &std::path::Path, porcelain: bool) -> i32 {
 
     if unverifiable > 0 {
         logger::warning(&format!(
-            "{unverifiable} pin(s) fix a URL but carry no digest — those installs are not verified."
+            "{unverifiable} pin(s) fix a URL but carry no digest - those installs are not verified."
         ));
     }
     logger::info("Use 'naner lock --refresh [vendor...]' to re-resolve on next install.");

@@ -49,7 +49,7 @@ pub fn execute(args: &[String]) -> i32 {
     let Some(init) = find_naner_init(&naner_root) else {
         logger::failure("naner-init not found");
         logger::info(
-            "naner-init performs the update — it is a separate executable because \
+            "naner-init performs the update - it is a separate executable because \
              naner.exe cannot replace itself while running.",
         );
         logger::info("Expected at vendor/bin/, beside naner.exe, or on PATH.");
