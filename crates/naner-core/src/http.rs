@@ -33,30 +33,9 @@ impl Default for UreqHttp {
 
 impl UreqHttp {
     pub fn new() -> Self {
-        // native-tls: schannel on Windows, OpenSSL elsewhere. A connector
-        // build failure would mean a broken TLS stack; surface it loudly.
-        let tls = native_tls::TlsConnector::new().expect("failed to initialize TLS");
-        let mut builder = ureq::AgentBuilder::new()
-            .tls_connector(std::sync::Arc::new(tls))
-            .timeout(std::time::Duration::from_secs(
-                constants::DEFAULT_HTTP_TIMEOUT_MINUTES * 60,
-            ))
-            .user_agent(&constants::default_user_agent());
-
-        let proxy_url = std::env::var("HTTPS_PROXY")
-            .or_else(|_| std::env::var("https_proxy"))
-            .or_else(|_| std::env::var("HTTP_PROXY"))
-            .or_else(|_| std::env::var("http_proxy"))
-            .ok();
-
-        if let Some(proxy_str) = proxy_url
-            && let Ok(proxy) = ureq::Proxy::new(&proxy_str)
-        {
-            builder = builder.proxy(proxy);
+        Self {
+            agent: build_agent(),
         }
-
-        let agent = builder.build();
-        Self { agent }
     }
 
     fn request(&self, url: &str) -> ureq::Request {
@@ -172,6 +151,65 @@ impl Http for UreqHttp {
                 logger::failure(&format!("    Download error: {e}"));
                 false
             }
+        }
+    }
+}
+
+/// The one place an HTTP agent is configured.
+///
+/// Both callers — the vendor pipeline here and the releases client in
+/// `github` — need the same TLS stack, timeout, user agent and proxy. They
+/// used to build their own, and only this one read the proxy variables, so a
+/// user behind a corporate proxy could install vendors but could not bootstrap
+/// or update: `naner-init` failed with a bare "Failed to fetch release".
+/// Owning the configuration once is also what `ATLAS-BOUND-0001` asks for —
+/// one component responsible for translating across the outbound-HTTP
+/// boundary.
+pub(crate) fn build_agent() -> ureq::Agent {
+    let mut builder = ureq::AgentBuilder::new()
+        .timeout(std::time::Duration::from_secs(
+            constants::DEFAULT_HTTP_TIMEOUT_MINUTES * 60,
+        ))
+        .user_agent(&constants::default_user_agent());
+
+    // native-tls: schannel on Windows, OpenSSL elsewhere. A connector that
+    // will not build means a broken TLS stack; say so and fall back to ureq's
+    // own default rather than aborting the process — the launcher builds with
+    // `panic = "abort"`, so an expect() here would take the whole run down
+    // with no message on a GUI launch.
+    match native_tls::TlsConnector::new() {
+        Ok(tls) => builder = builder.tls_connector(std::sync::Arc::new(tls)),
+        Err(e) => logger::warning(&format!("TLS init failed ({e}); using default TLS")),
+    }
+
+    if let Some(proxy) = configured_proxy() {
+        builder = builder.proxy(proxy);
+    }
+    builder.build()
+}
+
+/// Proxy from the environment, honouring `NO_PROXY` as a blanket opt-out.
+///
+/// Both spellings of each variable are read because callers set them
+/// inconsistently and naner cannot control which one a given shell exports.
+fn configured_proxy() -> Option<ureq::Proxy> {
+    let no_proxy = std::env::var("NO_PROXY")
+        .or_else(|_| std::env::var("no_proxy"))
+        .unwrap_or_default();
+    if no_proxy.trim() == "*" {
+        return None;
+    }
+
+    let url = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"]
+        .iter()
+        .find_map(|name| std::env::var(name).ok())
+        .filter(|v| !v.trim().is_empty())?;
+
+    match ureq::Proxy::new(&url) {
+        Ok(proxy) => Some(proxy),
+        Err(e) => {
+            logger::warning(&format!("Ignoring unusable proxy setting {url:?}: {e}"));
+            None
         }
     }
 }

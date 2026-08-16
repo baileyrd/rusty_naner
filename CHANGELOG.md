@@ -22,6 +22,7 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 - `naner lock [--refresh [vendor...]] [--porcelain]` to inspect and drop pins.
 
 ### Changed
+- CI caches Cargo registry and build artifacts per runner OS.
 - `update-vendors` ignores any existing pin and rewrites it, so updating is not a
   no-op on pinned vendors.
 
@@ -30,6 +31,9 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
 ### Fixed
+- Proxy settings are honoured on every outbound request, not just vendor
+  downloads; `naner-init` bootstrap and update previously ignored them.
+- A broken TLS stack no longer aborts the process; it warns and falls back.
 - Downloads stage to `<name>.part` and are published by rename, so an
   interrupted run leaves nothing that the next run mistakes for a complete
   cached asset.
