@@ -50,6 +50,11 @@ Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/rel
   test now walks every source file and fails on the specific characters that
   render as mojibake, naming file and line. It deliberately does not forbid all
   non-ASCII: `paths.rs` tests accented and CJK path handling with real input.
+- **Fixed:** a pinned install printed `Latest version: 26.02` directly beneath
+  `Using pinned 7-Zip (26.02)`. Nothing had checked what was current -- that is
+  the whole point of a pin -- so the line asserted a check that never ran, on
+  the one screen where a user is deciding whether to trust what they are about
+  to install. It now prints only on the resolving path, where it is true.
 - **Provenance:** all found by working `docs/VALIDATION.md` Step 1 mode 3
   against v0.6.0 on Windows — the step that exists to catch exactly this, and
   which had never been run from outside an initialized tree. Neither is a v0.6.0
