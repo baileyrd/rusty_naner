@@ -14,20 +14,26 @@ pub fn execute(args: &[String]) -> i32 {
         }
     };
 
-    let shell = match shell_str.as_str() {
-        "bash" => Shell::Bash,
-        "zsh" => Shell::Zsh,
-        "pwsh" | "powershell" => Shell::PowerShell,
-        "fish" => Shell::Fish,
-        other => {
-            eprintln!("Unknown shell '{other}'. Supported: bash, zsh, pwsh, fish");
-            return 1;
-        }
+    let Some(shell) = parse_shell(&shell_str) else {
+        eprintln!("Unknown shell '{shell_str}'. Supported: bash, zsh, pwsh, fish");
+        return 1;
     };
 
     let mut cmd = build_cli_command();
     generate(shell, &mut cmd, "naner", &mut io::stdout());
     0
+}
+
+/// Shell name → clap_complete target. Separate from `execute` so the accepted
+/// spellings can be tested without generating a script to stdout.
+fn parse_shell(name: &str) -> Option<Shell> {
+    Some(match name {
+        "bash" => Shell::Bash,
+        "zsh" => Shell::Zsh,
+        "pwsh" | "powershell" => Shell::PowerShell,
+        "fish" => Shell::Fish,
+        _ => return None,
+    })
 }
 
 fn build_cli_command() -> Command {
@@ -47,4 +53,39 @@ fn build_cli_command() -> Command {
         .subcommand(Command::new("install").about("Install vendor tools"))
         .subcommand(Command::new("update-vendors").about("Update installed vendors"))
         .subcommand(Command::new("root").about("Print NANER_ROOT path"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_documented_shell_is_accepted() {
+        // These are the names the usage string promises.
+        for name in ["bash", "zsh", "pwsh", "fish"] {
+            assert!(parse_shell(name).is_some(), "usage advertises {name}");
+        }
+        // Accepted alias, not advertised.
+        assert_eq!(parse_shell("powershell"), Some(Shell::PowerShell));
+    }
+
+    #[test]
+    fn an_unknown_shell_is_rejected() {
+        assert_eq!(parse_shell("nushell"), None);
+        assert_eq!(parse_shell(""), None);
+        // Case folding happens before this is called.
+        assert_eq!(parse_shell("BASH"), None);
+    }
+
+    /// The generated script is what users pipe into their shell; a panic here
+    /// would surface as a truncated completion file.
+    #[test]
+    fn completions_generate_for_every_supported_shell() {
+        for name in ["bash", "zsh", "pwsh", "fish"] {
+            let shell = parse_shell(name).unwrap();
+            let mut buf = Vec::new();
+            generate(shell, &mut build_cli_command(), "naner", &mut buf);
+            assert!(!buf.is_empty(), "{name} produced an empty script");
+        }
+    }
 }
