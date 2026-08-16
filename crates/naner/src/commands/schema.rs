@@ -12,7 +12,26 @@ pub fn execute(args: &[String]) -> i32 {
 
     match target.as_str() {
         "config" => {
-            let schema = json!({
+            let schema = config_schema_value();
+            println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+            0
+        }
+        "vendors" => {
+            let schema = vendors_schema_value();
+            println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+            0
+        }
+        other => {
+            eprintln!("Unknown schema target '{other}'. Valid targets: 'config', 'vendors'");
+            1
+        }
+    }
+}
+
+/// The `naner.json` schema. A function rather than an inline literal so the
+/// drift tests below check the exact value the command prints.
+fn config_schema_value() -> serde_json::Value {
+    json!({
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "title": "NanerConfig",
                 "description": "Configuration schema for naner terminal launcher",
@@ -51,6 +70,14 @@ pub fn execute(args: &[String]) -> i32 {
                                 "ColorScheme": { "type": "string" },
                                 "Terminal": { "type": "string" },
                                 "UseVendorPath": { "type": "boolean" },
+                                "PreLaunch": {
+                                    "type": "string",
+                                    "description": "Script run before the terminal is spawned"
+                                },
+                                "PostLaunch": {
+                                    "type": "string",
+                                    "description": "Script run after the terminal starts"
+                                },
                                 "CustomShell": {
                                     "type": "object",
                                     "properties": {
@@ -61,30 +88,36 @@ pub fn execute(args: &[String]) -> i32 {
                             }
                         }
                     },
-                    "Services": {
-                        "type": "array",
-                        "description": "Background sidecar daemons to run alongside terminal sessions",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "Name": { "type": "string" },
-                                "Command": { "type": "string" },
-                                "Arguments": {
-                                    "type": "array",
-                                    "items": { "type": "string" }
-                                },
-                                "AutoRestart": { "type": "boolean" }
-                            },
-                            "required": ["Name", "Command"]
+                    "WindowsTerminal": {
+                        "type": "object",
+                        "properties": {
+                            "DefaultTerminal": { "type": "boolean" },
+                            "LaunchMode": { "type": "string" },
+                            "TabTitle": { "type": "string" },
+                            "SuppressApplicationTitle": { "type": "boolean" }
                         }
+                    },
+                    "Advanced": {
+                        "type": "object",
+                        "properties": {
+                            "PreservePath": { "type": "boolean" },
+                            "InheritSystemPath": { "type": "boolean" },
+                            "VerboseLogging": { "type": "boolean" },
+                            "DebugMode": { "type": "boolean" }
+                        }
+                    },
+                    "CustomProfiles": {
+                        "type": "object",
+                        "description": "Additional profiles, same shape as Profiles",
+                        "additionalProperties": { "$ref": "#/properties/Profiles/additionalProperties" }
                     }
                 }
-            });
-            println!("{}", serde_json::to_string_pretty(&schema).unwrap());
-            0
-        }
-        "vendors" => {
-            let schema = json!({
+    })
+}
+
+/// The `vendors.json` schema.
+fn vendors_schema_value() -> serde_json::Value {
+    json!({
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "title": "VendorsConfig",
                 "description": "Configuration schema for naner vendors manifest",
@@ -104,10 +137,35 @@ pub fn execute(args: &[String]) -> i32 {
                                     "type": "array",
                                     "items": { "type": "string" }
                                 },
+                                "installType": { "type": "string" },
+                                "installerArgs": {
+                                    "type": "array",
+                                    "items": { "type": "string" }
+                                },
+                                "checksumSource": {
+                                    "type": "object",
+                                    "description": "Where to fetch a digest for a dynamically-resolved artifact",
+                                    "properties": {
+                                        "type": { "type": "string", "enum": ["sidecar", "scrape"] },
+                                        "suffix": { "type": "string" },
+                                        "url": { "type": "string" },
+                                        "pattern": { "type": "string" }
+                                    }
+                                },
                                 "releaseSource": {
                                     "type": "object",
                                     "properties": {
-                                        "type": { "type": "string" },
+                                        "type": {
+                                            "type": "string",
+                                            "enum": [
+                                                "github",
+                                                "web-scrape",
+                                                "static",
+                                                "golang-api",
+                                                "nodejs-api",
+                                                "dotnet-api"
+                                            ]
+                                        },
                                         "repo": { "type": "string" },
                                         "assetPattern": { "type": "string" },
                                         "url": { "type": "string" },
@@ -126,13 +184,72 @@ pub fn execute(args: &[String]) -> i32 {
                         }
                     }
                 }
-            });
-            println!("{}", serde_json::to_string_pretty(&schema).unwrap());
-            0
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use naner_core::config::{NanerConfig, ProfileConfig};
+
+    /// Every key serde actually emits must be described by the schema.
+    ///
+    /// The schema is a hand-written literal — a third description of the config
+    /// format alongside the serde structs and the shipped `*-schema.json`. This
+    /// test makes serde the source of truth so the literal cannot drift again,
+    /// which is how it came to advertise a `Services` block that no field
+    /// backed and to omit `Advanced`, `WindowsTerminal` and `CustomProfiles`.
+    #[test]
+    fn schema_describes_every_field_serde_emits() {
+        let mut config = NanerConfig::default();
+        // Force the profile shape to serialize by giving it one entry.
+        config
+            .profiles
+            .insert("Sample".into(), ProfileConfig::default());
+
+        let emitted: serde_json::Value = serde_json::to_value(&config).unwrap();
+        let schema = super::config_schema_value();
+
+        let top: Vec<String> = emitted.as_object().unwrap().keys().cloned().collect();
+        let described = schema["properties"].as_object().unwrap();
+        for key in &top {
+            assert!(
+                described.contains_key(key),
+                "schema omits top-level field {key:?} that serde emits"
+            );
         }
-        other => {
-            eprintln!("Unknown schema target '{other}'. Valid targets: 'config', 'vendors'");
-            1
+
+        let profile_emitted = &emitted["Profiles"]["Sample"];
+        let profile_described =
+            schema["properties"]["Profiles"]["additionalProperties"]["properties"]
+                .as_object()
+                .unwrap();
+        for key in profile_emitted.as_object().unwrap().keys() {
+            assert!(
+                profile_described.contains_key(key),
+                "schema omits profile field {key:?} that serde emits"
+            );
+        }
+    }
+
+    /// The inverse: the schema must not invent fields the model has no home
+    /// for. `Services` ("background sidecar daemons") was described in detail
+    /// and backed by nothing, so a user following the schema got a silently
+    /// ignored config block.
+    #[test]
+    fn schema_does_not_describe_fields_the_model_lacks() {
+        let mut config = NanerConfig::default();
+        config
+            .profiles
+            .insert("Sample".into(), ProfileConfig::default());
+        let emitted = serde_json::to_value(&config).unwrap();
+        let emitted_keys: Vec<&String> = emitted.as_object().unwrap().keys().collect();
+
+        let schema = super::config_schema_value();
+        for key in schema["properties"].as_object().unwrap().keys() {
+            assert!(
+                emitted_keys.contains(&key),
+                "schema describes {key:?}, which no config field produces"
+            );
         }
     }
 }

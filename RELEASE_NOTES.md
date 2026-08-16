@@ -12,6 +12,30 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #32 — Make `naner schema` describe the config that exists
+**2026-08-16**
+
+- **Fixed:** `naner schema config` advertised a `Services` block — "background
+  sidecar daemons to run alongside terminal sessions" — that no field backs and
+  no code implements, so a user following the schema got a silently ignored
+  config section. Removed.
+- **Fixed:** it omitted `WindowsTerminal`, `Advanced` and `CustomProfiles` at
+  the top level and `PreLaunch` / `PostLaunch` on a profile, so roughly half
+  the real surface had no autocompletion.
+- **Fixed:** `naner schema vendors` had drifted the same way — no `installType`,
+  `installerArgs` or `checksumSource`, and no enum on `releaseSource.type`,
+  which now lists the six the loader accepts.
+- **Changed:** both schemas moved out of the `execute` match into named
+  functions, so the tests check the exact value the command prints rather than
+  a copy.
+- **Added:** two drift tests that make serde the source of truth — every key
+  `NanerConfig` serializes must be described, and every described key must be
+  one serde produces. The second is what catches an invented block; verified
+  by re-introducing `Services` and watching it fail.
+- **Known limitation:** `schema vendors` is still checked by eye against
+  `VendorJsonEntry`, which is private to `naner-core`. It has no equivalent
+  round-trip test.
+
 ### PR #31 — Honour the `enabled` flag; generate the vendor list
 **2026-08-16**
 
