@@ -206,8 +206,24 @@ fn install_all_optional(
     } else {
         logger::warning(&format!("Completed with {failed} failure(s)."));
     }
-    logger::info("Restart your terminal to use the newly installed tools.");
+    if restart_hint_applies(to_install.len(), failed) {
+        logger::info("Restart your terminal to use the newly installed tools.");
+    }
     if failed > 0 { 1 } else { 0 }
+}
+
+/// Whether "restart your terminal" is true yet.
+///
+/// It is advice about a PATH that changed, so it only applies if something was
+/// actually placed. When every vendor failed -- a checksum mismatch, say --
+/// nothing changed, and telling someone to restart implies an install they did
+/// not get.
+///
+/// Deliberately conservative on the mixed case where a named vendor failed but
+/// one of its dependencies installed: this reports nothing rather than
+/// guessing, since over-claiming is the failure mode being fixed.
+fn restart_hint_applies(attempted: usize, failed: usize) -> bool {
+    failed < attempted
 }
 
 /// `InstallSpecificVendors`.
@@ -289,7 +305,9 @@ fn install_specific(
     } else {
         logger::warning(&format!("Completed with {failed} failure(s)."));
     }
-    logger::info("Restart your terminal to use the newly installed tools.");
+    if restart_hint_applies(needs.len(), failed) {
+        logger::info("Restart your terminal to use the newly installed tools.");
+    }
     if failed > 0 { 1 } else { 0 }
 }
 
@@ -362,4 +380,36 @@ fn show_install_help(optional: &[&VendorDefinition]) {
         );
     }
     logger::newline();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::restart_hint_applies;
+
+    /// The bug: a checksum mismatch aborted the only install, and naner still
+    /// said "Restart your terminal to use the newly installed tools." Nothing
+    /// had been installed. Telling someone their PATH changed when it did not
+    /// is the same over-claim as reporting success on a failure.
+    #[test]
+    fn nothing_installed_means_no_restart_advice() {
+        assert!(!restart_hint_applies(1, 1), "the only vendor failed");
+        assert!(!restart_hint_applies(3, 3), "every vendor failed");
+    }
+
+    #[test]
+    fn a_partial_install_still_needs_a_restart() {
+        assert!(restart_hint_applies(3, 1), "two of three landed");
+    }
+
+    #[test]
+    fn a_clean_run_advises_a_restart() {
+        assert!(restart_hint_applies(2, 0));
+    }
+
+    /// `install --list` and an up-to-date tree both reach the summary with
+    /// nothing attempted. No install, no advice.
+    #[test]
+    fn attempting_nothing_advises_nothing() {
+        assert!(!restart_hint_applies(0, 0));
+    }
 }
