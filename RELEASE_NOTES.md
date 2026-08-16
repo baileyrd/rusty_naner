@@ -9,8 +9,80 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
-[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
+Nothing merged since [v0.6.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.6.0).
+
+---
+
+## v0.6.0 — 2026-08-16
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...v0.6.0).
+
+The output of a full repository audit. v0.5.0 completed the migration and shipped
+a launcher that worked; this release is about the difference between working and
+being trustworthy. Three themes:
+
+**Things that reported success without doing anything.** Five commands
+(`profile import`, `setup-shell`, `pack`, `self-update`, `checksum`) printed a
+success message and acted on nothing. Vendor install reported success when it
+could not place the tree. `enabled` in `vendors.json` was parsed and ignored.
+`PreLaunch`'s exit code was discarded, so a hook that failed still launched the
+terminal. Each of these is worse than an outright error, because the user has
+no reason to look.
+
+**Nothing was verified.** Downloaded vendor artifacts and self-update binaries
+were trusted on the strength of TLS transport alone. Downloads now check against
+the digest the distributor publishes where one exists, `naner.lock` pins version,
+URL and SHA-256 for the vendors that publish none, and `naner-init` verifies
+release assets against a `SHA256SUMS` manifest and fails closed without it.
+
+**Two reachable injection paths.** Terminal arguments were interpolated
+unescaped into a command line handed to `raw_arg`, reachable through
+`naner -d '<value>'` — so any wrapper passing a caller-supplied directory was
+exposed, not just someone editing their own config. Separately, environment
+variable *names* went unescaped into `--export-env` output that is designed to
+be piped into `Invoke-Expression` / `eval`.
+
+### Breaking changes
+
+- **`naner checksum` is removed.** It never computed or wrote anything. It now
+  exits 2 with a pointer to what replaced it — automatic digest verification and
+  `naner lock` — rather than vanishing and leaving a script with an unexplained
+  "unknown command".
+- **`ProfileConfig.WindowEffect` is removed.** It was parsed and never read, so
+  the `Mica` / `Acrylic` / `Tabbed` backdrops the README advertised never
+  existed. A config that still sets it is not rejected; the key is simply not
+  part of the model, and the README no longer claims the feature.
+- **An invalid environment variable name is now an error, not a warning.** A
+  config using a name outside `[A-Za-z_][A-Za-z0-9_]*` previously loaded with a
+  warning and will now fail validation. This is the fix for the `--export-env`
+  injection, and configs travel via `naner pack` and `profile export`, so
+  tolerating it was not defensible.
+- **`enabled: false` in `vendors.json` is now honoured.** `install --all`
+  previously installed the seven vendors the shipped config switches off. If you
+  relied on that, those vendors will no longer install; set `enabled: true` or
+  name them explicitly. Dependencies still install regardless, since they were
+  not chosen from a menu.
+
+### Known limitations
+
+- **The Windows validation checklist has not been re-run for this release.**
+  `docs/VALIDATION.md` was signed off for v0.5.0. This release changes real
+  runtime behaviour on paths CI cannot reach — the staged-tree swap, the
+  argument-escaping change on the spawned command line, the hook gate, and four
+  commands that now write files they previously did not. Linux and Windows CI
+  are green and the unit tests cover the logic, but no one has watched this
+  build launch a terminal.
+- `naner schema vendors` is still hand-checked against `VendorJsonEntry`, which
+  is private to `naner-core`, so it has no round-trip drift test the way
+  `schema config` does.
+- `naner migrate` still cannot preserve comments through a serde round-trip. It
+  warns before overwriting a commented file and leaves a timestamped backup.
+- Hooks still run under `-ExecutionPolicy Bypass`. That is deliberate — a hook
+  is a script the config owner supplied on purpose — but it is a weakening, and
+  it is now documented as one.
+- `cargo-deny` treats `unmaintained` as a warning rather than an error, so an
+  unmaintained dependency will not fail CI. Known vulnerabilities and yanked
+  versions do.
 
 ### PR #36 — Cover command dispatch; pin the toolchain
 **2026-08-16**

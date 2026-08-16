@@ -27,7 +27,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      # rust-toolchain.toml is the single source of the compiler version;
+      # rustup installs it on the first cargo invocation. Installing `stable`
+      # here too would fetch a second toolchain that nothing then uses, and
+      # would let a release build with a different compiler than CI verified.
+      - name: Show toolchain
+        run: rustup show active-toolchain && cargo --version
 
       - name: Verify tag matches package version
         shell: pwsh
