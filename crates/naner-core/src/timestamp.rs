@@ -12,6 +12,19 @@ pub fn now_local() -> String {
     imp::now()
 }
 
+/// [`now_local`] reduced to a filename-safe stamp, `YYYYMMDD-HHMMSS`.
+///
+/// Used for backup names, where the separators the display format uses are
+/// either illegal (`:` on Windows) or awkward (spaces) in a path.
+pub fn file_stamp() -> String {
+    now_local()
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == ' ')
+        .collect::<String>()
+        .replacen(' ', "-", 1)
+        .replace(' ', "")
+}
+
 fn format(year: i64, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> String {
     format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}")
 }
@@ -71,6 +84,23 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
     let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32; // [1, 12]
     (y + i64::from(m <= 2), m, d)
+}
+
+/// Runs on every platform, unlike `tests` below: the characters this guards
+/// against (`:` in particular) are illegal in a Windows path, which is the
+/// platform naner actually ships to.
+#[cfg(test)]
+mod stamp_tests {
+    #[test]
+    fn file_stamp_is_path_safe_and_sortable() {
+        let stamp = super::file_stamp();
+        assert_eq!(stamp.len(), 15, "expected YYYYMMDD-HHMMSS, got {stamp:?}");
+        assert_eq!(&stamp[8..9], "-");
+        assert!(
+            stamp.chars().all(|c| c.is_ascii_digit() || c == '-'),
+            "stamp must contain nothing illegal in a Windows path: {stamp:?}"
+        );
+    }
 }
 
 #[cfg(all(test, not(windows)))]
