@@ -85,13 +85,16 @@ impl Http for UreqHttp {
     }
 
     fn download(&self, url: &str, output_path: &Path) -> bool {
-        if output_path.is_file() && output_path.metadata().map_or(0, |m| m.len()) > 0 {
-            logger::info(&format!(
-                "    Using cached download asset: {}",
-                output_path.display()
-            ));
-            return true;
-        }
+        // Stream into `<name>.part` and publish with a rename only once the
+        // transfer is known complete. Writing straight to `output_path` meant
+        // an interrupted process — Ctrl-C, a crash, a lost machine — left a
+        // truncated file exactly where the next run looks for a finished one.
+        // Deleting on the error paths cannot cover that case, because nothing
+        // gets to run. Staging makes it safe by construction: a file at
+        // `output_path` was renamed there after a verified-complete transfer.
+        let part_path = partial_path(output_path);
+        let _ = std::fs::remove_file(&part_path); // stale one from a previous run
+
         match self.request(url).call() {
             Ok(response) => {
                 let total_bytes: u64 = response
@@ -99,7 +102,7 @@ impl Http for UreqHttp {
                     .and_then(|v| v.parse().ok())
                     .unwrap_or(0);
                 let mut reader = response.into_reader();
-                let file = match std::fs::File::create(output_path) {
+                let file = match std::fs::File::create(&part_path) {
                     Ok(f) => f,
                     Err(e) => {
                         logger::failure(&format!("    Download error: {e}"));
@@ -117,12 +120,12 @@ impl Http for UreqHttp {
                         Ok(n) => n,
                         Err(e) => {
                             logger::failure(&format!("    Download error: {e}"));
-                            return discard_partial(writer, output_path);
+                            return discard_partial(writer, &part_path);
                         }
                     };
                     if writer.write_all(&buffer[..bytes_read]).is_err() {
                         logger::failure("    Download error: write failed");
-                        return discard_partial(writer, output_path);
+                        return discard_partial(writer, &part_path);
                     }
                     total_read += bytes_read as u64;
 
@@ -139,7 +142,7 @@ impl Http for UreqHttp {
                 }
                 if writer.flush().is_err() {
                     logger::failure("    Download error: flush failed");
-                    return discard_partial(writer, output_path);
+                    return discard_partial(writer, &part_path);
                 }
                 // A truncated transfer that ends cleanly is otherwise
                 // indistinguishable from a complete one, and the partial file
@@ -148,11 +151,20 @@ impl Http for UreqHttp {
                     logger::failure(&format!(
                         "    Download error: expected {total_bytes} bytes, received {total_read}"
                     ));
-                    return discard_partial(writer, output_path);
+                    return discard_partial(writer, &part_path);
                 }
                 if total_bytes > 0 {
                     print!("\r    Progress: 100%");
                     println!();
+                }
+
+                // Publish. Only now is the artifact allowed to exist under the
+                // name the cache probe trusts.
+                drop(writer);
+                if let Err(e) = std::fs::rename(&part_path, output_path) {
+                    logger::failure(&format!("    Download error: could not finalize: {e}"));
+                    let _ = std::fs::remove_file(&part_path);
+                    return false;
                 }
                 true
             }
@@ -164,15 +176,82 @@ impl Http for UreqHttp {
     }
 }
 
+/// Staging name for an in-flight download: `foo.zip` -> `foo.zip.part`.
+///
+/// A suffix rather than `with_extension`, which would turn `foo.tar.xz` into
+/// `foo.tar.part` and collide with the intermediate `.tar` the xz extractor
+/// writes beside it.
+pub fn partial_path(output_path: &Path) -> std::path::PathBuf {
+    let mut name = output_path.file_name().unwrap_or_default().to_os_string();
+    name.push(".part");
+    output_path.with_file_name(name)
+}
+
 /// Drop a partially-written download and report failure.
 ///
-/// The cache check at the top of `download` treats any non-empty file as a
-/// finished asset, so a partial left on disk is silently reused by the next
-/// run. Always returns `false` so callers can `return discard_partial(..)`.
+/// Always returns `false` so callers can `return discard_partial(..)`.
 fn discard_partial(writer: std::io::BufWriter<std::fs::File>, output_path: &Path) -> bool {
     // Takes the writer by value so the handle is closed before the unlink:
     // Windows refuses to remove a file that is still open.
     drop(writer);
     let _ = std::fs::remove_file(output_path);
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn staging_name_appends_rather_than_replacing_the_extension() {
+        assert_eq!(
+            partial_path(Path::new("/d/node.zip")),
+            Path::new("/d/node.zip.part")
+        );
+        // `with_extension` would yield `msys2-base.tar.part` here, colliding
+        // with the intermediate `.tar` the xz extractor writes into the same
+        // folder.
+        assert_eq!(
+            partial_path(Path::new("/d/msys2-base.tar.xz")),
+            Path::new("/d/msys2-base.tar.xz.part")
+        );
+        // No extension at all.
+        assert_eq!(
+            partial_path(Path::new("/d/installer")),
+            Path::new("/d/installer.part")
+        );
+    }
+
+    /// Proves the staging discipline against a real transfer: the artifact
+    /// lands under its final name and no `.part` survives. Excluded from CI —
+    /// run with `cargo test -- --ignored`.
+    #[test]
+    #[ignore = "hits the network"]
+    fn a_real_download_publishes_by_rename_and_leaves_no_part_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("SHASUMS256.txt");
+
+        let http = UreqHttp::new();
+        assert!(http.download("https://nodejs.org/dist/index.json", &out));
+
+        assert!(out.is_file(), "artifact published under its final name");
+        assert!(out.metadata().unwrap().len() > 0);
+        assert!(
+            !partial_path(&out).exists(),
+            "staging file must not survive a successful download"
+        );
+    }
+
+    #[test]
+    #[ignore = "hits the network"]
+    fn a_failed_download_leaves_neither_the_artifact_nor_a_part_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("nope.bin");
+
+        let http = UreqHttp::new();
+        assert!(!http.download("https://nodejs.org/dist/definitely-not-here", &out));
+
+        assert!(!out.exists(), "nothing may be left under the final name");
+        assert!(!partial_path(&out).exists());
+    }
 }

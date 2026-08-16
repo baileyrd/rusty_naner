@@ -119,8 +119,12 @@ impl<'a> UnifiedVendorInstaller<'a> {
         }
         let mut download_path = self.download_dir.join(&info.file_name);
 
-        // Download (with download-level fallback).
-        if !self.http.download(&info.url, &download_path) {
+        // Download (with download-level fallback). Reusing a cached asset is a
+        // policy decision that needs the expected digest, so it lives here
+        // rather than in the transport.
+        if !self.reuse_cached(&download_path, vendor, &info)
+            && !self.http.download(&info.url, &download_path)
+        {
             let Some(fallback_url) = vendor.fallback_url.as_deref() else {
                 logger::warning(&format!("Failed to download {}, skipping...", vendor.name));
                 return false;
@@ -129,7 +133,9 @@ impl<'a> UnifiedVendorInstaller<'a> {
             info = fallback_info(vendor, fallback_url);
             download_path = self.download_dir.join(&info.file_name);
             logger::status(&format!("  Downloading {}...", info.file_name));
-            if !self.http.download(&info.url, &download_path) {
+            if !self.reuse_cached(&download_path, vendor, &info)
+                && !self.http.download(&info.url, &download_path)
+            {
                 logger::warning(&format!("Failed to download {}, skipping...", vendor.name));
                 return false;
             }
@@ -652,6 +658,41 @@ impl<'a> UnifiedVendorInstaller<'a> {
             version: Some(version),
             checksum: None,
         }))
+    }
+
+    /// Whether an already-downloaded asset can stand in for a fresh download.
+    ///
+    /// A cached file is complete by construction — `Http::download` publishes
+    /// with a rename, so nothing truncated ever carries the final name. What
+    /// completeness cannot tell us is whether it is the *right* artifact: file
+    /// names like `Miniconda3-latest-Windows-x86_64.exe` are stable while their
+    /// contents move. So when a digest is known the cache entry has to match
+    /// it, and a stale one is deleted and re-fetched instead of being handed to
+    /// the verifier, which would fail the install rather than fix it.
+    fn reuse_cached(
+        &self,
+        download_path: &Path,
+        vendor: &VendorDefinition,
+        info: &VendorDownloadInfo,
+    ) -> bool {
+        if !download_path.is_file() || download_path.metadata().map_or(0, |m| m.len()) == 0 {
+            return false;
+        }
+
+        if let Some(expected) = resolved_checksum(vendor, info) {
+            let result = checksum::verify(download_path, &expected);
+            if !result.success && !result.skipped {
+                logger::info("    Cached download does not match the expected digest, re-fetching");
+                let _ = std::fs::remove_file(download_path);
+                return false;
+            }
+        }
+
+        logger::info(&format!(
+            "    Using cached download asset: {}",
+            download_path.display()
+        ));
+        true
     }
 
     /// Fetch the digest described by a vendor's `checksumSource`, if any.
@@ -1349,6 +1390,9 @@ mod tests {
     struct StubHttp {
         text: HashMap<String, (u16, String)>,
         files: HashMap<String, Vec<u8>>,
+        /// Counts `download` calls so a test can prove a transfer was *skipped*
+        /// rather than merely that the right bytes ended up on disk.
+        downloads: std::cell::Cell<usize>,
     }
 
     impl Http for StubHttp {
@@ -1359,6 +1403,7 @@ mod tests {
                 .ok_or_else(|| format!("no route for {url}"))
         }
         fn download(&self, url: &str, output_path: &Path) -> bool {
+            self.downloads.set(self.downloads.get() + 1);
             match self.files.get(url) {
                 Some(bytes) => {
                     let mut f = std::fs::File::create(output_path).unwrap();
@@ -1486,6 +1531,139 @@ mod tests {
 
         let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
         assert!(installer.install_vendor("PowerShell"));
+    }
+
+    // ---- download caching (#15) ----
+
+    fn cached_vendor(sha256: Option<&str>) -> VendorDefinition {
+        VendorDefinition {
+            name: "Node.js".into(),
+            key: "NodeJS".into(),
+            extract_dir: "nodejs".into(),
+            source_type: VendorSourceType::StaticUrl,
+            static_url: Some("https://static.example/node.zip".into()),
+            file_name: Some("node.zip".into()),
+            checksum: sha256.map(|v| checksum::ChecksumInfo {
+                algorithm: "SHA256".into(),
+                value: v.into(),
+                required: true,
+            }),
+            ..Default::default()
+        }
+    }
+
+    /// Seed `vendor/.downloads/node.zip` as if a previous run had left it.
+    fn seed_cache(root: &Path, bytes: &[u8]) -> PathBuf {
+        let dir = root.join("vendor/.downloads");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("node.zip");
+        std::fs::write(&path, bytes).unwrap();
+        path
+    }
+
+    fn payload_and_digest() -> (Vec<u8>, String) {
+        let bytes = zip_bytes("node.exe", b"node");
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), &bytes).unwrap();
+        let digest = crate::checksum::compute(tmp.path(), "SHA256").unwrap();
+        (bytes, digest)
+    }
+
+    #[test]
+    fn a_matching_cached_asset_is_reused_without_downloading() {
+        let root = tempfile::tempdir().unwrap();
+        let (payload, digest) = payload_and_digest();
+        seed_cache(root.path(), &payload);
+
+        // No route for the URL at all: if it tried to download, it would fail.
+        let http = StubHttp::default();
+        let installer =
+            UnifiedVendorInstaller::new(root.path(), vec![cached_vendor(Some(&digest))], &http);
+
+        assert!(installer.install_vendor("Node.js"));
+        assert_eq!(http.downloads.get(), 0, "cache hit must skip the transfer");
+        assert!(root.path().join("vendor/nodejs/node.exe").is_file());
+    }
+
+    /// The stale-cache case that used to turn into a failed install: the file
+    /// name is stable (`Miniconda3-latest-...`) while the contents move, so the
+    /// cached bytes no longer match the digest we now expect.
+    #[test]
+    fn a_stale_cached_asset_is_discarded_and_refetched() {
+        let root = tempfile::tempdir().unwrap();
+        let (payload, digest) = payload_and_digest();
+        seed_cache(root.path(), b"an older release with the same file name");
+
+        let mut http = StubHttp::default();
+        http.files
+            .insert("https://static.example/node.zip".into(), payload);
+        let installer =
+            UnifiedVendorInstaller::new(root.path(), vec![cached_vendor(Some(&digest))], &http);
+
+        assert!(
+            installer.install_vendor("Node.js"),
+            "a stale cache must be re-fetched, not fail the install"
+        );
+        assert_eq!(http.downloads.get(), 1);
+        assert!(root.path().join("vendor/nodejs/node.exe").is_file());
+    }
+
+    /// With no digest to check against, a complete cached file is still
+    /// reusable — that is the offline/air-gapped case the README advertises.
+    #[test]
+    fn an_unverifiable_cached_asset_is_still_reused() {
+        let root = tempfile::tempdir().unwrap();
+        let (payload, _) = payload_and_digest();
+        seed_cache(root.path(), &payload);
+
+        let http = StubHttp::default();
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![cached_vendor(None)], &http);
+
+        assert!(installer.install_vendor("Node.js"));
+        assert_eq!(http.downloads.get(), 0);
+    }
+
+    /// The interruption this issue is about. A killed process leaves the
+    /// staging file, never the final name — so the next run sees no cache and
+    /// downloads properly instead of unpacking a truncated archive.
+    #[test]
+    fn an_interrupted_transfer_leaves_no_cache_hit() {
+        let root = tempfile::tempdir().unwrap();
+        let (payload, digest) = payload_and_digest();
+
+        // Simulate the kill: a partial `.part` and nothing at the final name.
+        let dir = root.path().join("vendor/.downloads");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("node.zip.part"), &payload[..payload.len() / 2]).unwrap();
+
+        let mut http = StubHttp::default();
+        http.files
+            .insert("https://static.example/node.zip".into(), payload);
+        let installer =
+            UnifiedVendorInstaller::new(root.path(), vec![cached_vendor(Some(&digest))], &http);
+
+        assert!(installer.install_vendor("Node.js"));
+        assert_eq!(
+            http.downloads.get(),
+            1,
+            "a .part file must not be mistaken for a finished download"
+        );
+    }
+
+    #[test]
+    fn an_empty_cached_file_is_not_a_cache_hit() {
+        let root = tempfile::tempdir().unwrap();
+        let (payload, digest) = payload_and_digest();
+        seed_cache(root.path(), b"");
+
+        let mut http = StubHttp::default();
+        http.files
+            .insert("https://static.example/node.zip".into(), payload);
+        let installer =
+            UnifiedVendorInstaller::new(root.path(), vec![cached_vendor(Some(&digest))], &http);
+
+        assert!(installer.install_vendor("Node.js"));
+        assert_eq!(http.downloads.get(), 1);
     }
 
     // ---- placement / swap failure handling (#14) ----
