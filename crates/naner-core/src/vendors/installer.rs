@@ -278,7 +278,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
 
             if is_wt {
                 logger::info(&format!("Updating {}{suffix}...", vendor.name));
-                logger::info("  Preserving settings configuration");
+                logger::info("  Extracting over-top; your settings are kept");
             } else {
                 logger::info(&format!(
                     "Removing existing {} installation{suffix}...",
@@ -2218,7 +2218,17 @@ mod tests {
             "new"
         );
         assert!(target.join(".portable").is_file());
-        assert!(target.join("settings/settings.json").is_file());
+
+        // Asserting `is_file()` here is what let the overwrite through: the
+        // configurator rewrote settings.json from the template on every
+        // update, and a file was still present afterwards, so this passed
+        // while every colour scheme and key binding the user had set was
+        // being destroyed. Read the contents.
+        assert_eq!(
+            std::fs::read_to_string(target.join("settings/settings.json")).unwrap(),
+            "{\"user\":\"edited\"}",
+            "an update must not replace the user's Windows Terminal settings"
+        );
     }
 
     #[test]

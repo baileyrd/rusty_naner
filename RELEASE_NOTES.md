@@ -66,6 +66,21 @@ Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/rel
   update line prefixed a `v` unconditionally onto a version that four of the six
   essential vendors already record with one. `github.rs` had the guard for this
   and the installer did not.
+- **Fixed:** `update-vendors` destroyed the user's Windows Terminal settings on
+  every run. Windows Terminal is deliberately the one vendor extracted over-top
+  rather than deleted and reinstalled, precisely so `settings.json` survives —
+  and then the post-install configurator rewrote it from the template anyway,
+  unconditionally. Every colour scheme, key binding, font choice and custom
+  profile, replaced, under a line reading `Preserving settings configuration`.
+  An existing file is now left alone. The trade is that template changes no
+  longer reach an existing install: a stale template is a missing feature, an
+  overwrite is lost work. Merging Naner's profiles into the user's file is the
+  right long-term answer and is tracked separately (#50).
+- **Fixed:** the test named `windows_terminal_update_preserves_settings`
+  asserted only that `settings.json` existed after an update, which was true
+  whether it had been preserved or replaced. It reads the contents now. A test
+  named for a property it does not check is worse than no test — it is the
+  reason this looked covered.
 - **Provenance:** all found by working `docs/VALIDATION.md` Step 1 mode 3
   against v0.6.0 on Windows — the step that exists to catch exactly this, and
   which had never been run from outside an initialized tree. Neither is a v0.6.0

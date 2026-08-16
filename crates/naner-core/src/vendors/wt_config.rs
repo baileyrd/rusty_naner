@@ -31,7 +31,28 @@ impl<'a> WindowsTerminalConfigurator<'a> {
 
         let settings_dir = target_dir.join("settings");
         std::fs::create_dir_all(&settings_dir)?;
-        self.create_settings(&settings_dir.join("settings.json"))?;
+        let settings_path = settings_dir.join("settings.json");
+
+        // The file belongs to the user the moment it exists. Windows Terminal
+        // is the one vendor that extracts over-top rather than being deleted
+        // and reinstalled, precisely so this survives an update -- and then
+        // this function used to overwrite it from the template anyway, wiping
+        // every colour scheme, key binding and custom profile on a routine
+        // `update-vendors` while the run reported "Preserving settings
+        // configuration".
+        //
+        // The cost of not writing is that template changes never reach an
+        // existing install. That is the right trade for now: a stale template
+        // is a missing feature, an overwrite is lost work. Merging Naner's
+        // profiles into the user's file is the real answer and is a larger
+        // job -- WT settings are JSONC and this module deliberately does not
+        // round-trip them.
+        if settings_path.is_file() {
+            logger::info("    Keeping your existing settings/settings.json");
+            return Ok(());
+        }
+
+        self.create_settings(&settings_path)?;
         logger::info("    Created settings/settings.json with Naner profiles");
         Ok(())
     }
@@ -113,6 +134,37 @@ mod tests {
         let expected_root = root.path().to_string_lossy().replace('\\', "\\\\");
         assert!(written.contains(&expected_root));
         assert!(!written.contains("%NANER_ROOT%"));
+    }
+
+    /// The file belongs to the user once it exists. `update-vendors` used to
+    /// rewrite it from the template on every run while reporting that it was
+    /// preserving it.
+    #[test]
+    fn an_existing_settings_file_is_never_rewritten() {
+        let root = tempfile::tempdir().unwrap();
+        let template_dir = root.path().join("home/.config/windows-terminal");
+        std::fs::create_dir_all(&template_dir).unwrap();
+        std::fs::write(
+            template_dir.join("settings.json"),
+            r#"{ "from": "template" }"#,
+        )
+        .unwrap();
+
+        let target = root.path().join("vendor/terminal");
+        std::fs::create_dir_all(target.join("settings")).unwrap();
+        let settings = target.join("settings/settings.json");
+        std::fs::write(&settings, r#"{ "mine": "keep this" }"#).unwrap();
+
+        WindowsTerminalConfigurator::new(root.path())
+            .configure_portable_mode(&target)
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(&settings).unwrap(),
+            r#"{ "mine": "keep this" }"#
+        );
+        // Portable mode is still configured on the way past.
+        assert!(target.join(".portable").is_file());
     }
 
     #[test]
