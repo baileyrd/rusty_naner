@@ -37,7 +37,12 @@ pub struct WebScrapeConfig {
 }
 
 /// `VendorDefinition` — how to fetch and install one vendor.
-#[derive(Clone, Debug, Default)]
+///
+/// `Default` is hand-written rather than derived so `enabled` starts `true`.
+/// A derived `bool` default of `false` would silently disable every built-in
+/// essential vendor and every test fixture that uses `..Default::default()`,
+/// which is a far worse failure than an unwanted vendor being offered.
+#[derive(Clone, Debug)]
 pub struct VendorDefinition {
     pub name: String,
     pub key: String,
@@ -82,6 +87,35 @@ pub struct VendorDefinition {
     // Executable installers
     pub install_type: Option<String>,
     pub installer_args: Option<Vec<String>>,
+}
+
+impl Default for VendorDefinition {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            key: String::new(),
+            description: String::new(),
+            extract_dir: String::new(),
+            enabled: true,
+            required: false,
+            dependencies: Vec::new(),
+            source_type: VendorSourceType::default(),
+            static_url: None,
+            file_name: None,
+            github_owner: None,
+            github_repo: None,
+            asset_pattern: None,
+            asset_pattern_end: None,
+            web_scrape: None,
+            fallback_url: None,
+            fallback_version: None,
+            fallback_file_name: None,
+            checksum: None,
+            checksum_source: None,
+            install_type: None,
+            installer_args: None,
+        }
+    }
 }
 
 /// How to obtain an upstream digest for an artifact whose URL is only known

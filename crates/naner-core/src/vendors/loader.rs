@@ -26,13 +26,17 @@ struct VendorsJsonRoot {
     vendors: Option<crate::collections::OrderedMap<VendorJsonEntry>>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(default)]
 struct VendorJsonEntry {
     name: String,
     description: String,
     #[serde(rename = "extractDir", alias = "extractdir")]
     extract_dir: String,
+    /// Defaults to *true*: `#[serde(default)]` on the struct would otherwise
+    /// give a bool `false`, so omitting the field would silently disable a
+    /// vendor. Opting out has to be deliberate.
+    #[serde(default = "default_true")]
     enabled: bool,
     required: bool,
     dependencies: Option<Vec<String>>,
@@ -45,6 +49,24 @@ struct VendorJsonEntry {
     checksum: Option<ChecksumJson>,
     #[serde(rename = "checksumSource", alias = "checksumsource")]
     checksum_source: Option<ChecksumSourceJson>,
+}
+
+impl Default for VendorJsonEntry {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            extract_dir: String::new(),
+            enabled: true,
+            required: false,
+            dependencies: None,
+            release_source: None,
+            install_type: None,
+            installer_args: None,
+            checksum: None,
+            checksum_source: None,
+        }
+    }
 }
 
 /// Where to fetch a digest for a dynamically-resolved artifact.
@@ -70,6 +92,10 @@ struct ChecksumJson {
     value: Option<String>,
     /// When true a mismatch blocks installation; otherwise it only warns.
     required: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -113,7 +139,22 @@ impl VendorConfigurationLoader {
 
     /// `LoadVendors`: file → parse → convert, with the default-essential
     /// fallback and the same warnings.
+    /// Vendors the user has actually opted into.
+    ///
+    /// `enabled: false` was parsed and then ignored everywhere, so
+    /// `install --all` installed vendors the config had switched off and
+    /// `install --list` advertised them. Filtering here means every caller
+    /// gets the same answer.
     pub fn load_vendors(&self) -> Vec<VendorDefinition> {
+        self.load_all_vendors()
+            .into_iter()
+            .filter(|v| v.enabled)
+            .collect()
+    }
+
+    /// Every vendor in the file, disabled ones included — for tooling that
+    /// needs to show what exists rather than what is switched on.
+    pub fn load_all_vendors(&self) -> Vec<VendorDefinition> {
         if !self.config_path.is_file() {
             logger::warning(&format!(
                 "Vendor configuration not found: {}",
@@ -161,8 +202,12 @@ impl VendorConfigurationLoader {
     }
 
     /// `GetVendorByKey`: case-insensitive on key or display name.
+    /// Searches *all* vendors, disabled included. Lookup by name is a
+    /// different question from whether the vendor may be installed — a caller
+    /// that resolves a disabled name needs to say "that one is switched off",
+    /// not "no such vendor", which would send the user hunting for a typo.
     pub fn vendor_by_key(&self, key: &str) -> Option<VendorDefinition> {
-        self.load_vendors()
+        self.load_all_vendors()
             .into_iter()
             .find(|v| v.key.eq_ignore_ascii_case(key) || v.name.eq_ignore_ascii_case(key))
     }
@@ -315,6 +360,76 @@ fn base_url_of(url: Option<&str>) -> String {
         &url[..scheme_end + 3],
         format_args!("{host}{}", &path[..last_slash + 1])
     )
+}
+
+#[cfg(test)]
+mod enabled_tests {
+    use super::*;
+
+    fn loader_for(json: &str) -> (tempfile::TempDir, VendorConfigurationLoader) {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("config")).unwrap();
+        std::fs::write(tmp.path().join("config/vendors.json"), json).unwrap();
+        let loader = VendorConfigurationLoader::new(tmp.path());
+        (tmp, loader)
+    }
+
+    const MIXED: &str = r#"{
+        "vendors": {
+            "On":      { "name": "On",      "extractDir": "on",      "enabled": true,  "required": false },
+            "Off":     { "name": "Off",     "extractDir": "off",     "enabled": false, "required": false },
+            "Omitted": { "name": "Omitted", "extractDir": "omitted", "required": false }
+        }
+    }"#;
+
+    #[test]
+    fn disabled_vendors_are_not_offered_or_installed() {
+        let (_tmp, loader) = loader_for(MIXED);
+        let names: Vec<String> = loader.load_vendors().into_iter().map(|v| v.key).collect();
+        assert!(names.contains(&"On".to_string()));
+        assert!(
+            !names.contains(&"Off".to_string()),
+            "enabled:false must be honoured"
+        );
+    }
+
+    /// The dangerous half of honouring the flag: `#[serde(default)]` gives a
+    /// bool `false`, so an entry that omits `enabled` would have been switched
+    /// off by the very change that started reading it.
+    #[test]
+    fn omitting_enabled_means_enabled() {
+        let (_tmp, loader) = loader_for(MIXED);
+        let names: Vec<String> = loader.load_vendors().into_iter().map(|v| v.key).collect();
+        assert!(
+            names.contains(&"Omitted".to_string()),
+            "a vendor that does not mention `enabled` must stay enabled"
+        );
+    }
+
+    #[test]
+    fn load_all_vendors_still_sees_the_disabled_ones() {
+        let (_tmp, loader) = loader_for(MIXED);
+        assert_eq!(loader.load_all_vendors().len(), 3);
+        assert_eq!(loader.load_vendors().len(), 2);
+    }
+
+    /// The other way this change could have gone catastrophically wrong: the
+    /// hardcoded fallback set never sets `enabled`, so a derived `Default` of
+    /// `false` would have made a missing vendors.json install nothing at all.
+    #[test]
+    fn the_builtin_essential_set_survives_the_filter() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("config")).unwrap();
+        let loader = VendorConfigurationLoader::new(tmp.path());
+
+        let essentials = essential_vendor_definitions();
+        assert!(!essentials.is_empty());
+        assert!(
+            essentials.iter().all(|v| v.enabled),
+            "built-in defaults must be enabled or a missing vendors.json installs nothing"
+        );
+        assert_eq!(loader.load_vendors().len(), essentials.len());
+    }
 }
 
 #[cfg(test)]
