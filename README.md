@@ -91,7 +91,7 @@ published through the Phase 5 release workflow. Phases 0–5 done:
 - **Privacy Telemetry Opt-Out Enforcer**: Injects default telemetry opt-out variables (`DOTNET_CLI_TELEMETRY_OPTOUT=1`, `POWERSHELL_TELEMETRY_OPTOUT=1`, `AZURE_CORE_COLLECT_TELEMETRY=0`).
 - **Dynamic Architecture Resolution (`%{ARCH}`)**: Dynamically expands `%{ARCH}` into `arm64` or `x64` based on host target compilation.
 - **Atomic Staged Extraction**: Extracts archives to `vendor/.staging/<name>`, then swaps the tree into place with a single rename. The previous install is moved aside rather than deleted, so a failed placement restores it instead of leaving a half-populated directory. Windows Terminal is the exception — it merges over its existing install so `settings/` survives an update, which cannot be atomic.
-- **Download Asset Caching**: Auto-detects and reuses cached download assets for offline/air-gapped environments.
+- **Download Asset Caching**: Reuses an already-downloaded vendor asset instead of re-fetching it, for offline/air-gapped environments. Transfers stage to `<name>.part` and are published with a rename, so an interrupted run leaves no file under the name the cache trusts. When a digest is known the cached file must match it — a stale entry is discarded and re-fetched rather than failing the install.
 - **Job Object Breakaway Isolation**: Spawns terminal targets with `CREATE_BREAKAWAY_FROM_JOB` (0x01000000) on Windows.
 - **Event Hooks**: Supports `PreLaunch` / `PostLaunch` script hooks, run before the terminal is spawned and after it starts.
 

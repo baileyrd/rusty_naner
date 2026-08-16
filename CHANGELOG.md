@@ -30,6 +30,11 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
 ### Fixed
+- Downloads stage to `<name>.part` and are published by rename, so an
+  interrupted run leaves nothing that the next run mistakes for a complete
+  cached asset.
+- A cached asset that does not match the expected digest is discarded and
+  re-fetched instead of failing the install.
 - Vendor install no longer reports success when the staged tree cannot be
   placed; the failure is logged and no version marker or lock pin is written.
 - The staged-tree swap is atomic again on Windows: the target is moved aside

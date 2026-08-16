@@ -12,6 +12,30 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #29 — Stage downloads so an interrupted run cannot poison the cache
+**2026-08-16**
+
+- **Fixed:** transfers now stream into `<name>.part` and are published with a
+  rename once complete. Writing straight to the final path meant a killed
+  process — Ctrl-C, a crash, a lost machine — left a truncated file exactly
+  where the next run looks for a finished one. Deleting on the error paths
+  (shipped in #25) cannot cover that case, because nothing gets to run;
+  staging makes it safe by construction.
+- **Changed:** the cache decision moved from the transport to the installer,
+  which is the only place that knows the expected digest. A cached asset is
+  reused only if it is non-empty and, where a digest is known, matches it.
+- **Fixed:** a stale cached asset is now discarded and re-fetched instead of
+  being handed to the verifier, which would have failed the install rather
+  than fixing it. This is a real case, not a hypothetical: names like
+  `Miniconda3-latest-Windows-x86_64.exe` are stable while their contents move,
+  and pinning (#27) makes the expected digest specific enough to notice.
+- **Known limitation:** with no digest to check against, a complete cached file
+  is still reused on name alone. That is the offline case the README
+  advertises, and completeness is now guaranteed even though identity is not.
+- 8 new tests (140 passed, 7 network-dependent `#[ignore]`d). Two of the new
+  ones run a real transfer to confirm the artifact lands under its final name
+  and no `.part` survives either success or failure.
+
 ### PR #28 — Stop reporting success when the vendor tree cannot be placed
 **2026-08-16**
 

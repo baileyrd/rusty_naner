@@ -56,7 +56,8 @@ control. Each has exactly one component responsible for translating across it
 
 | Boundary | Owner | Substitutable via | Failure contract |
 | --- | --- | --- | --- |
-| HTTP (vendor downloads) | `core::http::UreqHttp` | `Http` trait | `get_text` → `Err` on transport failure, `Ok(status, _)` for non-2xx; `download` → `false`, partial file deleted |
+| HTTP (vendor downloads) | `core::http::UreqHttp` | `Http` trait | `get_text` → `Err` on transport failure, `Ok(status, _)` for non-2xx; `download` stages to `<name>.part` and publishes by rename, so a failed or interrupted transfer leaves nothing under the final name |
+| Download cache | `installer::reuse_cached` | — | A cached asset is reused only if it is non-empty and, when a digest is known, matches it; a stale entry is deleted and re-fetched rather than handed to the verifier |
 | HTTP (GitHub releases) | `core::github::GitHubReleasesClient` | `ReleasesApi` trait | Returns `None` on any non-2xx or parse failure; `download_asset` → `false` |
 | Archive extraction | `core::archives` | — (dispatch on extension) | `false` on unsupported format or extraction error; staging dir removed |
 | Vendor tree placement | `installer::swap_into_place` / `merge_over` | — | Swap is atomic via rename, and restores the previous tree if placement fails; the Windows Terminal merge cannot be atomic (it must preserve `settings/`), so a part-way failure leaves a mixed tree and is reported as a failed install |
