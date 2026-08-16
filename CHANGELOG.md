@@ -26,6 +26,9 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   `settings.json` from the template, which destroyed every colour scheme, key
   binding and custom profile on each run while reporting that it preserved them
   (#50).
+- Built-in vendor definitions now carry a `key`. Without one they shared a
+  single `naner.lock` entry, losing pins and -- on a tree with no readable
+  `vendors.json` -- resolving one vendor's artifact as another's pin (#53).
 
 ## [0.6.0] - 2026-08-16
 ### Added

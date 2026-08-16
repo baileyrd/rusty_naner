@@ -134,10 +134,21 @@ pub enum ChecksumSource {
 /// `VendorDefinitionFactory`: the hardcoded essential set used when
 /// vendors.json is missing/invalid, 7-Zip deliberately first (it unblocks
 /// the other extractions).
+/// The built-in fallback set, used by `update-vendors` and whenever
+/// `vendors.json` is missing, empty or unparseable.
+///
+/// Every entry must set `key`, and the key must match the one `vendors.json`
+/// uses for the same vendor. `naner.lock` is keyed by it: six definitions
+/// sharing the default `""` meant every `update-vendors` install overwrote the
+/// previous one's pin, and -- on a tree without a readable `vendors.json` --
+/// every vendor then resolved that single entry as its own pin, downloading
+/// one vendor's artifact under another's name and verifying it successfully
+/// against that artifact's genuine digest.
 pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
     vec![
         VendorDefinition {
             name: constants::vendor_names::SEVEN_ZIP.into(),
+            key: "SevenZip".into(),
             extract_dir: "7zip".into(),
             // 7-zip.org moved its binaries to GitHub releases; the old
             // download.html scrape now yields a mangled URL. GitHub source
@@ -151,6 +162,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
         },
         VendorDefinition {
             name: constants::vendor_names::POWERSHELL.into(),
+            key: "PowerShell".into(),
             extract_dir: "powershell".into(),
             source_type: VendorSourceType::GitHub,
             github_owner: Some("PowerShell".into()),
@@ -164,6 +176,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
         },
         VendorDefinition {
             name: constants::vendor_names::WINDOWS_TERMINAL.into(),
+            key: "WindowsTerminal".into(),
             extract_dir: "terminal".into(),
             source_type: VendorSourceType::GitHub,
             github_owner: Some("microsoft".into()),
@@ -178,6 +191,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
         },
         VendorDefinition {
             name: constants::vendor_names::MSYS2.into(),
+            key: "MSYS2".into(),
             extract_dir: "msys64".into(),
             source_type: VendorSourceType::WebScrape,
             web_scrape: Some(WebScrapeConfig {
@@ -192,6 +206,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
         },
         VendorDefinition {
             name: constants::vendor_names::RUSTY_TERM.into(),
+            key: "RustyTerm".into(),
             extract_dir: "rusty_term".into(),
             source_type: VendorSourceType::GitHub,
             github_owner: Some("baileyrd".into()),
@@ -204,6 +219,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
         },
         VendorDefinition {
             name: constants::vendor_names::RUSH.into(),
+            key: "Rush".into(),
             extract_dir: "rush".into(),
             source_type: VendorSourceType::GitHub,
             github_owner: Some("baileyrd".into()),
@@ -215,4 +231,69 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
             ..Default::default()
         },
     ]
+}
+
+#[cfg(test)]
+mod builtin_tests {
+    use super::essential_vendor_definitions;
+    use std::collections::HashSet;
+
+    /// `naner.lock` is a map keyed by `VendorDefinition::key`. Every built-in
+    /// left it at the `String::default()` empty string, so each install through
+    /// `update-vendors` overwrote the previous one's pin and only the last
+    /// survived -- visible as a nameless row in `naner lock`.
+    ///
+    /// The dangerous half is the read: on a tree where `vendors.json` is
+    /// missing, empty or unparseable, `load_all_vendors` falls back to this set,
+    /// and `lock.get(&vendor.key)` then hands every vendor the one `""` entry.
+    /// Installing PowerShell would fetch whichever artifact wrote that entry
+    /// last and verify it successfully, because the digest is genuine -- of the
+    /// wrong file.
+    #[test]
+    fn every_builtin_has_a_key() {
+        for vendor in essential_vendor_definitions() {
+            assert!(
+                !vendor.key.trim().is_empty(),
+                "{:?} has no key; it would share a lockfile entry with every \
+                 other keyless vendor",
+                vendor.name
+            );
+        }
+    }
+
+    #[test]
+    fn builtin_keys_are_unique() {
+        let vendors = essential_vendor_definitions();
+        let unique: HashSet<&str> = vendors.iter().map(|v| v.key.as_str()).collect();
+        assert_eq!(
+            unique.len(),
+            vendors.len(),
+            "two built-ins share a key, so they share a pin"
+        );
+    }
+
+    /// The keys have to match `vendors.json`, or a vendor installed from the
+    /// manifest and the same vendor installed from the fallback set would write
+    /// two separate pins for one directory.
+    #[test]
+    fn builtin_keys_match_the_shipped_manifest() {
+        // Kept as a literal rather than read from disk: this is the contract,
+        // and a test that reads the file it is checking cannot catch the file
+        // changing.
+        const MANIFEST_KEYS: [&str; 6] = [
+            "SevenZip",
+            "PowerShell",
+            "WindowsTerminal",
+            "MSYS2",
+            "RustyTerm",
+            "Rush",
+        ];
+        for vendor in essential_vendor_definitions() {
+            assert!(
+                MANIFEST_KEYS.contains(&vendor.key.as_str()),
+                "built-in key {:?} is not one vendors.json uses",
+                vendor.key
+            );
+        }
+    }
 }

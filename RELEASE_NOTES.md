@@ -81,6 +81,18 @@ Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/rel
   whether it had been preserved or replaced. It reads the contents now. A test
   named for a property it does not check is worse than no test — it is the
   reason this looked covered.
+- **Fixed:** none of the six built-in vendor definitions set `key`, so all six
+  shared the empty-string entry in `naner.lock` -- each `update-vendors` install
+  overwrote the previous one's pin, leaving a nameless row and no pin at all for
+  four of them. The read side was the dangerous half: `load_all_vendors` falls
+  back to that same keyless set when `vendors.json` is missing, empty or
+  unparseable, and the pin lookup is by key, so every vendor resolved the one
+  shared entry as its own. On such a tree, `naner install PowerShell` would
+  fetch whichever artifact wrote that entry last, verify it **successfully** --
+  the digest is genuine, just of the wrong file -- and install it under
+  PowerShell's name. Integrity checking cannot catch that; nothing is corrupt.
+  All six now carry the key `vendors.json` uses, with tests asserting they
+  exist, are unique, and match the manifest (#53).
 - **Provenance:** all found by working `docs/VALIDATION.md` Step 1 mode 3
   against v0.6.0 on Windows — the step that exists to catch exactly this, and
   which had never been run from outside an initialized tree. Neither is a v0.6.0
