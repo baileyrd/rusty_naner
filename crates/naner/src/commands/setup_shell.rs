@@ -5,7 +5,7 @@
 //! does mean "show me, do not touch it".
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use naner_core::{constants, logger, paths};
 
@@ -53,6 +53,14 @@ fn upsert_block(existing: &str, block: &str) -> Option<String> {
     Some(out)
 }
 
+/// Where `naner.exe` lives inside a naner root.
+fn naner_exe_path(naner_root: &Path) -> PathBuf {
+    naner_root
+        .join(constants::directory_names::VENDOR)
+        .join(constants::directory_names::BIN)
+        .join(constants::executables::NANER)
+}
+
 pub fn execute(args: &[String]) -> i32 {
     let shell = args
         .first()
@@ -69,7 +77,12 @@ pub fn execute(args: &[String]) -> i32 {
         }
     };
 
-    let naner_exe = naner_root.join("bin").join("naner.exe");
+    // `vendor/bin`, not `bin`. That is where the release workflow stages
+    // naner.exe, where `naner-init` installs and updates it, and what
+    // `naner.bat` calls. `bin/` is the user's own directory and ships empty.
+    // The generated block guards on `Test-Path`/`-f`, so pointing at the wrong
+    // path does not fail loudly -- the integration just silently never runs.
+    let naner_exe = naner_exe_path(&naner_root);
 
     let block = match shell.as_str() {
         "pwsh" | "powershell" => format!(
@@ -142,6 +155,28 @@ mod tests {
     use super::*;
 
     const BLOCK: &str = "# >>> naner initialize >>>\nnew line\n# <<< naner initialize <<<";
+
+    /// The integration block is guarded by `Test-Path` / `-f`, so a wrong path
+    /// produces no error at all -- the block is written, looks correct in
+    /// `--dry-run`, and silently never runs. That is how `bin/naner.exe`
+    /// survived: nothing fails when it is wrong.
+    ///
+    /// `vendor/bin` is the location the release workflow stages to, that
+    /// `naner-init` installs and updates, and that `naner.bat` calls.
+    #[test]
+    fn the_integration_block_points_at_where_naner_exe_actually_is() {
+        let exe = naner_exe_path(Path::new("C:/naner"));
+        assert!(
+            exe.ends_with("vendor/bin/naner.exe"),
+            "expected <root>/vendor/bin/naner.exe, got {}",
+            exe.display()
+        );
+        assert_ne!(
+            exe,
+            Path::new("C:/naner").join("bin").join("naner.exe"),
+            "`bin/` is the user's own directory and ships empty"
+        );
+    }
 
     #[test]
     fn appends_to_a_file_that_has_no_block() {
