@@ -22,6 +22,10 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   when every install failed and nothing was placed.
 - Vendor update lines no longer print a doubled `v` (`vv1.24.11911.0`) when the
   recorded version already carries the prefix.
+- `update-vendors` no longer overwrites an existing Windows Terminal
+  `settings.json` from the template, which destroyed every colour scheme, key
+  binding and custom profile on each run while reporting that it preserved them
+  (#50).
 
 ## [0.6.0] - 2026-08-16
 ### Added
