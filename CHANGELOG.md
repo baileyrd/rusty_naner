@@ -1,34 +1,6 @@
-# Changelog
-
-All notable changes to this repo are documented here.
-Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
-Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
-
 ## [Unreleased]
-### Fixed
-- `naner --export-env` no longer prints the first-run notice to stdout, where the
-  calling shell would try to execute it; the notice moves to stderr and the
-  command exits non-zero when nothing was exported (#38).
-- Console output is ASCII, so a Windows console on the default code page no
-  longer renders `[x]`, bullets and check marks as mojibake (#39).
-- `setup-shell` writes a block pointing at `vendor\bin\naner.exe` rather than
-  `bin\naner.exe`, so the shell integration actually runs; `VendorPaths.Naner`
-  in the shipped config had the same wrong path (#42).
-- Five further non-ASCII characters missed by the first sweep, in `lock`,
-  `self-update` and the vendor list, with a test that now enforces it (#39).
-- A pinned install no longer prints `Latest version:`, which claimed a currency
-  check that a pin by definition does not perform.
-- "Restart your terminal to use the newly installed tools." is no longer printed
-  when every install failed and nothing was placed.
-- Vendor update lines no longer print a doubled `v` (`vv1.24.11911.0`) when the
-  recorded version already carries the prefix.
-- `update-vendors` no longer overwrites an existing Windows Terminal
-  `settings.json` from the template, which destroyed every colour scheme, key
-  binding and custom profile on each run while reporting that it preserved them
-  (#50).
-- Built-in vendor definitions now carry a `key`. Without one they shared a
-  single `naner.lock` entry, losing pins and -- on a tree with no readable
-  `vendors.json` -- resolving one vendor's artifact as another's pin (#53).
+
+Nothing yet.
 
 ## [0.6.0] - 2026-08-16
 ### Added
@@ -62,6 +34,29 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
 ### Fixed
+- `naner --export-env` no longer prints the first-run notice to stdout, where the
+  calling shell would try to execute it; the notice moves to stderr and the
+  command exits non-zero when nothing was exported (#38).
+- Console output is ASCII, so a Windows console on the default code page no
+  longer renders `[x]`, bullets and check marks as mojibake (#39).
+- `setup-shell` writes a block pointing at `vendor\bin\naner.exe` rather than
+  `bin\naner.exe`, so the shell integration actually runs; `VendorPaths.Naner`
+  in the shipped config had the same wrong path (#42).
+- Five further non-ASCII characters missed by the first sweep, in `lock`,
+  `self-update` and the vendor list, with a test that now enforces it (#39).
+- A pinned install no longer prints `Latest version:`, which claimed a currency
+  check that a pin by definition does not perform.
+- "Restart your terminal to use the newly installed tools." is no longer printed
+  when every install failed and nothing was placed.
+- Vendor update lines no longer print a doubled `v` (`vv1.24.11911.0`) when the
+  recorded version already carries the prefix.
+- `update-vendors` no longer overwrites an existing Windows Terminal
+  `settings.json` from the template, which destroyed every colour scheme, key
+  binding and custom profile on each run while reporting that it preserved them
+  (#50).
+- Built-in vendor definitions now carry a `key`. Without one they shared a
+  single `naner.lock` entry, losing pins and -- on a tree with no readable
+  `vendors.json` -- resolving one vendor's artifact as another's pin (#53).
 - `naner profile import` writes the profile instead of only validating it;
   `setup-shell` writes an idempotent block to the shell startup file; `pack`
   bundles the whole distribution and honours its `[dir]` argument;
