@@ -61,6 +61,11 @@ Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/rel
   a restart for tools that were never placed. The advice is about a PATH that
   changed, so it now prints only when something was installed. A partial run
   still gets it; a run where everything failed does not.
+- **Fixed:** `update-vendors` printed `Updating Windows Terminal
+  (vv1.24.11911.0)...`, and the same for PowerShell, Rusty Term and Rush. The
+  update line prefixed a `v` unconditionally onto a version that four of the six
+  essential vendors already record with one. `github.rs` had the guard for this
+  and the installer did not.
 - **Provenance:** all found by working `docs/VALIDATION.md` Step 1 mode 3
   against v0.6.0 on Windows — the step that exists to catch exactly this, and
   which had never been run from outside an initialized tree. Neither is a v0.6.0
