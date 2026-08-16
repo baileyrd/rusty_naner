@@ -1,10 +1,13 @@
 //! Command: `naner setup-shell [pwsh|bash|cmd]`
 //! Integrates naner environment exports into shell profile startup scripts.
 
-use naner_core::{logger, paths, constants};
+use naner_core::{constants, logger, paths};
 
 pub fn execute(args: &[String]) -> i32 {
-    let shell = args.first().map(|s| s.to_lowercase()).unwrap_or_else(|| "pwsh".to_string());
+    let shell = args
+        .first()
+        .map(|s| s.to_lowercase())
+        .unwrap_or_else(|| "pwsh".to_string());
     let dry_run = args.iter().any(|a| a == "--dry-run");
 
     let naner_root = match paths::find_naner_root(None, constants::MAX_NANER_ROOT_SEARCH_DEPTH) {
@@ -28,10 +31,14 @@ pub fn execute(args: &[String]) -> i32 {
 
             logger::header("Naner Shell Integration: PowerShell");
             if dry_run {
-                logger::info("Dry run requested. Add the following line to your PowerShell $PROFILE:");
+                logger::info(
+                    "Dry run requested. Add the following line to your PowerShell $PROFILE:",
+                );
                 println!("{snippet}");
             } else {
-                logger::info("To integrate Naner with PowerShell, add the following line to your $PROFILE:");
+                logger::info(
+                    "To integrate Naner with PowerShell, add the following line to your $PROFILE:",
+                );
                 println!("{snippet}");
                 logger::success("Integration snippet generated.");
             }
@@ -49,7 +56,9 @@ pub fn execute(args: &[String]) -> i32 {
                 logger::info("Dry run requested. Add the following line to your ~/.bashrc:");
                 println!("{snippet}");
             } else {
-                logger::info("To integrate Naner with Bash, add the following line to your ~/.bashrc:");
+                logger::info(
+                    "To integrate Naner with Bash, add the following line to your ~/.bashrc:",
+                );
                 println!("{snippet}");
                 logger::success("Integration snippet generated.");
             }
@@ -58,7 +67,9 @@ pub fn execute(args: &[String]) -> i32 {
         "cmd" => {
             let snippet = format!("@call \"{}\" --export-env -f cmd", naner_exe.display());
             logger::header("Naner Shell Integration: CMD");
-            logger::info("To integrate Naner with CMD, call the following command at prompt startup:");
+            logger::info(
+                "To integrate Naner with CMD, call the following command at prompt startup:",
+            );
             println!("{snippet}");
             0
         }

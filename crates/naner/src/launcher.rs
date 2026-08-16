@@ -109,16 +109,22 @@ impl<'a> TerminalLauncher<'a> {
 
         self.setup_path_environment();
 
-        if let Some(script) = &profile.pre_launch {
-            if !script.is_empty() {
-                let expanded = paths::expand_naner_path(script, &self.naner_root.to_string_lossy());
-                if self.debug_mode {
-                    logger::status(&format!("Executing PreLaunch hook: {expanded}"));
-                }
-                let _ = std::process::Command::new("powershell")
-                    .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", &expanded])
-                    .status();
+        if let Some(script) = &profile.pre_launch
+            && !script.is_empty()
+        {
+            let expanded = paths::expand_naner_path(script, &self.naner_root.to_string_lossy());
+            if self.debug_mode {
+                logger::status(&format!("Executing PreLaunch hook: {expanded}"));
             }
+            let _ = std::process::Command::new("powershell")
+                .args([
+                    "-NoProfile",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    &expanded,
+                ])
+                .status();
         }
 
         if self.debug_mode {
@@ -127,16 +133,23 @@ impl<'a> TerminalLauncher<'a> {
 
         match spawn_terminal(&terminal_path, &arguments, self.naner_root) {
             Ok(()) => {
-                if let Some(script) = &profile.post_launch {
-                    if !script.is_empty() {
-                        let expanded = paths::expand_naner_path(script, &self.naner_root.to_string_lossy());
-                        if self.debug_mode {
-                            logger::status(&format!("Executing PostLaunch hook: {expanded}"));
-                        }
-                        let _ = std::process::Command::new("powershell")
-                            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", &expanded])
-                            .status();
+                if let Some(script) = &profile.post_launch
+                    && !script.is_empty()
+                {
+                    let expanded =
+                        paths::expand_naner_path(script, &self.naner_root.to_string_lossy());
+                    if self.debug_mode {
+                        logger::status(&format!("Executing PostLaunch hook: {expanded}"));
                     }
+                    let _ = std::process::Command::new("powershell")
+                        .args([
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            &expanded,
+                        ])
+                        .status();
                 }
                 if self.debug_mode {
                     logger::success(&format!("Launched: {}", profile.name));

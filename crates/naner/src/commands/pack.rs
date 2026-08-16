@@ -1,10 +1,10 @@
 //! Command: `naner pack [dir] --out <bundle.zip>`
 //! Creates a self-contained portable distribution zip package.
 
+use naner_core::{constants, logger, paths};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use naner_core::{constants, logger, paths};
 use zip::write::SimpleFileOptions;
 
 pub fn execute(args: &[String]) -> i32 {
@@ -21,13 +21,18 @@ pub fn execute(args: &[String]) -> i32 {
     };
 
     let out_filename = if let Some(pos) = args.iter().position(|a| a == "--out" || a == "-o") {
-        args.get(pos + 1).map(|s| s.to_string()).unwrap_or_else(|| "naner-bundle.zip".to_string())
+        args.get(pos + 1)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "naner-bundle.zip".to_string())
     } else {
         "naner-bundle.zip".to_string()
     };
 
     let out_path = Path::new(&out_filename);
-    logger::status(&format!("Creating distribution bundle at {}...", out_path.display()));
+    logger::status(&format!(
+        "Creating distribution bundle at {}...",
+        out_path.display()
+    ));
 
     let file = match fs::File::create(out_path) {
         Ok(f) => f,
@@ -58,6 +63,9 @@ pub fn execute(args: &[String]) -> i32 {
         return 1;
     }
 
-    logger::success(&format!("Distribution package successfully bundled to {}", out_path.display()));
+    logger::success(&format!(
+        "Distribution package successfully bundled to {}",
+        out_path.display()
+    ));
     0
 }

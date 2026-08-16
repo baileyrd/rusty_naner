@@ -49,10 +49,10 @@ impl UreqHttp {
             .or_else(|_| std::env::var("http_proxy"))
             .ok();
 
-        if let Some(proxy_str) = proxy_url {
-            if let Ok(proxy) = ureq::Proxy::new(&proxy_str) {
-                builder = builder.proxy(proxy);
-            }
+        if let Some(proxy_str) = proxy_url
+            && let Ok(proxy) = ureq::Proxy::new(&proxy_str)
+        {
+            builder = builder.proxy(proxy);
         }
 
         let agent = builder.build();
@@ -86,7 +86,10 @@ impl Http for UreqHttp {
 
     fn download(&self, url: &str, output_path: &Path) -> bool {
         if output_path.is_file() && output_path.metadata().map_or(0, |m| m.len()) > 0 {
-            logger::info(&format!("    Using cached download asset: {}", output_path.display()));
+            logger::info(&format!(
+                "    Using cached download asset: {}",
+                output_path.display()
+            ));
             return true;
         }
         match self.request(url).call() {

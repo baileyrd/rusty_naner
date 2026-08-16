@@ -245,8 +245,11 @@ fn extract_7z(
 /// path untouched — the C# `Replace(..., OrdinalIgnoreCase)` on the suffix).
 fn tar_path_for(archive_path: &Path) -> PathBuf {
     let s = archive_path.to_string_lossy();
-    match s.to_lowercase().rfind(".tar.xz") {
-        Some(idx) => PathBuf::from(format!("{}.tar", &s[..idx])),
+    // Matched against the original string, not a lowercased copy: offsets
+    // taken from a lowercased copy can land mid-character (see
+    // `paths::match_ranges_ignore_case`).
+    match crate::paths::match_ranges_ignore_case(&s, ".tar.xz").last() {
+        Some(range) => PathBuf::from(format!("{}.tar", &s[..range.start])),
         None => archive_path.with_extension("tar"),
     }
 }
@@ -421,6 +424,38 @@ fn build_installer_arguments(
 mod tests {
     use super::*;
     use std::io::Write;
+
+    #[test]
+    fn tar_path_strips_the_suffix_case_insensitively() {
+        assert_eq!(
+            tar_path_for(Path::new("/d/msys2.TAR.XZ")),
+            Path::new("/d/msys2.tar")
+        );
+        assert_eq!(
+            tar_path_for(Path::new("/d/msys2.tar.xz")),
+            Path::new("/d/msys2.tar")
+        );
+        // No suffix: fall back to swapping the extension.
+        assert_eq!(
+            tar_path_for(Path::new("/d/msys2.zip")),
+            Path::new("/d/msys2.tar")
+        );
+    }
+
+    /// Regression: the suffix used to be located in a lowercased copy of the
+    /// path, whose byte offsets drift from the original on characters like
+    /// `ẞ` whose lowercase form is a different length.
+    #[test]
+    fn tar_path_handles_non_ascii_directories() {
+        assert_eq!(
+            tar_path_for(Path::new("/d/\u{1E9E}/msys2.tar.xz")),
+            Path::new("/d/\u{1E9E}/msys2.tar")
+        );
+        assert_eq!(
+            tar_path_for(Path::new("/d/\u{0130}x/msys2.TAR.xz")),
+            Path::new("/d/\u{0130}x/msys2.tar")
+        );
+    }
 
     fn make_zip(entries: &[(&str, &[u8])]) -> tempfile::NamedTempFile {
         let file = tempfile::Builder::new().suffix(".zip").tempfile().unwrap();

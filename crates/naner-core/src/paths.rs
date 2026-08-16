@@ -148,7 +148,11 @@ pub fn expand_naner_path_with(
         return path.to_string();
     }
 
-    let host_arch = if cfg!(target_arch = "aarch64") { "arm64" } else { "x64" };
+    let host_arch = if cfg!(target_arch = "aarch64") {
+        "arm64"
+    } else {
+        "x64"
+    };
     let expanded = replace_case_insensitive(path, "%{ARCH}", host_arch);
     let expanded = replace_case_insensitive(&expanded, "%NANER_ROOT%", naner_root);
     let expanded = expand_windows_env(&expanded, &lookup);
@@ -158,18 +162,73 @@ pub fn expand_naner_path_with(
 /// Case-insensitive literal replacement (C# `string.Replace(...,
 /// OrdinalIgnoreCase)`).
 fn replace_case_insensitive(haystack: &str, needle: &str, replacement: &str) -> String {
+    let ranges = match_ranges_ignore_case(haystack, needle);
+    if ranges.is_empty() {
+        return haystack.to_string();
+    }
+
     let mut result = String::with_capacity(haystack.len());
-    let lower_haystack = haystack.to_lowercase();
-    let lower_needle = needle.to_lowercase();
     let mut pos = 0;
-    while let Some(found) = lower_haystack[pos..].find(&lower_needle) {
-        let start = pos + found;
-        result.push_str(&haystack[pos..start]);
+    for range in ranges {
+        result.push_str(&haystack[pos..range.start]);
         result.push_str(replacement);
-        pos = start + needle.len();
+        pos = range.end;
     }
     result.push_str(&haystack[pos..]);
     result
+}
+
+/// Byte ranges of every non-overlapping case-insensitive occurrence of
+/// `needle` in `haystack`, left to right.
+///
+/// Matching walks `haystack` character by character, so every index returned
+/// is a valid char boundary *of the original string*. Searching a lowercased
+/// copy instead — which is what this used to do — desynchronizes the offsets
+/// whenever a character's lowercase form has a different UTF-8 length
+/// (`ẞ` → `ß` shrinks by one byte, `İ` → `i̇` grows by one), which silently
+/// corrupts the result or panics on a mid-character slice.
+pub(crate) fn match_ranges_ignore_case(
+    haystack: &str,
+    needle: &str,
+) -> Vec<std::ops::Range<usize>> {
+    let mut ranges = Vec::new();
+    if needle.is_empty() {
+        return ranges;
+    }
+
+    let mut search_from = 0;
+    while let Some(range) = find_ignore_case(haystack, needle, search_from) {
+        search_from = range.end;
+        ranges.push(range);
+    }
+    ranges
+}
+
+/// First case-insensitive occurrence of `needle` at or after the char
+/// boundary `from`, as a byte range into `haystack`.
+fn find_ignore_case(haystack: &str, needle: &str, from: usize) -> Option<std::ops::Range<usize>> {
+    for (offset, _) in haystack[from..].char_indices() {
+        let start = from + offset;
+        let mut rest = haystack[start..].chars();
+        let mut wanted = needle.chars();
+
+        let matched = loop {
+            let Some(want) = wanted.next() else {
+                break true;
+            };
+            match rest.next() {
+                // Per-character simple case folding, matching the C#
+                // `OrdinalIgnoreCase` comparison this ports.
+                Some(got) if got == want || got.to_lowercase().eq(want.to_lowercase()) => {}
+                _ => break false,
+            }
+        };
+
+        if matched {
+            return Some(start..haystack.len() - rest.as_str().len());
+        }
+    }
+    None
 }
 
 /// .NET Core's `ExpandEnvironmentVariablesCore` algorithm, ported exactly:
@@ -331,6 +390,34 @@ mod tests {
                 .find(|(k, _)| *k == name)
                 .map(|(_, v)| v.to_string())
         }
+    }
+
+    /// Regression: matching over a lowercased copy desynchronizes the byte
+    /// offsets from the original whenever a character's lowercase form has a
+    /// different UTF-8 length. `ẞ` (3 bytes) → `ß` (2) used to panic on a
+    /// mid-character slice; `İ` (2) → `i̇` (3) used to swallow the following
+    /// character and emit a mangled path.
+    #[test]
+    fn non_ascii_prefix_does_not_shift_match_offsets() {
+        for prefix in ["\u{1E9E}", "\u{0130}", "é", "日本語", ""] {
+            let lookup = env(&[]);
+            assert_eq!(
+                expand_naner_path_with(&format!("{prefix}%NANER_ROOT%\\bin"), "C:\\naner", lookup),
+                format!("{prefix}C:\\naner\\bin"),
+                "prefix {prefix:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn match_ranges_are_non_overlapping_and_char_aligned() {
+        assert_eq!(
+            match_ranges_ignore_case("%NANER_ROOT%/a/%naner_root%", "%NANER_ROOT%"),
+            vec![0..12, 15..27]
+        );
+        assert_eq!(match_ranges_ignore_case("no match here", "%X%"), vec![]);
+        // An empty needle must terminate rather than spin forever.
+        assert_eq!(match_ranges_ignore_case("abc", ""), vec![]);
     }
 
     #[test]

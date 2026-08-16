@@ -5,7 +5,10 @@
 use serde_json::json;
 
 pub fn execute(args: &[String]) -> i32 {
-    let target = args.first().map(|s| s.to_lowercase()).unwrap_or_else(|| "config".to_string());
+    let target = args
+        .first()
+        .map(|s| s.to_lowercase())
+        .unwrap_or_else(|| "config".to_string());
 
     match target.as_str() {
         "config" => {

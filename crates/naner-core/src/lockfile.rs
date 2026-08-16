@@ -1,10 +1,10 @@
 //! Deterministic environment lockfile engine (`naner.lock`).
 //! Captures resolved vendor versions, exact download URLs, and SHA-256 digests.
 
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
 
 pub const LOCKFILE_NAME: &str = "naner.lock";
 

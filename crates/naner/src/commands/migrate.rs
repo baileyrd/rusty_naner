@@ -1,8 +1,8 @@
 //! Command: `naner config migrate`
 //! Upgrades legacy configuration files to the latest canonical JSON schema and formats them cleanly.
 
-use std::fs;
 use naner_core::{config, constants, logger, paths};
+use std::fs;
 
 pub fn execute(_args: &[String]) -> i32 {
     logger::header("Naner Configuration Auto-Migration");
@@ -33,9 +33,14 @@ pub fn execute(_args: &[String]) -> i32 {
         }
     };
 
-    logger::info(&format!("Source configuration file: {}", cfg_file.display()));
+    logger::info(&format!(
+        "Source configuration file: {}",
+        cfg_file.display()
+    ));
 
-    let target_json_path = naner_root.join(constants::directory_names::CONFIG).join("naner.json");
+    let target_json_path = naner_root
+        .join(constants::directory_names::CONFIG)
+        .join("naner.json");
     let json_output = serde_json::to_string_pretty(&cfg).unwrap();
 
     if let Err(err) = fs::write(&target_json_path, json_output) {
@@ -43,6 +48,9 @@ pub fn execute(_args: &[String]) -> i32 {
         return 1;
     }
 
-    logger::success(&format!("Configuration successfully migrated and canonicalized to {}", target_json_path.display()));
+    logger::success(&format!(
+        "Configuration successfully migrated and canonicalized to {}",
+        target_json_path.display()
+    ));
     0
 }
