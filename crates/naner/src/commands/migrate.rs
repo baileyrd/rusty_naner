@@ -7,7 +7,7 @@
 use std::fs;
 use std::path::Path;
 
-use naner_core::{config, constants, logger, paths, timestamp};
+use naner_core::{config, constants, logger, paths};
 
 /// Top-level keys the config model does not own but which are worth keeping —
 /// `$schema` in particular, since losing it breaks the very IDE completion
@@ -134,27 +134,8 @@ pub fn execute(args: &[String]) -> i32 {
         return 0;
     }
 
-    // Back up before overwriting. Timestamped so a second run cannot clobber
-    // the only copy of the original.
-    if target.is_file() {
-        let backup = target.with_extension(format!("{}.bak", timestamp::file_stamp()));
-        if let Err(err) = fs::copy(&target, &backup) {
-            logger::failure(&format!("Could not write backup, aborting: {err}"));
-            return 1;
-        }
-        logger::info(&format!("Backup: {}", backup.display()));
-    }
-
-    // Write via a temp file so an interrupted write cannot truncate the
-    // config the launcher needs to start.
-    let temp = target.with_extension("json.tmp");
-    if let Err(err) = fs::write(&temp, &output) {
+    if let Err(err) = crate::config_file::replace(&target, &output) {
         logger::failure(&format!("Failed to write migrated configuration: {err}"));
-        return 1;
-    }
-    if let Err(err) = fs::rename(&temp, &target) {
-        let _ = fs::remove_file(&temp);
-        logger::failure(&format!("Failed to finalize migrated configuration: {err}"));
         return 1;
     }
 

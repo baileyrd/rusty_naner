@@ -5,6 +5,7 @@
 
 mod cli;
 mod commands;
+mod config_file;
 mod first_run;
 mod launcher;
 

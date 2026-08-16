@@ -1,14 +1,40 @@
 //! Command: `naner self-update`
-//! Queries GitHub releases for baileyrd/naner and performs atomic self-replacement.
+//!
+//! Delegates to `naner-init`, which owns the update protocol. `naner.exe`
+//! cannot replace itself while running on Windows — the file is locked — which
+//! is why `naner-init` exists as a separate executable in the first place.
 
-use naner_core::{
-    constants,
-    github::{GitHubReleasesClient, ReleasesApi},
-    logger, paths, version,
-};
+use std::path::PathBuf;
 
-pub fn execute(_args: &[String]) -> i32 {
-    logger::header("Naner Self-Updater");
+use naner_core::{constants, logger, paths};
+
+/// `naner-init` as shipped: alongside naner.exe in `vendor/bin`, or on PATH.
+fn find_naner_init(naner_root: &std::path::Path) -> Option<PathBuf> {
+    let name = if cfg!(windows) {
+        "naner-init.exe"
+    } else {
+        "naner-init"
+    };
+    let bundled = naner_root.join("vendor").join("bin").join(name);
+    if bundled.is_file() {
+        return Some(bundled);
+    }
+    let beside_us = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(name)))
+        .filter(|p| p.is_file());
+    if beside_us.is_some() {
+        return beside_us;
+    }
+    std::env::var("PATH").ok().and_then(|path| {
+        std::env::split_paths(&path)
+            .map(|dir| dir.join(name))
+            .find(|p| p.is_file())
+    })
+}
+
+pub fn execute(args: &[String]) -> i32 {
+    logger::header("Naner Self-Update");
     logger::newline();
 
     let naner_root = match paths::find_naner_root(None, constants::MAX_NANER_ROOT_SEARCH_DEPTH) {
@@ -20,36 +46,27 @@ pub fn execute(_args: &[String]) -> i32 {
         }
     };
 
-    let client = GitHubReleasesClient::new("baileyrd", "naner");
-
-    logger::status(&format!(
-        "Checking for updates (current version: v{})...",
-        constants::VERSION
-    ));
-
-    let latest_release = match client.get_latest_release() {
-        Some(r) => r,
-        None => {
-            logger::info("Naner is already running the latest build.");
-            return 0;
-        }
+    let Some(init) = find_naner_init(&naner_root) else {
+        logger::failure("naner-init not found");
+        logger::info(
+            "naner-init performs the update — it is a separate executable because \
+             naner.exe cannot replace itself while running.",
+        );
+        logger::info("Expected at vendor/bin/, beside naner.exe, or on PATH.");
+        return 1;
     };
 
-    let tag = latest_release.tag_name.as_deref().unwrap_or("v0.5.0");
-    if !version::is_newer(tag, constants::VERSION) {
-        logger::success(&format!("Naner is up to date! (v{})", constants::VERSION));
-        return 0;
-    }
+    logger::info(&format!("Current version: v{}", constants::VERSION));
+    logger::status(&format!("Handing over to {}...", init.display()));
+    logger::newline();
 
-    logger::status(&format!(
-        "Latest release available: {} (tag: {})",
-        latest_release.name.as_deref().unwrap_or(tag),
-        tag
-    ));
-    logger::info(&format!(
-        "Target naner installation at {}",
-        naner_root.display()
-    ));
-    logger::success("Self-update check completed.");
-    0
+    // Inherit stdio so naner-init's prompts and progress reach the user, and
+    // pass its exit code straight through rather than inventing one.
+    match std::process::Command::new(&init).args(args).status() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(err) => {
+            logger::failure(&format!("Could not run {}: {err}", init.display()));
+            1
+        }
+    }
 }

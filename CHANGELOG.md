@@ -27,6 +27,8 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   no-op on pinned vendors.
 
 ### Removed
+- `naner checksum`, which never computed or wrote anything; superseded by
+  automatic digest verification and `naner lock`.
 - `ProfileConfig::WindowEffect`, which was parsed and never read. The README's
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
@@ -37,6 +39,10 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   cannot become shell code in `--export-env` output.
 
 ### Fixed
+- `naner profile import` writes the profile instead of only validating it;
+  `setup-shell` writes an idempotent block to the shell startup file; `pack`
+  bundles the whole distribution and honours its `[dir]` argument;
+  `self-update` delegates to `naner-init` instead of doing nothing.
 - A failing `PreLaunch` hook now aborts the launch instead of being ignored.
 - `naner migrate` no longer writes environment overrides, telemetry defaults
   or expanded paths into the config file, no longer drops `$schema`/`title`/

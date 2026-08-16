@@ -79,13 +79,16 @@ pub fn execute(args: &[String]) -> i32 {
             0
         }
         "import" => {
-            let import_path = match args.get(1) {
-                Some(path) => path,
-                None => {
-                    eprintln!("Usage: naner profile import <file.json>");
-                    return 1;
-                }
+            let Some(import_path) = args.get(1) else {
+                eprintln!("Usage: naner profile import <file.json> [--as <name>] [--dry-run]");
+                return 1;
             };
+            let dry_run = args.iter().any(|a| a.eq_ignore_ascii_case("--dry-run"));
+            let rename = args
+                .iter()
+                .position(|a| a.eq_ignore_ascii_case("--as"))
+                .and_then(|i| args.get(i + 1))
+                .cloned();
 
             let content = match fs::read_to_string(Path::new(import_path)) {
                 Ok(c) => c,
@@ -94,7 +97,6 @@ pub fn execute(args: &[String]) -> i32 {
                     return 1;
                 }
             };
-
             let val: serde_json::Value = match serde_json::from_str(&content) {
                 Ok(v) => v,
                 Err(err) => {
@@ -103,7 +105,7 @@ pub fn execute(args: &[String]) -> i32 {
                 }
             };
 
-            let imported_profile: config::ProfileConfig = if let Some(p) = val.get("Profile") {
+            let imported: config::ProfileConfig = if let Some(p) = val.get("Profile") {
                 match serde_json::from_value(p.clone()) {
                     Ok(parsed) => parsed,
                     Err(e) => {
@@ -121,17 +123,57 @@ pub fn execute(args: &[String]) -> i32 {
                 return 1;
             };
 
-            let key = if !imported_profile.name.is_empty() {
-                imported_profile.name.clone()
-            } else {
-                "ImportedProfile".to_string()
+            let key = rename
+                .or_else(|| (!imported.name.is_empty()).then(|| imported.name.clone()))
+                .unwrap_or_else(|| "ImportedProfile".to_string());
+
+            // Merge into the file as written, not the loaded config: the
+            // loaded one carries environment overrides and expanded paths that
+            // must never be written back (same reason as `migrate`).
+            let Some(cfg_file) = config::find_configuration_file(&naner_root) else {
+                logger::failure("Configuration file not found");
+                return 1;
+            };
+            let mut on_disk = match config::load_verbatim(&cfg_file) {
+                Ok(c) => c,
+                Err(err) => {
+                    logger::failure(&format!("Configuration parse error: {err}"));
+                    return 1;
+                }
             };
 
-            let target_cfg_path =
-                cfg_file.unwrap_or_else(|| naner_root.join("config").join("naner.json"));
+            let replacing =
+                on_disk.profiles.contains_key(&key) || on_disk.custom_profiles.contains_key(&key);
+            // Imports land in CustomProfiles so a built-in of the same name is
+            // never silently overwritten in place.
+            on_disk.custom_profiles.insert(key.clone(), imported);
+
+            let target = naner_root
+                .join(constants::directory_names::CONFIG)
+                .join("naner.json");
+            let rendered = match serde_json::to_string_pretty(&on_disk) {
+                Ok(s) => format!("{s}\n"),
+                Err(err) => {
+                    logger::failure(&format!("Could not serialize configuration: {err}"));
+                    return 1;
+                }
+            };
+
+            if replacing {
+                logger::warning(&format!("Replacing existing profile '{key}'"));
+            }
+            if dry_run {
+                logger::info("Dry run — nothing written. Result would be:");
+                print!("{rendered}");
+                return 0;
+            }
+            if let Err(err) = crate::config_file::replace(&target, &rendered) {
+                logger::failure(&format!("Failed to write configuration: {err}"));
+                return 1;
+            }
             logger::success(&format!(
-                "Validated imported profile '{key}'. Target config: {}",
-                target_cfg_path.display()
+                "Imported profile '{key}' into {}",
+                target.display()
             ));
             0
         }

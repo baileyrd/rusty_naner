@@ -12,6 +12,44 @@ PR until it is tagged. Terse per-category entries live in
 Merged against `main` since [v0.5.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.5.0).
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...main).
 
+### PR #35 — Make the stub commands do what they claim
+**2026-08-16**
+
+Five commands reported success without acting. Four now act; one is retired.
+
+- **Fixed:** `profile import` validated its input and then wrote nothing. It
+  now merges the profile into `CustomProfiles` — deliberately not `Profiles`,
+  so a built-in of the same name is never overwritten in place — with a
+  timestamped backup, an atomic write, `--as <name>` and `--dry-run`. Like
+  `migrate`, it reads the file verbatim so environment overrides are not
+  baked in.
+- **Fixed:** `setup-shell` never touched a startup file, and both branches of
+  `--dry-run` were byte-identical. It now writes a marked, idempotent block to
+  `$PROFILE` or `~/.bashrc`: re-running replaces the block rather than
+  appending a second, an unchanged block is a no-op, and surrounding content
+  survives. `cmd` still only prints, because it has no per-user startup file
+  naner can edit — writing an AutoRun registry key behind someone's back is
+  not a reasonable default, and that is now said out loud.
+- **Fixed:** `pack` bundled only `config/` while claiming a "self-contained
+  portable distribution", and ignored its documented `[dir]` argument. It now
+  bundles `bin/`, `config/`, `home/`, `icons/` and `naner.bat`, honours
+  `[dir]`, reports anything missing instead of quietly shipping a thinner
+  archive, and skips transient files — `.downloads`, `.staging`, `.part`,
+  `.tmp`, and the `.bak` files the config commands leave behind.
+- **Fixed:** `self-update` printed "Self-update check completed" and replaced
+  nothing. It now hands over to `naner-init`, which owns the update protocol,
+  passing arguments through and returning its exit code. That is the honest
+  design rather than a workaround: `naner.exe` cannot replace itself while
+  running on Windows, which is why `naner-init` is a separate executable.
+- **Removed:** `naner checksum`. It never computed or wrote anything, and what
+  it was for is now covered properly — resolvers carry the distributor's
+  digest, and `naner lock` records the exact version, URL and SHA-256 per
+  vendor. It exits 2 with a pointer rather than silently disappearing.
+- **Changed:** the back-up-then-atomically-replace discipline that `migrate`
+  needed is now a shared helper, used by `profile import` and `setup-shell`
+  too. Getting it wrong costs someone their configuration, so it lives in one
+  place.
+
 ### PR #34 — Escape terminal arguments; validate env var names; make PreLaunch a gate
 **2026-08-16**
 
