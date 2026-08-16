@@ -12,7 +12,10 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::{VendorDefinition, VendorSourceType, WebScrapeConfig, essential_vendor_definitions};
+use super::{
+    ChecksumSource, VendorDefinition, VendorSourceType, WebScrapeConfig,
+    essential_vendor_definitions,
+};
 use crate::config::strip_json_comments;
 use crate::{constants, logger};
 
@@ -40,6 +43,22 @@ struct VendorJsonEntry {
     #[serde(rename = "installerArgs", alias = "installerargs")]
     installer_args: Option<Vec<String>>,
     checksum: Option<ChecksumJson>,
+    #[serde(rename = "checksumSource", alias = "checksumsource")]
+    checksum_source: Option<ChecksumSourceJson>,
+}
+
+/// Where to fetch a digest for a dynamically-resolved artifact.
+/// `type: "sidecar"` reads `<download-url><suffix>`; `type: "scrape"` pulls
+/// capture group 1 out of `url`, with `{FILE}` in `pattern` replaced by the
+/// resolved file name.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct ChecksumSourceJson {
+    #[serde(rename = "type")]
+    source_type: String,
+    suffix: Option<String>,
+    url: Option<String>,
+    pattern: Option<String>,
 }
 
 /// Optional per-vendor checksum (fix for B2 — the C# schema never had one).
@@ -194,6 +213,7 @@ fn convert(vendors: crate::collections::OrderedMap<VendorJsonEntry>) -> Vec<Vend
                     required: c.required,
                 })
             }),
+            checksum_source: entry.checksum_source.and_then(convert_checksum_source),
             ..Default::default()
         };
 
@@ -238,6 +258,25 @@ fn convert(vendors: crate::collections::OrderedMap<VendorJsonEntry>) -> Vec<Vend
     }
 
     definitions
+}
+
+/// An entry missing the fields its `type` needs is dropped rather than
+/// half-applied — a malformed checksum source must not look like a
+/// successfully configured one.
+fn convert_checksum_source(json: ChecksumSourceJson) -> Option<ChecksumSource> {
+    match json.source_type.to_lowercase().as_str() {
+        "sidecar" => Some(ChecksumSource::Sidecar {
+            suffix: json.suffix.filter(|s| !s.is_empty())?,
+        }),
+        "scrape" => Some(ChecksumSource::Scrape {
+            url: json.url.filter(|s| !s.is_empty())?,
+            pattern: json.pattern.filter(|s| !s.is_empty())?,
+        }),
+        other => {
+            logger::warning(&format!("Unknown checksumSource type: {other}"));
+            None
+        }
+    }
 }
 
 /// `ParseSourceType`: unknown types silently parse as `static`

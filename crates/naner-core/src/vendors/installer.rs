@@ -11,8 +11,8 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use super::{
-    VENDOR_VERSION_FILE, VendorDefinition, VendorSourceType, WindowsTerminalConfigurator,
-    is_windows_terminal,
+    ChecksumSource, VENDOR_VERSION_FILE, VendorDefinition, VendorSourceType,
+    WindowsTerminalConfigurator, is_windows_terminal,
 };
 use crate::http::Http;
 use crate::{archives, checksum, logger};
@@ -23,6 +23,11 @@ pub struct VendorDownloadInfo {
     pub url: String,
     pub file_name: String,
     pub version: Option<String>,
+    /// Digest published by the upstream source for *this* resolved artifact,
+    /// when the source exposes one. Additive: the C# model had no such field
+    /// because it never verified anything. A vendor's static `checksum` in
+    /// vendors.json takes precedence over this (see `resolved_checksum`).
+    pub checksum: Option<checksum::ChecksumInfo>,
 }
 
 pub struct UnifiedVendorInstaller<'a> {
@@ -106,7 +111,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
 
         logger::success(&format!("  Downloaded {}", info.file_name));
 
-        if !self.verify_checksum(&download_path, vendor) {
+        if !self.verify_checksum(&download_path, vendor, &info) {
             logger::failure(&format!(
                 "  Checksum verification failed for {}",
                 vendor.name
@@ -254,7 +259,12 @@ impl<'a> UnifiedVendorInstaller<'a> {
         };
 
         match resolved {
-            Ok(Some(info)) => Some(info),
+            Ok(Some(mut info)) => {
+                if info.checksum.is_none() {
+                    info.checksum = self.fetch_checksum_source(vendor, &info);
+                }
+                Some(info)
+            }
             Ok(None) => {
                 let fallback_url = vendor.fallback_url.as_deref()?;
                 // Tier-3: fallback use is loud (stderr) — a silently pinned
@@ -329,6 +339,9 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 .clone()
                 .unwrap_or_else(|| file_name_of(download_url)),
             version: release.tag_name,
+            // The releases API exposes no digest for older assets; a vendor
+            // can still pin one via `checksum` in vendors.json.
+            checksum: None,
         }))
     }
 
@@ -362,6 +375,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
             url: full_url,
             version: Some(version_from_file_name(&file_name)),
             file_name,
+            checksum: None,
         }))
     }
 
@@ -387,10 +401,27 @@ impl<'a> UnifiedVendorInstaller<'a> {
         };
 
         let file_name = format!("node-{version}-win-x64.zip");
+        // nodejs.org publishes a per-release SHASUMS256.txt; a resolution that
+        // succeeds without it still installs (unverified) rather than failing
+        // the whole vendor.
+        let checksum = match self
+            .http
+            .get_text(&format!("https://nodejs.org/dist/{version}/SHASUMS256.txt"))
+        {
+            Ok((status, body)) if (200..300).contains(&status) => {
+                upstream_sha256(sha256_from_sums_file(&body, &file_name).as_deref())
+            }
+            _ => {
+                logger::debug("    No SHASUMS256.txt available for this release", false);
+                None
+            }
+        };
+
         Ok(Some(VendorDownloadInfo {
             url: format!("https://nodejs.org/dist/{version}/{file_name}"),
             file_name,
             version: Some(version),
+            checksum,
         }))
     }
 
@@ -407,6 +438,8 @@ impl<'a> UnifiedVendorInstaller<'a> {
             os: Option<String>,
             arch: Option<String>,
             kind: Option<String>,
+            /// go.dev publishes the digest inline — no extra request needed.
+            sha256: Option<String>,
         }
 
         let (status, body) = self.http.get_text("https://go.dev/dl/?mode=json")?;
@@ -425,7 +458,8 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 && f.arch.as_deref() == Some("amd64")
                 && f.kind.as_deref() == Some("archive")
         });
-        let Some(file_name) = file.and_then(|f| f.filename.clone()) else {
+        let Some(file) = file else { return Ok(None) };
+        let Some(file_name) = file.filename.clone() else {
             return Ok(None);
         };
 
@@ -433,6 +467,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
             url: format!("https://go.dev/dl/{file_name}"),
             file_name,
             version: Some(version.clone()),
+            checksum: upstream_sha256(file.sha256.as_deref()),
         }))
     }
 
@@ -450,6 +485,30 @@ impl<'a> UnifiedVendorInstaller<'a> {
             release_type: Option<String>,
             #[serde(rename = "support-phase")]
             support_phase: Option<String>,
+            #[serde(rename = "releases.json")]
+            releases_json: Option<String>,
+        }
+        // Channel manifest: carries the real download URL and a SHA-512 per
+        // file, so following it beats hand-building the URL from the version.
+        #[derive(Deserialize)]
+        struct ChannelReleases {
+            releases: Option<Vec<ChannelRelease>>,
+        }
+        #[derive(Deserialize)]
+        struct ChannelRelease {
+            sdk: Option<Sdk>,
+        }
+        #[derive(Deserialize)]
+        struct Sdk {
+            version: Option<String>,
+            files: Option<Vec<SdkFile>>,
+        }
+        #[derive(Deserialize)]
+        struct SdkFile {
+            name: Option<String>,
+            rid: Option<String>,
+            url: Option<String>,
+            hash: Option<String>,
         }
 
         let (status, body) = self.http.get_text(
@@ -467,28 +526,113 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 c.release_type.as_deref() == Some("lts")
                     && c.support_phase.as_deref() == Some("active")
             });
-        let Some(version) = lts.and_then(|c| c.latest_sdk) else {
+        let Some(channel) = lts else { return Ok(None) };
+        let Some(version) = channel.latest_sdk else {
             return Ok(None);
         };
 
         let file_name = format!("dotnet-sdk-{version}-win-x64.zip");
+        let built_url =
+            format!("https://builds.dotnet.microsoft.com/dotnet/Sdk/{version}/{file_name}");
+
+        // Prefer the channel manifest's own URL + hash; fall back to the
+        // hand-built URL (unverified) if the manifest is unavailable.
+        if let Some(releases_url) = channel.releases_json.as_deref()
+            && let Ok((status, body)) = self.http.get_text(releases_url)
+            && (200..300).contains(&status)
+            && let Ok(channel_releases) = serde_json::from_str::<ChannelReleases>(&body)
+            && let Some(sdk) = channel_releases
+                .releases
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|r| r.sdk)
+                .find(|s| s.version.as_deref() == Some(version.as_str()))
+            && let Some(file) = sdk.files.unwrap_or_default().into_iter().find(|f| {
+                f.rid.as_deref() == Some("win-x64")
+                    && f.name.as_deref().is_some_and(|n| n.ends_with(".zip"))
+            })
+        {
+            return Ok(Some(VendorDownloadInfo {
+                url: file.url.unwrap_or(built_url),
+                file_name,
+                version: Some(version),
+                // 128 hex chars — the .NET manifest publishes SHA-512.
+                checksum: upstream_digest(file.hash.as_deref()),
+            }));
+        }
+
+        logger::debug(
+            "    No .NET channel manifest available; URL unverified",
+            false,
+        );
         Ok(Some(VendorDownloadInfo {
-            url: format!("https://builds.dotnet.microsoft.com/dotnet/Sdk/{version}/{file_name}"),
+            url: built_url,
             file_name,
             version: Some(version),
+            checksum: None,
         }))
     }
 
+    /// Fetch the digest described by a vendor's `checksumSource`, if any.
+    /// A source that is configured but unreachable logs and yields `None`
+    /// rather than failing resolution — the download still happens, just
+    /// unverified, which is the pre-existing behavior for every vendor.
+    fn fetch_checksum_source(
+        &self,
+        vendor: &VendorDefinition,
+        info: &VendorDownloadInfo,
+    ) -> Option<checksum::ChecksumInfo> {
+        let source = vendor.checksum_source.as_ref()?;
+        let url = match source {
+            ChecksumSource::Sidecar { suffix } => format!("{}{suffix}", info.url),
+            ChecksumSource::Scrape { url, .. } => url.clone(),
+        };
+
+        let body = match self.http.get_text(&url) {
+            Ok((status, body)) if (200..300).contains(&status) => body,
+            Ok((status, _)) => {
+                logger::warning(&format!("    Checksum source {url} returned {status}"));
+                return None;
+            }
+            Err(e) => {
+                logger::warning(&format!("    Checksum source {url} unreachable: {e}"));
+                return None;
+            }
+        };
+
+        let found = match source {
+            ChecksumSource::Sidecar { .. } => digest_from_sidecar(&body, &info.file_name),
+            ChecksumSource::Scrape { pattern, .. } => {
+                // `{FILE}` lets one pattern serve any resolved artifact.
+                let pattern =
+                    pattern.replace("{FILE}", &crate::regex_shim::escape(&info.file_name));
+                crate::regex_shim::compile_ci(&pattern)
+                    .ok()
+                    .and_then(|regex| regex.captures(&body)?.get(1).map(str::to_string))
+            }
+        };
+
+        match upstream_digest(found.as_deref()) {
+            Some(digest) => Some(digest),
+            None => {
+                logger::warning(&format!("    No digest for {} in {url}", info.file_name));
+                None
+            }
+        }
+    }
+
     /// `VerifyChecksum` (`VendorInstallerBase`) with the same log lines.
-    fn verify_checksum(&self, file_path: &Path, vendor: &VendorDefinition) -> bool {
-        let Some(info) = &vendor.checksum else {
+    fn verify_checksum(
+        &self,
+        file_path: &Path,
+        vendor: &VendorDefinition,
+        download: &VendorDownloadInfo,
+    ) -> bool {
+        let Some(info) = resolved_checksum(vendor, download) else {
             logger::debug("    No checksum provided, skipping verification", false);
             return true;
         };
-        if info.value.is_empty() {
-            logger::debug("    No checksum provided, skipping verification", false);
-            return true;
-        }
+        let info = &info;
 
         logger::status(&format!("    Verifying {} checksum...", info.algorithm));
         let result = checksum::verify(file_path, info);
@@ -525,6 +669,79 @@ impl<'a> UnifiedVendorInstaller<'a> {
     }
 }
 
+/// Which digest to verify a download against.
+///
+/// A `checksum` pinned in vendors.json wins: an operator who has pinned an
+/// artifact is asserting something stronger than "whatever the distributor
+/// currently serves", and silently preferring the upstream value would let a
+/// compromised manifest overrule the pin. Otherwise use whatever the resolver
+/// discovered upstream.
+fn resolved_checksum(
+    vendor: &VendorDefinition,
+    download: &VendorDownloadInfo,
+) -> Option<checksum::ChecksumInfo> {
+    vendor
+        .checksum
+        .clone()
+        .filter(|c| !c.value.is_empty())
+        .or_else(|| download.checksum.clone())
+        .filter(|c| !c.value.is_empty())
+}
+
+/// Wrap an upstream-published hex digest as a *required* checksum.
+///
+/// Required is the right default here, unlike the optional `checksum` object
+/// in vendors.json: the value came from the distributor's own manifest for
+/// this exact artifact, so a mismatch means the bytes are not what the source
+/// says they are. The algorithm is inferred from the hex length, which keeps
+/// callers from having to state it.
+fn upstream_digest(value: Option<&str>) -> Option<checksum::ChecksumInfo> {
+    let value = value.map(str::trim).filter(|v| !v.is_empty())?;
+    if !value.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let algorithm = match value.len() {
+        64 => "SHA256",
+        96 => "SHA384",
+        128 => "SHA512",
+        _ => return None,
+    };
+    Some(checksum::ChecksumInfo {
+        algorithm: algorithm.into(),
+        value: value.to_string(),
+        required: true,
+    })
+}
+
+/// [`upstream_digest`] restricted to SHA-256, for sources that document that
+/// algorithm specifically (go.dev, nodejs.org).
+fn upstream_sha256(value: Option<&str>) -> Option<checksum::ChecksumInfo> {
+    upstream_digest(value).filter(|c| c.algorithm == "SHA256")
+}
+
+/// Pull the digest for `file_name` out of a `sha256sum`-style listing
+/// (`<hex>  <name>` per line), as published at
+/// `nodejs.org/dist/<version>/SHASUMS256.txt`.
+fn sha256_from_sums_file(body: &str, file_name: &str) -> Option<String> {
+    body.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        let hash = parts.next()?;
+        // The name column is `*name` for binary mode, plain otherwise.
+        let name = parts.next()?.trim_start_matches('*');
+        (name == file_name).then(|| hash.to_string())
+    })
+}
+
+/// Digest from a sidecar file whose body is either a bare hex string or a
+/// `sha256sum`-style line (`static.rust-lang.org` publishes the bare form).
+fn digest_from_sidecar(body: &str, file_name: &str) -> Option<String> {
+    let token = body.split_whitespace().next()?;
+    if token.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Some(token.to_string());
+    }
+    sha256_from_sums_file(body, file_name)
+}
+
 fn fetch_static(vendor: &VendorDefinition) -> Option<VendorDownloadInfo> {
     let (Some(url), Some(file_name)) = (&vendor.static_url, &vendor.file_name) else {
         return None;
@@ -533,11 +750,13 @@ fn fetch_static(vendor: &VendorDefinition) -> Option<VendorDownloadInfo> {
         url: url.clone(),
         file_name: file_name.clone(),
         version: Some(version_from_file_name(file_name)),
+        checksum: None,
     })
 }
 
 fn fallback_info(vendor: &VendorDefinition, fallback_url: &str) -> VendorDownloadInfo {
     VendorDownloadInfo {
+        checksum: None,
         url: fallback_url.to_string(),
         file_name: vendor
             .fallback_file_name
@@ -655,6 +874,276 @@ fn fs_extra_copy(src: &Path, dst: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Network-dependent checks against the real distributor endpoints. Excluded
+/// from CI (`#[ignore]`); run with `cargo test -- --ignored --nocapture` when
+/// touching a resolver, since these are the only tests that catch an upstream
+/// manifest changing shape.
+#[cfg(test)]
+mod live_digest_tests {
+    use super::*;
+    use crate::http::UreqHttp;
+
+    fn installer<'a>(http: &'a UreqHttp) -> UnifiedVendorInstaller<'a> {
+        UnifiedVendorInstaller::new(Path::new("/nonexistent"), Vec::new(), http)
+    }
+
+    fn assert_sha(info: &VendorDownloadInfo, bits: usize, label: &str) {
+        let c = info
+            .checksum
+            .as_ref()
+            .unwrap_or_else(|| panic!("{label}: no digest resolved"));
+        assert_eq!(c.value.len(), bits / 4, "{label}: unexpected digest length");
+        assert!(c.required, "{label}: upstream digest must be required");
+        println!("{label}: {} {} = {}", info.file_name, c.algorithm, c.value);
+    }
+
+    #[test]
+    #[ignore = "hits the network"]
+    fn go_resolves_a_sha256() {
+        let http = UreqHttp::new();
+        let info = installer(&http).fetch_golang().unwrap().unwrap();
+        assert_sha(&info, 256, "go");
+    }
+
+    #[test]
+    #[ignore = "hits the network"]
+    fn nodejs_resolves_a_sha256() {
+        let http = UreqHttp::new();
+        let info = installer(&http).fetch_nodejs().unwrap().unwrap();
+        assert_sha(&info, 256, "nodejs");
+    }
+
+    #[test]
+    #[ignore = "hits the network"]
+    fn dotnet_resolves_a_sha512_and_an_authoritative_url() {
+        let http = UreqHttp::new();
+        let info = installer(&http).fetch_dotnet().unwrap().unwrap();
+        assert_sha(&info, 512, "dotnet");
+        assert!(info.url.starts_with("https://"), "url: {}", info.url);
+    }
+
+    #[test]
+    #[ignore = "hits the network"]
+    fn rustup_sidecar_resolves() {
+        let http = UreqHttp::new();
+        let vendor = VendorDefinition {
+            name: "Rust".into(),
+            checksum_source: Some(ChecksumSource::Sidecar {
+                suffix: ".sha256".into(),
+            }),
+            ..Default::default()
+        };
+        let info = VendorDownloadInfo {
+            url: "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe"
+                .into(),
+            file_name: "rustup-init.exe".into(),
+            version: None,
+            checksum: None,
+        };
+        let resolved = installer(&http).fetch_checksum_source(&vendor, &info);
+        assert_sha(
+            &VendorDownloadInfo {
+                checksum: resolved,
+                ..info.clone()
+            },
+            256,
+            "rustup",
+        );
+    }
+
+    #[test]
+    #[ignore = "hits the network"]
+    fn miniconda_scrape_resolves() {
+        let http = UreqHttp::new();
+        let vendor = VendorDefinition {
+            name: "Miniconda".into(),
+            checksum_source: Some(ChecksumSource::Scrape {
+                url: "https://repo.anaconda.com/miniconda/".into(),
+                pattern: "{FILE}</a></td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td>([0-9a-f]{64})".into(),
+            }),
+            ..Default::default()
+        };
+        let info = VendorDownloadInfo {
+            url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe".into(),
+            file_name: "Miniconda3-latest-Windows-x86_64.exe".into(),
+            version: None,
+            checksum: None,
+        };
+        let resolved = installer(&http).fetch_checksum_source(&vendor, &info);
+        assert_sha(
+            &VendorDownloadInfo {
+                checksum: resolved,
+                ..info.clone()
+            },
+            256,
+            "miniconda",
+        );
+    }
+}
+
+#[cfg(test)]
+mod digest_tests {
+    use super::*;
+
+    /// The real shape of a repo.anaconda.com/miniconda/ row, including the
+    /// newline+indent runs between tags and the duplicate filename in href.
+    const MINICONDA_LISTING: &str = r#"    <tr>
+      <th>Last Modified</th>
+      <th>SHA256</th>
+    </tr>
+    <tr>
+      <td><a href="Miniconda3-py39_4.9.2-Windows-x86_64.exe">Miniconda3-py39_4.9.2-Windows-x86_64.exe</a></td>
+      <td class="s">70.7M</td>
+      <td>2021-01-12 20:03:36</td>
+      <td>1111111111111111111111111111111111111111111111111111111111111111</td>
+    </tr>
+    <tr>
+      <td><a href="Miniconda3-latest-Windows-x86_64.exe">Miniconda3-latest-Windows-x86_64.exe</a></td>
+      <td class="s">124.7M</td>
+      <td>2026-07-29 18:22:05</td>
+      <td>4441b50816f866f4e6e774e90f90a71bde756f06c94144407a6d93677c539e46</td>
+    </tr>
+"#;
+
+    /// The pattern shipped in dist-assets/config/vendors.json.
+    const MINICONDA_PATTERN: &str =
+        "{FILE}</a></td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td>([0-9a-f]{64})";
+
+    /// Guards the shipped config against the engine: `rusty_regx` is POSIX-ERE
+    /// and leftmost-*longest*, so this proves `{64}` intervals work and that
+    /// the bounded `[^<]*` runs keep the match inside the requested row rather
+    /// than sliding to a neighbouring one.
+    #[test]
+    fn miniconda_scrape_pattern_selects_the_right_row() {
+        let file = "Miniconda3-latest-Windows-x86_64.exe";
+        let pattern = MINICONDA_PATTERN.replace("{FILE}", &crate::regex_shim::escape(file));
+        let regex = crate::regex_shim::compile_ci(&pattern).expect("pattern compiles");
+        let captured = regex
+            .captures(MINICONDA_LISTING)
+            .and_then(|c| c.get(1))
+            .expect("hash captured");
+        assert_eq!(
+            captured,
+            "4441b50816f866f4e6e774e90f90a71bde756f06c94144407a6d93677c539e46"
+        );
+    }
+
+    #[test]
+    fn miniconda_pattern_picks_the_named_file_not_the_first_row() {
+        let file = "Miniconda3-py39_4.9.2-Windows-x86_64.exe";
+        let pattern = MINICONDA_PATTERN.replace("{FILE}", &crate::regex_shim::escape(file));
+        let regex = crate::regex_shim::compile_ci(&pattern).unwrap();
+        assert_eq!(
+            regex.captures(MINICONDA_LISTING).and_then(|c| c.get(1)),
+            Some("1111111111111111111111111111111111111111111111111111111111111111")
+        );
+    }
+
+    #[test]
+    fn algorithm_is_inferred_from_digest_length() {
+        let sha256 = "a".repeat(64);
+        let sha512 = "b".repeat(128);
+        assert_eq!(upstream_digest(Some(&sha256)).unwrap().algorithm, "SHA256");
+        assert_eq!(upstream_digest(Some(&sha512)).unwrap().algorithm, "SHA512");
+        assert_eq!(
+            upstream_digest(Some(&"c".repeat(96))).unwrap().algorithm,
+            "SHA384"
+        );
+    }
+
+    #[test]
+    fn upstream_digests_are_required_so_a_mismatch_blocks_install() {
+        assert!(upstream_digest(Some(&"a".repeat(64))).unwrap().required);
+    }
+
+    #[test]
+    fn malformed_digests_are_rejected_rather_than_trusted() {
+        assert!(upstream_digest(None).is_none());
+        assert!(upstream_digest(Some("")).is_none());
+        assert!(upstream_digest(Some("  ")).is_none());
+        // Wrong length for every supported algorithm.
+        assert!(upstream_digest(Some(&"a".repeat(40))).is_none());
+        // Non-hex, e.g. an error page captured by a bad pattern.
+        assert!(upstream_digest(Some(&"z".repeat(64))).is_none());
+        // SHA-512 offered where only SHA-256 is documented.
+        assert!(upstream_sha256(Some(&"a".repeat(128))).is_none());
+    }
+
+    #[test]
+    fn shasums_file_is_parsed_by_exact_file_name() {
+        let body = "d3bd72755141ed32bbcd841228ee81897c8a98d50dfa7dae2179399a0a7c90f8  node-v26.7.0-win-x64.zip
+aaaa72755141ed32bbcd841228ee81897c8a98d50dfa7dae2179399a0a7c90f8  node-v26.7.0-win-x86.zip
+";
+        assert_eq!(
+            sha256_from_sums_file(body, "node-v26.7.0-win-x64.zip").as_deref(),
+            Some("d3bd72755141ed32bbcd841228ee81897c8a98d50dfa7dae2179399a0a7c90f8")
+        );
+        // A near-miss name must not fall through to another line's digest.
+        assert_eq!(sha256_from_sums_file(body, "node-v26.7.0-win.zip"), None);
+    }
+
+    #[test]
+    fn sidecar_accepts_bare_hex_and_sums_form() {
+        // static.rust-lang.org serves the bare form.
+        assert_eq!(
+            digest_from_sidecar(
+                "86478e53f769379d7f0ebfa7c9aa97cb76ca92233f79aa2cc0dbee2efaac73c7\n",
+                "rustup-init.exe"
+            )
+            .as_deref(),
+            Some("86478e53f769379d7f0ebfa7c9aa97cb76ca92233f79aa2cc0dbee2efaac73c7")
+        );
+        assert_eq!(
+            digest_from_sidecar(
+                "86478e53f769379d7f0ebfa7c9aa97cb76ca92233f79aa2cc0dbee2efaac73c7  rustup-init.exe",
+                "rustup-init.exe"
+            )
+            .as_deref(),
+            Some("86478e53f769379d7f0ebfa7c9aa97cb76ca92233f79aa2cc0dbee2efaac73c7")
+        );
+    }
+
+    #[test]
+    fn a_pinned_checksum_outranks_the_upstream_one() {
+        let pinned = checksum::ChecksumInfo {
+            algorithm: "SHA256".into(),
+            value: "a".repeat(64),
+            required: true,
+        };
+        let upstream = upstream_digest(Some(&"b".repeat(64)));
+        let vendor = VendorDefinition {
+            checksum: Some(pinned.clone()),
+            ..Default::default()
+        };
+        let download = VendorDownloadInfo {
+            url: String::new(),
+            file_name: String::new(),
+            version: None,
+            checksum: upstream.clone(),
+        };
+        assert_eq!(
+            resolved_checksum(&vendor, &download).unwrap().value,
+            pinned.value
+        );
+
+        // With no pin, the upstream digest is what gets verified.
+        let unpinned = VendorDefinition::default();
+        assert_eq!(
+            resolved_checksum(&unpinned, &download).unwrap().value,
+            upstream.unwrap().value
+        );
+
+        // Neither present: nothing to verify.
+        let empty = VendorDownloadInfo {
+            url: String::new(),
+            file_name: String::new(),
+            version: None,
+            checksum: None,
+        };
+        assert!(resolved_checksum(&unpinned, &empty).is_none());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::WebScrapeConfig;
@@ -725,6 +1214,87 @@ mod tests {
               "browser_download_url": "https://gh.example/PowerShell-7.5.0-win-x64.zip" }
         ]
     }"#;
+
+    /// End-to-end proof that a resolver-supplied digest is enforced: same
+    /// vendor and same bytes, only the sidecar digest differs.
+    fn install_with_sidecar_digest(sidecar_body: &str) -> (tempfile::TempDir, bool) {
+        let root = tempfile::tempdir().unwrap();
+        let payload = zip_bytes("pwsh.exe", b"fake");
+        let mut vendor = github_vendor();
+        vendor.checksum_source = Some(ChecksumSource::Sidecar {
+            suffix: ".sha256".into(),
+        });
+
+        let mut http = StubHttp::default();
+        http.text.insert(
+            "https://api.github.com/repos/PowerShell/PowerShell/releases/latest".into(),
+            (200, RELEASE_JSON.into()),
+        );
+        http.text.insert(
+            "https://gh.example/PowerShell-7.5.0-win-x64.zip.sha256".into(),
+            (200, sidecar_body.into()),
+        );
+        http.files.insert(
+            "https://gh.example/PowerShell-7.5.0-win-x64.zip".into(),
+            payload,
+        );
+
+        let installed = {
+            let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
+            installer.install_vendor("PowerShell")
+        };
+        (root, installed)
+    }
+
+    fn sha256_of_payload() -> String {
+        let bytes = zip_bytes("pwsh.exe", b"fake");
+        let tmp = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(tmp.path(), &bytes).unwrap();
+        crate::checksum::compute(tmp.path(), "SHA256").unwrap()
+    }
+
+    #[test]
+    fn matching_upstream_digest_allows_the_install() {
+        let (root, installed) = install_with_sidecar_digest(&sha256_of_payload());
+        assert!(installed);
+        assert!(root.path().join("vendor/powershell/pwsh.exe").is_file());
+    }
+
+    #[test]
+    fn mismatched_upstream_digest_blocks_the_install() {
+        let (root, installed) = install_with_sidecar_digest(&"a".repeat(64));
+        assert!(
+            !installed,
+            "install must fail when the upstream digest does not match"
+        );
+        // Nothing may be left behind for a later run to treat as installed.
+        assert!(!root.path().join("vendor/powershell/pwsh.exe").exists());
+    }
+
+    /// An unreachable checksum source must not become a silent hard failure
+    /// for every vendor that configures one — it degrades to the pre-existing
+    /// unverified install, loudly.
+    #[test]
+    fn unreachable_checksum_source_degrades_to_unverified() {
+        let root = tempfile::tempdir().unwrap();
+        let mut vendor = github_vendor();
+        vendor.checksum_source = Some(ChecksumSource::Sidecar {
+            suffix: ".sha256".into(),
+        });
+        let mut http = StubHttp::default();
+        http.text.insert(
+            "https://api.github.com/repos/PowerShell/PowerShell/releases/latest".into(),
+            (200, RELEASE_JSON.into()),
+        );
+        // No route for the .sha256 URL at all.
+        http.files.insert(
+            "https://gh.example/PowerShell-7.5.0-win-x64.zip".into(),
+            zip_bytes("pwsh.exe", b"fake"),
+        );
+
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
+        assert!(installer.install_vendor("PowerShell"));
+    }
 
     #[test]
     fn b1_fixed_glob_pattern_matches_release_asset() {

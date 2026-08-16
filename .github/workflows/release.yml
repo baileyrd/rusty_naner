@@ -59,6 +59,25 @@ jobs:
           Set-Content -Path dist/bundle/vendor/bin/.naner-version -Value '${{ github.ref_name }}' -NoNewline
           Compress-Archive -Path dist/bundle/* -DestinationPath dist/naner-bundle.zip
 
+      # naner-init verifies every asset it installs against this manifest and
+      # refuses to install without it, so a release missing SHA256SUMS is not
+      # merely unverified - it is uninstallable. Generated after the bundle is
+      # zipped so all three published assets are covered.
+      - name: Generate SHA256SUMS
+        shell: pwsh
+        working-directory: dist
+        run: |
+          $assets = 'naner.exe', 'naner-init.exe', 'naner-bundle.zip'
+          $lines = foreach ($a in $assets) {
+            if (-not (Test-Path $a)) { throw "Expected release asset missing: $a" }
+            # sha256sum format: lowercase hex, two spaces, bare file name.
+            "$((Get-FileHash $a -Algorithm SHA256).Hash.ToLower())  $a"
+          }
+          # ASCII + explicit LF: the updater splits on whitespace, but a BOM
+          # would attach to the first hash and fail every verification.
+          [IO.File]::WriteAllText("$PWD/SHA256SUMS", ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
+          Get-Content SHA256SUMS
+
       - name: Publish release to baileyrd/naner
         uses: softprops/action-gh-release@v2
         with:
@@ -68,3 +87,4 @@ jobs:
             dist/naner.exe
             dist/naner-init.exe
             dist/naner-bundle.zip
+            dist/SHA256SUMS

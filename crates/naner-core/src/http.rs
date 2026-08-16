@@ -117,12 +117,12 @@ impl Http for UreqHttp {
                         Ok(n) => n,
                         Err(e) => {
                             logger::failure(&format!("    Download error: {e}"));
-                            return false;
+                            return discard_partial(writer, output_path);
                         }
                     };
                     if writer.write_all(&buffer[..bytes_read]).is_err() {
                         logger::failure("    Download error: write failed");
-                        return false;
+                        return discard_partial(writer, output_path);
                     }
                     total_read += bytes_read as u64;
 
@@ -139,7 +139,16 @@ impl Http for UreqHttp {
                 }
                 if writer.flush().is_err() {
                     logger::failure("    Download error: flush failed");
-                    return false;
+                    return discard_partial(writer, output_path);
+                }
+                // A truncated transfer that ends cleanly is otherwise
+                // indistinguishable from a complete one, and the partial file
+                // would be picked up as a cache hit on the next run.
+                if total_bytes > 0 && total_read != total_bytes {
+                    logger::failure(&format!(
+                        "    Download error: expected {total_bytes} bytes, received {total_read}"
+                    ));
+                    return discard_partial(writer, output_path);
                 }
                 if total_bytes > 0 {
                     print!("\r    Progress: 100%");
@@ -153,4 +162,17 @@ impl Http for UreqHttp {
             }
         }
     }
+}
+
+/// Drop a partially-written download and report failure.
+///
+/// The cache check at the top of `download` treats any non-empty file as a
+/// finished asset, so a partial left on disk is silently reused by the next
+/// run. Always returns `false` so callers can `return discard_partial(..)`.
+fn discard_partial(writer: std::io::BufWriter<std::fs::File>, output_path: &Path) -> bool {
+    // Takes the writer by value so the handle is closed before the unlink:
+    // Windows refuses to remove a file that is still open.
+    drop(writer);
+    let _ = std::fs::remove_file(output_path);
+    false
 }

@@ -1,8 +1,10 @@
 //! Port of `ChecksumVerifier`: SHA256/384/512, SHA1, MD5; normalize-then-
-//! compare (strip spaces/dashes/colons, uppercase). Note the C# reality:
-//! vendors.json defines no checksum field, so verification never actually
-//! runs today (bug B2) — the machinery is ported complete and correct for
-//! the deliberate post-parity fix.
+//! compare (strip spaces/dashes/colons, uppercase).
+//!
+//! The C# original never ran this: vendors.json defined no checksum field
+//! (bug B2). It runs now — a vendor may pin a digest in vendors.json, and
+//! resolvers additionally carry one from upstream for sources that publish
+//! it (see `vendors::installer::resolved_checksum` for the precedence).
 
 use std::io::Read;
 use std::path::Path;

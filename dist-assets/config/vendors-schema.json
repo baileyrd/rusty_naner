@@ -103,6 +103,53 @@
           },
           "description": "Arguments to pass to installer (if installType is 'installer')"
         },
+        "checksum": {
+          "type": "object",
+          "description": "Pin this artifact to a known digest. Takes precedence over any digest a resolver discovers upstream.",
+          "required": ["value"],
+          "additionalProperties": false,
+          "properties": {
+            "algorithm": {
+              "type": "string",
+              "enum": ["SHA256", "SHA384", "SHA512", "SHA1", "MD5"],
+              "default": "SHA256"
+            },
+            "value": {
+              "type": "string",
+              "description": "Expected hex digest (spaces, dashes and colons are ignored)"
+            },
+            "required": {
+              "type": "boolean",
+              "default": false,
+              "description": "When true a mismatch blocks installation; otherwise it only warns"
+            }
+          }
+        },
+        "checksumSource": {
+          "type": "object",
+          "description": "Where to fetch a digest for a dynamically-resolved artifact. Not needed for golang-api/nodejs-api/dotnet-api, which publish digests in their resolution response. A mismatch against a digest fetched this way always blocks installation.",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["sidecar", "scrape"]
+            },
+            "suffix": {
+              "type": "string",
+              "description": "sidecar only: appended to the download URL, e.g. '.sha256'"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "description": "scrape only: listing page carrying the digest"
+            },
+            "pattern": {
+              "type": "string",
+              "description": "scrape only: POSIX-ERE matched case-insensitively; capture group 1 is the digest and '{FILE}' is replaced with the resolved file name"
+            }
+          }
+        },
         "packages": {
           "type": "array",
           "items": {
@@ -118,7 +165,14 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["github", "web-scrape", "static", "golang-api"],
+          "enum": [
+            "github",
+            "web-scrape",
+            "static",
+            "golang-api",
+            "nodejs-api",
+            "dotnet-api"
+          ],
           "description": "Type of release source"
         },
         "repo": {
