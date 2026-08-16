@@ -228,8 +228,29 @@ fn validate_environment(config: &NanerConfig, naner_root: &str, report: &mut Val
             report
                 .errors
                 .push("Environment variable name cannot be empty".into());
+        } else if !is_valid_env_var_name(key) {
+            // An error, not a warning. `naner --export-env` is designed to be
+            // piped into Invoke-Expression / eval, and only the *values* were
+            // escaped — a crafted name became shell code in the consuming
+            // session. Configs travel (`naner pack`, `naner profile export`),
+            // so "the user owns their own config" is not the whole story.
+            report.errors.push(format!(
+                "Environment variable name is not a valid identifier: {key:?} \
+                 (expected letters, digits and underscore, not starting with a digit)"
+            ));
         }
     }
+}
+
+/// `[A-Za-z_][A-Za-z0-9_]*` — the intersection of what PowerShell, POSIX
+/// shells and cmd all accept unquoted, which is what the export formats emit.
+fn is_valid_env_var_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 #[cfg(test)]
@@ -381,5 +402,68 @@ mod tests {
         let msg = report.error_message().unwrap();
         assert!(msg.starts_with("Configuration validation failed with"));
         assert!(msg.contains("  - DefaultProfile cannot be empty"));
+    }
+    // ---- environment variable names (#21) ----
+
+    #[test]
+    fn a_name_that_is_not_an_identifier_is_an_error() {
+        let mut config = valid_config();
+        // `--export-env` output is piped into Invoke-Expression / eval, and
+        // only values were escaped, so this became shell code downstream.
+        config
+            .environment
+            .environment_variables
+            .insert("FOO'; Write-Host pwned; $x='".to_string(), "v".to_string());
+        let report = validate(&config, "C:\\naner");
+        assert!(
+            !report.is_valid(),
+            "a non-identifier name must block the load"
+        );
+        assert!(
+            report
+                .errors
+                .iter()
+                .any(|e| e.contains("not a valid identifier")),
+            "{:?}",
+            report.errors
+        );
+    }
+
+    #[test]
+    fn ordinary_names_still_validate() {
+        for name in ["PATH", "_UNDERSCORE", "GOPATH", "a1", "NANER_ROOT"] {
+            let mut config = valid_config();
+            config
+                .environment
+                .environment_variables
+                .insert(name.to_string(), "v".to_string());
+            let report = validate(&config, "C:\\naner");
+            assert!(
+                report.is_valid(),
+                "{name} should be accepted: {:?}",
+                report.errors
+            );
+        }
+    }
+
+    #[test]
+    fn names_that_shells_cannot_take_unquoted_are_rejected() {
+        for name in [
+            "1LEADING_DIGIT",
+            "HAS SPACE",
+            "HAS-DASH",
+            "HAS$DOLLAR",
+            "HAS;SEMI",
+        ] {
+            let mut config = valid_config();
+            config
+                .environment
+                .environment_variables
+                .insert(name.to_string(), "v".to_string());
+            assert!(
+                !validate(&config, "C:\\naner").is_valid(),
+                "{name} should be rejected"
+            );
+        }
     }
 }

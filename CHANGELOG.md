@@ -30,7 +30,14 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 - `ProfileConfig::WindowEffect`, which was parsed and never read. The README's
   claim of `Mica`/`Acrylic`/`Tabbed` backdrop support has been corrected.
 
+### Security
+- Terminal arguments are escaped, so a caller-supplied `--directory` cannot
+  inject flags into the spawned terminal's command line.
+- Environment variable names must be valid identifiers, so a crafted name
+  cannot become shell code in `--export-env` output.
+
 ### Fixed
+- A failing `PreLaunch` hook now aborts the launch instead of being ignored.
 - `naner migrate` no longer writes environment overrides, telemetry defaults
   or expanded paths into the config file, no longer drops `$schema`/`title`/
   `description`, keeps a timestamped backup, writes atomically, and gained
