@@ -163,7 +163,7 @@ pub fn execute(args: &[String]) -> i32 {
                 logger::warning(&format!("Replacing existing profile '{key}'"));
             }
             if dry_run {
-                logger::info("Dry run — nothing written. Result would be:");
+                logger::info("Dry run - nothing written. Result would be:");
                 print!("{rendered}");
                 return 0;
             }

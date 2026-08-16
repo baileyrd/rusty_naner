@@ -59,12 +59,12 @@ fn report_executable_info() {
 }
 
 /// `DirectoryVerifier.Verify`: the *essential* four (incl. `home`), each
-/// with a colored ✓/✗ line.
+/// with a colored `+`/`x` line (ASCII: see `logger::failure`).
 fn verify_directories(naner_root: &Path) {
     logger::status("Verifying directory structure:");
     for dir in constants::directory_names::ESSENTIAL {
         let exists = naner_root.join(dir).is_dir();
-        let (symbol, color) = if exists { ("✓", "92") } else { ("✗", "91") };
+        let (symbol, color) = if exists { ("+", "92") } else { ("x", "91") };
         println!("\x1b[{color}m  {symbol} {dir}/\x1b[0m");
     }
     logger::newline();
@@ -103,7 +103,7 @@ fn verify_vendor_paths(cfg: &config::NanerConfig) {
     for vendor_key in ["WindowsTerminal", "PowerShell", "GitBash"] {
         if let Some(vendor_path) = cfg.vendor_paths.get(vendor_key) {
             let exists = Path::new(vendor_path).is_file();
-            let (symbol, color) = if exists { ("✓", "92") } else { ("✗", "91") };
+            let (symbol, color) = if exists { ("+", "92") } else { ("x", "91") };
             println!("\x1b[{color}m  {symbol} {vendor_key}: {vendor_path}\x1b[0m");
         }
     }

@@ -11,7 +11,7 @@ pub fn execute() -> i32 {
     println!("Phase: {}", constants::PHASE_NAME);
     println!();
     println!("A unified terminal environment for Windows development");
-    println!("Copyright © 2026");
+    println!("Copyright (c) 2026");
     0
 }
 

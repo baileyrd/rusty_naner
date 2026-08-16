@@ -72,11 +72,7 @@ pub fn execute(args: &[String]) -> i32 {
 
     logger::status("Vendor Installation Status:");
     for (name, dir, installed) in &vendor_status {
-        let (symbol, color) = if *installed {
-            ("✓", "92")
-        } else {
-            ("✗", "91")
-        };
+        let (symbol, color) = if *installed { ("+", "92") } else { ("x", "91") };
         println!("\x1b[{color}m  {symbol} {name} (vendor/{dir})\x1b[0m");
     }
     logger::newline();

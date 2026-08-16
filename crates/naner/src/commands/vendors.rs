@@ -158,7 +158,7 @@ fn show_vendor_list(
     );
 
     if all_vendors.iter().any(|v| !v.enabled) {
-        println!("[--] is disabled in vendors.json — set \"enabled\": true to install it.");
+        println!("[--] is disabled in vendors.json - set \"enabled\": true to install it.");
     }
     println!("Use 'naner install <name>' to install a vendor.");
     println!("Use 'naner install --all' to install all optional vendors.");

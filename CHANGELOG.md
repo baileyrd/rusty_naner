@@ -5,8 +5,12 @@ Format: Added / Changed / Deprecated / Removed / Fixed / Security, newest first.
 Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 
 ## [Unreleased]
-
-Nothing yet.
+### Fixed
+- `naner --export-env` no longer prints the first-run notice to stdout, where the
+  calling shell would try to execute it; the notice moves to stderr and the
+  command exits non-zero when nothing was exported (#38).
+- Console output is ASCII, so a Windows console on the default code page no
+  longer renders `[x]`, bullets and check marks as mojibake (#39).
 
 ## [0.6.0] - 2026-08-16
 ### Added
