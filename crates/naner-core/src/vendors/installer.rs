@@ -454,10 +454,10 @@ impl<'a> UnifiedVendorInstaller<'a> {
 
         // RegexOptions.IgnoreCase.
         let regex = crate::regex_shim::compile_ci(&scrape.pattern)?;
-        let Some(captures) = regex.captures(&html) else {
+        let Some(relative) = newest_scrape_match(&regex, &html) else {
             return Ok(None);
         };
-        let relative = captures.get(1).unwrap_or_default();
+        let relative = relative.as_str();
         let full_url = format!(
             "{}/{}",
             scrape.base_url.trim_end_matches('/'),
@@ -959,6 +959,57 @@ fn glob_matches(name: &str, pattern: &str) -> bool {
         p += 1;
     }
     p == pat.len()
+}
+
+/// The newest artifact a scrape pattern matches, not the first one.
+///
+/// `regex.captures` returns the leftmost match, and a vendor's directory index
+/// is conventionally sorted ascending -- so taking the first match meant
+/// `install MSYS2` fetched the *oldest* base published, two years stale, under
+/// a line reading "Fetching latest MSYS2".
+///
+/// Ordering prefers the pattern's second capture group where there is one. The
+/// convention in `vendors.json` is that group 1 is the file name and group 2 is
+/// the version or date inside it, and comparing that numerically puts `1.10`
+/// after `1.9`, which a string comparison does not.
+///
+/// Without a second group there is nothing to parse and the file names are
+/// compared as strings -- correct for a zero-padded date embedded in a name,
+/// wrong for an unpadded version. A vendor that needs better should capture its
+/// version as group 2.
+fn newest_scrape_match(regex: &crate::regex_shim::Regex, html: &str) -> Option<String> {
+    let mut best: Option<(Option<String>, String)> = None;
+    for captures in regex.captures_iter(html) {
+        let Some(relative) = captures.get(1).filter(|s| !s.is_empty()) else {
+            continue;
+        };
+        let key = captures
+            .get(2)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        let candidate = (key, relative.to_string());
+        let replace = match &best {
+            None => true,
+            Some(current) => scrape_match_is_newer(&candidate, current),
+        };
+        if replace {
+            best = Some(candidate);
+        }
+    }
+    best.map(|(_, relative)| relative)
+}
+
+/// Strictly-newer test for two scraped matches, by version key where both have
+/// one and by file name otherwise. Ties keep the incumbent, so the leftmost
+/// match wins a genuine draw and the result stays deterministic.
+fn scrape_match_is_newer(
+    candidate: &(Option<String>, String),
+    current: &(Option<String>, String),
+) -> bool {
+    match (&candidate.0, &current.0) {
+        (Some(a), Some(b)) => crate::version::is_newer(a, b),
+        _ => candidate.1 > current.1,
+    }
 }
 
 /// Exactly one `v`, however the vendor spelled its version.
@@ -2263,6 +2314,61 @@ mod tests {
         // Quirk preserved: the C# `(\d+\.?\d*\.?\d*\.?\d*)` regex matches the
         // FIRST digit run — the "2" in "msys2" — not the date.
         assert_eq!(info.version.as_deref(), Some("2"));
+    }
+
+    /// A directory index lists many archives, ascending. Taking the leftmost
+    /// match therefore took the OLDEST -- `install MSYS2` fetched a base two
+    /// years stale under a line reading "Fetching latest MSYS2".
+    ///
+    /// The old fixture had exactly one archive on the page, so first and newest
+    /// were the same document and it could not tell the two behaviours apart.
+    #[test]
+    fn a_scrape_takes_the_newest_match_not_the_first() {
+        let regex = crate::regex_shim::compile_ci(r#"href="(msys2-base-x86_64-(\d{8})\.tar\.xz)""#)
+            .unwrap();
+        let index = r#"
+            <a href="msys2-base-x86_64-20240507.tar.xz">a</a>
+            <a href="msys2-base-x86_64-20240727.tar.xz">b</a>
+            <a href="msys2-base-x86_64-20260611.tar.xz">c</a>
+            <a href="msys2-base-x86_64-20251213.tar.xz">d</a>
+        "#;
+        assert_eq!(
+            newest_scrape_match(&regex, index).as_deref(),
+            Some("msys2-base-x86_64-20260611.tar.xz")
+        );
+    }
+
+    /// Why the version group is compared numerically rather than as a string:
+    /// `"1.9.0" > "1.10.0"` lexically, and that is the wrong answer.
+    #[test]
+    fn the_version_group_is_compared_numerically() {
+        let regex = crate::regex_shim::compile_ci(r#"href="(tool-(\d+\.\d+\.\d+)\.zip)""#).unwrap();
+        let index = r#"<a href="tool-1.9.0.zip">x</a><a href="tool-1.10.0.zip">y</a>"#;
+        assert_eq!(
+            newest_scrape_match(&regex, index).as_deref(),
+            Some("tool-1.10.0.zip")
+        );
+    }
+
+    /// No second group means nothing to parse, so file names are compared as
+    /// strings. Right for a zero-padded date, and the documented limit.
+    #[test]
+    fn without_a_version_group_the_file_names_are_compared() {
+        let regex = crate::regex_shim::compile_ci(r#"href="(base-\d{8}\.tar)""#).unwrap();
+        let index = r#"<a href="base-20240507.tar">a</a><a href="base-20260611.tar">b</a>"#;
+        assert_eq!(
+            newest_scrape_match(&regex, index).as_deref(),
+            Some("base-20260611.tar")
+        );
+    }
+
+    #[test]
+    fn a_scrape_with_no_match_resolves_to_nothing() {
+        let regex = crate::regex_shim::compile_ci(r#"href="(nothing-\d+\.zip)""#).unwrap();
+        assert_eq!(
+            newest_scrape_match(&regex, "<a href=\"other.zip\">x</a>"),
+            None
+        );
 
         assert_eq!(version_from_file_name("7z2408-x64.msi"), "7"); // "7" in "7z"
         assert_eq!(

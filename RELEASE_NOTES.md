@@ -44,10 +44,10 @@ be piped into `Invoke-Expression` / `eval`.
 
 ### Fixed after the first Windows validation pass
 
-Eleven bugs surfaced from working `docs/VALIDATION.md` against this
-release on real Windows. Nine are fixed below; the rest are filed. None
-were reachable from CI, and the two worst were silent — correct-looking
-output, exit code 0, real damage.
+Eleven bugs surfaced from working `docs/VALIDATION.md` against this release on
+real Windows. Ten are fixed below; one is filed (#41). None were reachable from
+CI, and the two worst were silent — correct-looking output, exit code 0, real
+damage.
 
 - **Fixed:** on a tree that is not initialized, `naner --export-env` printed the
   first-run notice to **stdout** and exited **0**. That stdout is documented for
@@ -128,6 +128,23 @@ output, exit code 0, real damage.
   PowerShell's name. Integrity checking cannot catch that; nothing is corrupt.
   All six now carry the key `vendors.json` uses, with tests asserting they
   exist, are unique, and match the manifest (#53).
+- **Fixed:** `naner install MSYS2` installed the oldest base MSYS2 publishes.
+  The scrape resolver took the leftmost regex match, and a vendor's directory
+  index is sorted ascending, so "first match" meant "first ever published" --
+  `20240507` out of ten available, over two years stale, reported as
+  "Fetching latest MSYS2". It now compares matches and takes the newest, using
+  the pattern's version capture group numerically where there is one so that
+  `1.10` sorts after `1.9`. The existing test could not catch this: its stub
+  page held a single archive, so first and newest were the same document (#47).
+- **Fixed:** `update-vendors` reinstalled vendors that `vendors.json` marks
+  `"enabled": false` -- Rusty Term and Rush, both experimental, onto every tree
+  on every run. It read a hardcoded set and never consulted the manifest, so
+  the flag was honoured by `install` and ignored by the other command that
+  installs things: switching a vendor off lasted until the next update. The
+  definitions still come from the built-in set, which carries sources and
+  fallbacks a user's manifest may be older than, but the manifest's `enabled`
+  now filters it, and skipped vendors are named rather than silently dropped.
+  A manifest that cannot be read disables nothing (#48).
 - **Provenance:** every one of these came from working the checklist by hand on
   real Windows, and none of them is a v0.6.0 regression — most were ported
   verbatim from the C# and had behaved this way throughout. What changed is that
@@ -166,12 +183,15 @@ output, exit code 0, real damage.
   to compare against. `docs/VALIDATION.md` has been rewritten against what this
   pass actually found — the previous revision told you to skip checksum
   verification, which stopped being true in this release.
-- **Four bugs found during that pass are filed, not fixed.** The launcher does
-  not verify the shell it hands to the terminal (#41); `install MSYS2` takes the
-  first match on a directory index sorted oldest-first, so it fetches a stale
-  base (#47); `update-vendors` installs vendors that `vendors.json` disables
-  (#48); and Naner's Windows Terminal profiles are now all-or-nothing rather
-  than merged into a user's settings (#52).
+- **One bug found during that pass is filed, not fixed.** The launcher does not
+  verify the shell it hands to the terminal, so a missing vendor surfaces as an
+  NT status code from Windows Terminal rather than "PowerShell is not installed
+  — run `naner install powershell`" (#41).
+- **Windows Terminal profiles are all-or-nothing.** Fixing the settings
+  overwrite means naner now writes the whole file or none of it, so template
+  changes never reach an existing install and there is no `--reset-settings` to
+  ask for them. Merging Naner's profiles into a user's file is the growth path
+  (#52).
 - **A `naner.lock` written before the key fix keeps its malformed entry.** #53
   stops new nameless entries; it does not clean up an existing one, and
   `lock --refresh` takes a vendor name the entry does not have. Delete the file
