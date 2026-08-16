@@ -9,10 +9,45 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/releases/tag/v0.6.0).
+Nothing merged since v0.6.0.
 
-### Keep `--export-env` output machine-readable; drop non-ASCII from the console
-**2026-08-16**
+---
+
+## v0.6.0 — 2026-08-16
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...v0.6.0).
+
+The output of a full repository audit. v0.5.0 completed the migration and shipped
+a launcher that worked; this release is about the difference between working and
+being trustworthy. Three themes:
+
+**Things that reported success without doing anything.** Five commands
+(`profile import`, `setup-shell`, `pack`, `self-update`, `checksum`) printed a
+success message and acted on nothing. Vendor install reported success when it
+could not place the tree. `enabled` in `vendors.json` was parsed and ignored.
+`PreLaunch`'s exit code was discarded, so a hook that failed still launched the
+terminal. Each of these is worse than an outright error, because the user has
+no reason to look.
+
+**Nothing was verified.** Downloaded vendor artifacts and self-update binaries
+were trusted on the strength of TLS transport alone. Downloads now check against
+the digest the distributor publishes where one exists, `naner.lock` pins version,
+URL and SHA-256 for the vendors that publish none, and `naner-init` verifies
+release assets against a `SHA256SUMS` manifest and fails closed without it.
+
+**Two reachable injection paths.** Terminal arguments were interpolated
+unescaped into a command line handed to `raw_arg`, reachable through
+`naner -d '<value>'` — so any wrapper passing a caller-supplied directory was
+exposed, not just someone editing their own config. Separately, environment
+variable *names* went unescaped into `--export-env` output that is designed to
+be piped into `Invoke-Expression` / `eval`.
+
+### Fixed after the first Windows validation pass
+
+Eleven bugs surfaced from working `docs/VALIDATION.md` against this
+release on real Windows. Nine are fixed below; the rest are filed. None
+were reachable from CI, and the two worst were silent — correct-looking
+output, exit code 0, real damage.
 
 - **Fixed:** on a tree that is not initialized, `naner --export-env` printed the
   first-run notice to **stdout** and exited **0**. That stdout is documented for
@@ -93,42 +128,12 @@ Merged against `main` since [v0.6.0](https://github.com/baileyrd/rusty_naner/rel
   PowerShell's name. Integrity checking cannot catch that; nothing is corrupt.
   All six now carry the key `vendors.json` uses, with tests asserting they
   exist, are unique, and match the manifest (#53).
-- **Provenance:** all found by working `docs/VALIDATION.md` Step 1 mode 3
-  against v0.6.0 on Windows — the step that exists to catch exactly this, and
-  which had never been run from outside an initialized tree. Neither is a v0.6.0
-  regression; `handle_first_run` was ported verbatim from the C# and has behaved
-  this way throughout.
-
----
-
-## v0.6.0 — 2026-08-16
-
-[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.5.0...v0.6.0).
-
-The output of a full repository audit. v0.5.0 completed the migration and shipped
-a launcher that worked; this release is about the difference between working and
-being trustworthy. Three themes:
-
-**Things that reported success without doing anything.** Five commands
-(`profile import`, `setup-shell`, `pack`, `self-update`, `checksum`) printed a
-success message and acted on nothing. Vendor install reported success when it
-could not place the tree. `enabled` in `vendors.json` was parsed and ignored.
-`PreLaunch`'s exit code was discarded, so a hook that failed still launched the
-terminal. Each of these is worse than an outright error, because the user has
-no reason to look.
-
-**Nothing was verified.** Downloaded vendor artifacts and self-update binaries
-were trusted on the strength of TLS transport alone. Downloads now check against
-the digest the distributor publishes where one exists, `naner.lock` pins version,
-URL and SHA-256 for the vendors that publish none, and `naner-init` verifies
-release assets against a `SHA256SUMS` manifest and fails closed without it.
-
-**Two reachable injection paths.** Terminal arguments were interpolated
-unescaped into a command line handed to `raw_arg`, reachable through
-`naner -d '<value>'` — so any wrapper passing a caller-supplied directory was
-exposed, not just someone editing their own config. Separately, environment
-variable *names* went unescaped into `--export-env` output that is designed to
-be piped into `Invoke-Expression` / `eval`.
+- **Provenance:** every one of these came from working the checklist by hand on
+  real Windows, and none of them is a v0.6.0 regression — most were ported
+  verbatim from the C# and had behaved this way throughout. What changed is that
+  someone ran the steps. Several of the affected paths had checklist entries
+  that had never been executed, and one had a passing unit test asserting the
+  wrong property.
 
 ### Breaking changes
 
@@ -153,13 +158,24 @@ be piped into `Invoke-Expression` / `eval`.
 
 ### Known limitations
 
-- **The Windows validation checklist has not been re-run for this release.**
-  `docs/VALIDATION.md` was signed off for v0.5.0. This release changes real
-  runtime behaviour on paths CI cannot reach — the staged-tree swap, the
-  argument-escaping change on the spawned command line, the hook gate, and four
-  commands that now write files they previously did not. Linux and Windows CI
-  are green and the unit tests cover the logic, but no one has watched this
-  build launch a terminal.
+- **The Windows validation checklist is partly done.** Console modes, the
+  config-writing commands and the vendor pipeline were worked through on real
+  Windows and are what produced the nine fixes above. Two steps were not:
+  **drop-in daily driving**, which is the one that catches what a checklist
+  cannot anticipate, and the **golden parity harness**, which needs a C# naner
+  to compare against. `docs/VALIDATION.md` has been rewritten against what this
+  pass actually found — the previous revision told you to skip checksum
+  verification, which stopped being true in this release.
+- **Four bugs found during that pass are filed, not fixed.** The launcher does
+  not verify the shell it hands to the terminal (#41); `install MSYS2` takes the
+  first match on a directory index sorted oldest-first, so it fetches a stale
+  base (#47); `update-vendors` installs vendors that `vendors.json` disables
+  (#48); and Naner's Windows Terminal profiles are now all-or-nothing rather
+  than merged into a user's settings (#52).
+- **A `naner.lock` written before the key fix keeps its malformed entry.** #53
+  stops new nameless entries; it does not clean up an existing one, and
+  `lock --refresh` takes a vendor name the entry does not have. Delete the file
+  to reset.
 - `naner schema vendors` is still hand-checked against `VendorJsonEntry`, which
   is private to `naner-core`, so it has no round-trip drift test the way
   `schema config` does.
