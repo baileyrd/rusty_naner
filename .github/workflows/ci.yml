@@ -18,9 +18,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      # No toolchain action: rust-toolchain.toml is the single source of the
+      # version, and rustup installs it (with its components) on the first
+      # cargo invocation. Installing `stable` here as well would pull a second
+      # toolchain that nothing then uses.
+      - name: Show toolchain
+        run: rustup show active-toolchain && cargo --version
       # Without this every run recompiles the whole dependency tree from
       # scratch on both runners. The Windows leg feels it worst: it is the only
       # one that does a release build, and the release profile sets lto = true

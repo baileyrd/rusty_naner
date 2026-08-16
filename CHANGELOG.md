@@ -6,6 +6,7 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 
 ## [Unreleased]
 ### Added
+- `rust-toolchain.toml` pinning the compiler version, and `.editorconfig`.
 - Standard governance file set: `CONTRIBUTING`, `CODE_OF_CONDUCT`, `SECURITY`,
   `CHANGELOG`, `RELEASE_NOTES`, `ARCHITECTURE`, ADR seed, PR/issue templates.
 - `.gitattributes` forcing `eol=lf`, with CRLF retained for `.bat`/`.cmd`/`.ps1`.

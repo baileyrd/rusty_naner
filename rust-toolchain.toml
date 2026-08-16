@@ -1,0 +1,11 @@
+# Pin the toolchain so every machine and both CI runners compile with the same
+# compiler. Left floating, `dtolnay/rust-toolchain@stable` silently moves under
+# the repo: `edition = "2024"` and the let-chains used throughout naner-core
+# need a recent compiler, and a future stable that changes a lint would turn
+# `clippy -D warnings` red on a commit that touched nothing.
+#
+# Raising this is a deliberate act. Bump it, run the gates, and land it as its
+# own change rather than discovering the move inside an unrelated PR.
+[toolchain]
+channel = "1.94.1"
+components = ["rustfmt", "clippy"]
