@@ -273,7 +273,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
             let current = read_version(&target_dir);
             let suffix = current
                 .as_deref()
-                .map(|v| format!(" (v{v})"))
+                .map(|v| format!(" ({})", with_v_prefix(v)))
                 .unwrap_or_default();
 
             if is_wt {
@@ -959,6 +959,16 @@ fn glob_matches(name: &str, pattern: &str) -> bool {
         p += 1;
     }
     p == pat.len()
+}
+
+/// Exactly one `v`, however the vendor spelled its version.
+///
+/// Windows Terminal's recorded version is already `v1.24.11911.0`, so
+/// unconditionally prefixing produced `vv1.24.11911.0`. Deliberately not
+/// `version::normalize`, which also strips a `-prerelease` suffix -- correct
+/// for comparison, silently lossy for display.
+fn with_v_prefix(version: &str) -> String {
+    format!("v{}", version.trim_start_matches(['v', 'V']))
 }
 
 /// `ExtractVersionFromFileName`: first `(\d+\.?\d*\.?\d*\.?\d*)` match, else
@@ -2250,5 +2260,16 @@ mod tests {
             "7.4.6"
         );
         assert_eq!(version_from_file_name("no-digits.zip"), "latest");
+    }
+
+    /// Windows Terminal records its version with the `v` already on it, so the
+    /// update line read `Updating Windows Terminal (vv1.24.11911.0)...`.
+    #[test]
+    fn a_version_gets_exactly_one_v_however_it_was_recorded() {
+        assert_eq!(with_v_prefix("v1.24.11911.0"), "v1.24.11911.0");
+        assert_eq!(with_v_prefix("26.02"), "v26.02");
+        assert_eq!(with_v_prefix("V7.6.5"), "v7.6.5");
+        // A prerelease suffix survives: this is display, not comparison.
+        assert_eq!(with_v_prefix("0.5.0-alpha.0"), "v0.5.0-alpha.0");
     }
 }

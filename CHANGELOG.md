@@ -20,6 +20,8 @@ Reasoning and known limitations live in [RELEASE_NOTES.md](./RELEASE_NOTES.md).
   check that a pin by definition does not perform.
 - "Restart your terminal to use the newly installed tools." is no longer printed
   when every install failed and nothing was placed.
+- Vendor update lines no longer print a doubled `v` (`vv1.24.11911.0`) when the
+  recorded version already carries the prefix.
 
 ## [0.6.0] - 2026-08-16
 ### Added
