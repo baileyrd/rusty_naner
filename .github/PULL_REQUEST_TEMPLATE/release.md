@@ -20,7 +20,7 @@ enforces this, but confirm it here before tagging.
 ## Release assets
 
 The workflow publishes `naner.exe`, `naner-init.exe`, `naner-bundle.zip` and
-`SHA256SUMS` to `baileyrd/naner`. `naner-init` **fails closed** without the
+`SHA256SUMS` to this repo. `naner-init` **fails closed** without the
 manifest, so a release missing `SHA256SUMS` is uninstallable, not merely unverified.
 
 - [ ] Asset names unchanged from the previous release

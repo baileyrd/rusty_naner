@@ -533,6 +533,19 @@ mod tests {
     use super::*;
     use naner_core::config::load_json;
 
+    /// `PATH` is process-global, but `cargo test` runs tests on multiple
+    /// threads of the same process by default. Two tests below mutate
+    /// `PATH` and restore it afterward, which is safe in isolation but
+    /// races if both run concurrently: one test's restore can land inside
+    /// the other's "PATH set to X, about to assert on X" window, handing
+    /// it something else entirely -- observed on a real Windows CI run as
+    /// `resolve_shell_falls_back_to_path_like_the_terminal_does` seeing the
+    /// real system `bash.exe` (Git for Windows ships one on `windows-latest`
+    /// runners) exactly when its own scoped `PATH` was empty. Every test
+    /// that mutates `PATH` must hold this for its full set/act/restore
+    /// sequence.
+    static PATH_MUTATION_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     const CONFIG: &str = r#"{
         "DefaultProfile": "Unified",
         "VendorPaths": {
@@ -674,9 +687,10 @@ mod tests {
         cfg.vendor_paths.remove("GitBash");
         let launcher = TerminalLauncher::new(Path::new("C:\\naner"), &cfg, false);
 
+        let _guard = PATH_MUTATION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let saved_path = std::env::var("PATH").ok();
-        // SAFETY: test-local mutation, restored below; no other test in
-        // this binary reads PATH concurrently.
+        // SAFETY: test-local mutation, restored below; PATH_MUTATION_LOCK
+        // serializes this against every other test that touches PATH.
         unsafe { std::env::set_var("PATH", path_dir.path()) };
         let found = launcher.resolve_shell(cfg.profiles.get("Bash").unwrap());
         let missing = {
@@ -690,6 +704,7 @@ mod tests {
             Some(p) => unsafe { std::env::set_var("PATH", p) },
             None => unsafe { std::env::remove_var("PATH") },
         }
+        drop(_guard);
 
         assert!(found.is_ok());
         assert_eq!(
@@ -864,9 +879,10 @@ mod tests {
         );
         let launcher = TerminalLauncher::new(Path::new("C:\\naner"), &cfg, false);
 
+        let _guard = PATH_MUTATION_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let saved_path = std::env::var("PATH").ok();
-        // SAFETY: test-local mutation, restored below; no other test in this
-        // binary reads PATH.
+        // SAFETY: test-local mutation, restored below; PATH_MUTATION_LOCK
+        // serializes this against every other test that touches PATH.
         unsafe { std::env::set_var("PATH", path_dir.path()) };
         let found = launcher.rusty_term_path();
         let vendor_first = {
@@ -882,6 +898,7 @@ mod tests {
             Some(p) => unsafe { std::env::set_var("PATH", p) },
             None => unsafe { std::env::remove_var("PATH") },
         }
+        drop(_guard);
         assert_eq!(found, Some(path_exe));
         assert_eq!(vendor_first, Some(vendor_exe));
     }

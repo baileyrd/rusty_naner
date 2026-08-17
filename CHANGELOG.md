@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.6.5.
+
+## [0.6.5] - 2026-08-17
 ### Added
 - Eight new optional vendor definitions in `config/vendors.json`: HiFile,
   OneCommander, Podman, ImageGlass, Inkscape, Obsidian, Zed and Zen. Like
@@ -6,7 +10,7 @@
   when explicitly requested.
 
 ### Changed
-- **Breaking for pre-v0.6.4 installs.** `.github/workflows/release.yml` now
+- **Breaking for pre-v0.6.5 installs.** `.github/workflows/release.yml` now
   publishes tagged releases to this repo (`baileyrd/rusty_naner`) instead of
   cross-publishing to the pre-rewrite `baileyrd/naner` repo, and
   `constants::github::REPO` now points `naner-init`'s update check at
@@ -14,6 +18,16 @@
   `baileyrd/naner`, which no longer receives new tags, so they will not see
   this release or any later one — those installs need a fresh
   `naner-init.exe` from `rusty_naner` to resume getting updates.
+
+### Fixed
+- Two `launcher` tests (`resolve_shell_falls_back_to_path_like_the_terminal_does`,
+  `rusty_term_discovery_prefers_vendor_path_then_path_env`) each mutated the
+  process-global `PATH` env var without synchronizing against each other,
+  racing under `cargo test`'s default multi-threaded runner. Caught on a
+  real Windows CI run: the race let the real system `bash.exe` (Git for
+  Windows ships one on `windows-latest` runners) leak into a window where
+  the test expected `PATH` to be empty. Both now hold a shared test-only
+  mutex for their full set/act/restore sequence.
 
 ## [0.6.4] - 2026-08-17
 ### Added

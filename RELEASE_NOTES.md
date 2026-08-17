@@ -9,6 +9,14 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.6.5.
+
+---
+
+## v0.6.5 — 2026-08-17
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.6.4...v0.6.5).
+
 Added eight new optional vendors to `config/vendors.json`: the file managers
 HiFile and OneCommander, the container engine Podman, the image viewer
 ImageGlass, the vector editor Inkscape, the note-taking app Obsidian, the
@@ -27,6 +35,17 @@ points here too. The tradeoff is explicit and was asked for: any install
 from before this change stops seeing new releases, since `baileyrd/naner`
 no longer receives new tags. Bringing such an install forward requires
 manually fetching a current `naner-init.exe` from `rusty_naner`.
+
+This is also the first release actually being used to test the new
+publish target end-to-end (real exe assets attached to a real `rusty_naner`
+tag), so treat it as a workflow shakedown release rather than a
+feature-complete milestone. That test caught a real bug before it shipped:
+CI's `windows-latest` job failed on the first attempt at this PR, tracing
+back to two `launcher` tests that mutate the process-global `PATH` env var
+without synchronizing against each other. Under `cargo test`'s default
+multi-threaded runner they raced, and the real system `bash.exe` (Git for
+Windows ships one on `windows-latest`) leaked into a window one test
+expected `PATH` to be empty. Both now hold a shared test-only mutex.
 
 ---
 
