@@ -9,7 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.6.4.
+Added eight new optional vendors to `config/vendors.json`: the file managers
+HiFile and OneCommander, the container engine Podman, the image viewer
+ImageGlass, the vector editor Inkscape, the note-taking app Obsidian, the
+Zed code editor and the Zen browser. All ship disabled by default (`enabled:
+false`), same as every other optional vendor — `naner install <Name>` turns
+one on explicitly.
 
 ---
 
