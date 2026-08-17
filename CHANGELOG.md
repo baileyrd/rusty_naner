@@ -1,6 +1,17 @@
 ## [Unreleased]
-
-Nothing yet.
+### Fixed
+- The Windows Terminal profiles `naner install WindowsTerminal` writes
+  (`Naner (Unified)`, `Naner PowerShell`, `Naner Bash`, `Naner CMD`) no longer
+  hardcode a dev machine's path. The shipped template had baked in
+  `C:\tools\cmd_line\naner` since `v0.5.0-alpha.0` instead of the
+  `%NANER_ROOT%` placeholder `create_settings` actually substitutes, so on
+  every other install `defaultProfile` (pinned to "Naner (Unified)") failed
+  to find `naner.exe` the moment Windows Terminal was opened directly rather
+  than through `naner.exe`/`naner.bat` (#58).
+- `profile.ps1`'s custom `prompt` no longer overwrites the Windows Terminal
+  tab title on every command. It was unconditionally resetting it to a
+  generic `pwsh in <folder>`, clobbering the descriptive `--title` naner sets
+  at launch (#59).
 
 ## [0.6.0] - 2026-08-16
 ### Added
