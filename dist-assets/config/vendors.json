@@ -296,6 +296,186 @@
         }
       },
       "postInstallFunction": "DotNetSDK.PostInstall"
+    },
+    "HiFile": {
+      "name": "HiFile",
+      "description": "Free, modern cross-platform file manager for Windows, macOS and Linux",
+      "extractDir": "hifile",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "static",
+        "url": "https://www.hifile.app/files/HiFile-0.9.16.0.exe",
+        "version": "0.9.16.0",
+        "fileName": "HiFile-0.9.16.0.exe",
+        "size": "~17"
+      },
+      "installType": "installer",
+      "installerArgs": ["/VERYSILENT", "/NORESTART"],
+      "postInstallFunction": "HiFile.PostInstall"
+    },
+    "OneCommander": {
+      "name": "OneCommander",
+      "description": "Modern dual-pane file manager for Windows productivity",
+      "extractDir": "onecommander",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "static",
+        "url": "https://www.onecommander.com/OneCommanderSetup3.108.0.0.msi",
+        "version": "3.108.0.0",
+        "fileName": "OneCommanderSetup3.108.0.0.msi",
+        "size": "~66"
+      },
+      "postInstallFunction": "OneCommander.PostInstall"
+    },
+    "Podman": {
+      "name": "Podman",
+      "description": "Daemonless engine for developing, managing and running OCI containers",
+      "extractDir": "podman",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "containers/podman",
+        "assetPattern": "podman-installer-windows-amd64.msi",
+        "fallback": {
+          "version": "v6.1.0",
+          "url": "https://github.com/containers/podman/releases/download/v6.1.0/podman-installer-windows-amd64.msi",
+          "fileName": "podman-installer-windows-amd64.msi",
+          "size": "~27"
+        }
+      },
+      "checksum": {
+        "algorithm": "SHA256",
+        "value": "1958aac22abb3a9cf7b52626c71ba1a26015c323f0b5fa74671e303b22b043d3"
+      },
+      "postInstallFunction": "Podman.PostInstall"
+    },
+    "ImageGlass": {
+      "name": "ImageGlass",
+      "description": "Fast, lightweight and versatile image viewer",
+      "extractDir": "imageglass",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "d2phap/ImageGlass",
+        "assetPattern": "ImageGlass_*_x64.msi",
+        "fallback": {
+          "version": "9.6.1.807",
+          "url": "https://github.com/d2phap/ImageGlass/releases/download/9.6.1.807/ImageGlass_9.6.1.807_x64.msi",
+          "fileName": "ImageGlass_9.6.1.807_x64.msi",
+          "size": "~136"
+        }
+      },
+      "checksum": {
+        "algorithm": "SHA256",
+        "value": "1f08209adb9456860ac2a71a74395456ccdf1bd9fc640f43d44b3b34788ddc0a"
+      },
+      "postInstallFunction": "ImageGlass.PostInstall"
+    },
+    "Inkscape": {
+      "name": "Inkscape",
+      "description": "Professional vector graphics editor",
+      "extractDir": "inkscape",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "static",
+        "url": "https://media.inkscape.org/dl/resources/file/inkscape-1.4.4_2026-05-05_dcaf3e7-x64.signed.msi",
+        "version": "1.4.4",
+        "fileName": "inkscape-1.4.4_2026-05-05_dcaf3e7-x64.signed.msi",
+        "size": "~132"
+      },
+      "checksum": {
+        "algorithm": "SHA256",
+        "value": "25c67a2e4b8d83deade457b1291801921d3cf78c05bc0232521d52ab9a8b37ef"
+      },
+      "postInstallFunction": "Inkscape.PostInstall"
+    },
+    "Obsidian": {
+      "name": "Obsidian",
+      "description": "Privacy-first knowledge base and note-taking app built on local Markdown files",
+      "extractDir": "obsidian",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "obsidianmd/obsidian-releases",
+        "assetPattern": "Obsidian-*.exe",
+        "fallback": {
+          "version": "v1.13.7",
+          "url": "https://github.com/obsidianmd/obsidian-releases/releases/download/v1.13.7/Obsidian-1.13.7.exe",
+          "fileName": "Obsidian-1.13.7.exe",
+          "size": "~316"
+        }
+      },
+      "checksum": {
+        "algorithm": "SHA256",
+        "value": "f233dc24896b3f2d5f9e4b01111181a561d0760b2105f0a474024c5f3143a9bc"
+      },
+      "installType": "installer",
+      "installerArgs": ["/S"],
+      "postInstallFunction": "Obsidian.PostInstall"
+    },
+    "Zed": {
+      "name": "Zed",
+      "description": "High-performance, multiplayer code editor from the creators of Atom and Tree-sitter",
+      "extractDir": "zed",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "zed-industries/zed",
+        "assetPattern": "Zed-x86_64.exe",
+        "fallback": {
+          "version": "v1.15.0",
+          "url": "https://github.com/zed-industries/zed/releases/download/v1.15.0/Zed-x86_64.exe",
+          "fileName": "Zed-x86_64.exe",
+          "size": "~88"
+        }
+      },
+      "checksum": {
+        "algorithm": "SHA256",
+        "value": "cfb4a1d9dd2e7959c4ebe29bb7436487a8766c4c3e086111fde5bb6fcf19766c"
+      },
+      "installType": "installer",
+      "installerArgs": ["/VERYSILENT", "/NORESTART"],
+      "postInstallFunction": "Zed.PostInstall"
+    },
+    "Zen": {
+      "name": "Zen Browser",
+      "description": "Privacy-focused, Firefox-based browser for a calmer, more productive internet",
+      "extractDir": "zen",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "zen-browser/desktop",
+        "assetPattern": "zen.installer.exe",
+        "fallback": {
+          "version": "1.21.14b",
+          "url": "https://github.com/zen-browser/desktop/releases/download/1.21.14b/zen.installer.exe",
+          "fileName": "zen.installer.exe",
+          "size": "~92"
+        }
+      },
+      "checksum": {
+        "algorithm": "SHA256",
+        "value": "32de4c25a6fd278e3ff6b3541e9aed8e9340365a524f3f3d8a1bc38699750c0a"
+      },
+      "installType": "installer",
+      "installerArgs": ["/S", "/PreventRebootRequired=true"],
+      "postInstallFunction": "Zen.PostInstall"
     }
   },
   "metadata": {

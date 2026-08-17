@@ -1,6 +1,9 @@
 ## [Unreleased]
-
-Nothing merged since v0.6.4.
+### Added
+- Eight new optional vendor definitions in `config/vendors.json`: HiFile,
+  OneCommander, Podman, ImageGlass, Inkscape, Obsidian, Zed and Zen. Like
+  every other optional vendor they ship `enabled: false` and install only
+  when explicitly requested.
 
 ## [0.6.4] - 2026-08-17
 ### Added
