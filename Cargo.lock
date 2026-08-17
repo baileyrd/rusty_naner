@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "naner"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "clap",
  "clap_complete",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "naner-core"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "lzma-rs",
  "native-tls",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "naner-init"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "naner-core",
  "tempfile",

@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing yet.
+
+## [0.6.1] - 2026-08-16
 ### Fixed
 - The Windows Terminal profiles `naner install WindowsTerminal` writes
   (`Naner (Unified)`, `Naner PowerShell`, `Naner Bash`, `Naner CMD`) no longer
