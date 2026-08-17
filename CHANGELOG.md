@@ -5,6 +5,16 @@
   every other optional vendor they ship `enabled: false` and install only
   when explicitly requested.
 
+### Changed
+- **Breaking for pre-v0.6.4 installs.** `.github/workflows/release.yml` now
+  publishes tagged releases to this repo (`baileyrd/rusty_naner`) instead of
+  cross-publishing to the pre-rewrite `baileyrd/naner` repo, and
+  `constants::github::REPO` now points `naner-init`'s update check at
+  `rusty_naner` to match. Installs from before this change still check
+  `baileyrd/naner`, which no longer receives new tags, so they will not see
+  this release or any later one — those installs need a fresh
+  `naner-init.exe` from `rusty_naner` to resume getting updates.
+
 ## [0.6.4] - 2026-08-17
 ### Added
 - `update-vendors` now reconciles `config/naner.json` (or `.yaml`/`.yml`) and

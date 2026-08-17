@@ -4,14 +4,17 @@
 # check that replaces the C# build script's Directory.Build.props rewrite
 # (MIGRATION_ANALYSIS §4.2).
 #
-# Publishes to `baileyrd/naner` (identical tag format vX.Y.Z and asset names,
-# or deployed naner-init.exe installations strand) via the NANER_RELEASE_TOKEN
-# PAT secret. Full releases since the v0.5.0-alpha.0 cutover (validation
-# gates signed off 2026-07-09).
+# Publishes to this repo (baileyrd/rusty_naner) using the default
+# GITHUB_TOKEN. Through v0.6.4 this cross-published to the pre-rewrite
+# baileyrd/naner repo instead, so already-deployed naner-init.exe installs
+# from that era point their update check at a repo that no longer receives
+# new tags — those installs will not see this release or later ones. New
+# installs (and anyone who reinstalls from this repo) get an updater that
+# checks here, per `constants::github::REPO`.
 #
 # Bundle layout mirrors the C# first-run extraction contract; the static
-# files (bin/, config/, home/, icons/, naner.bat) are vendored from
-# baileyrd/naner into dist-assets/.
+# files (bin/, config/, home/, icons/, naner.bat) were originally vendored
+# from baileyrd/naner into dist-assets/.
 
 name: Release
 
@@ -83,11 +86,9 @@ jobs:
           [IO.File]::WriteAllText("$PWD/SHA256SUMS", ($lines -join "`n") + "`n", [Text.UTF8Encoding]::new($false))
           Get-Content SHA256SUMS
 
-      - name: Publish release to baileyrd/naner
+      - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          repository: baileyrd/naner
-          token: ${{ secrets.NANER_RELEASE_TOKEN }}
           files: |
             dist/naner.exe
             dist/naner-init.exe
@@ -115,7 +116,7 @@ jobs:
           New-Item -ItemType Directory -Force $verifyDir | Out-Null
 
           foreach ($a in $assets) {
-            $url = "https://github.com/baileyrd/naner/releases/download/$tag/$a"
+            $url = "https://github.com/${{ github.repository }}/releases/download/$tag/$a"
             $dest = Join-Path $verifyDir $a
             $lastError = $null
             $downloaded = $false

@@ -24,7 +24,7 @@ pub const CONFIG_FILE_NAMES: [&str; 3] = ["naner.json", "naner.yaml", "naner.yml
 
 pub mod github {
     pub const OWNER: &str = "baileyrd";
-    pub const REPO: &str = "naner";
+    pub const REPO: &str = "rusty_naner";
 
     pub fn user_agent() -> String {
         format!("Naner/{}", super::VERSION)
