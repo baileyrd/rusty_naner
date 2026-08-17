@@ -9,6 +9,14 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.6.1.
+
+---
+
+## v0.6.1 — 2026-08-16
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.6.0...v0.6.1).
+
 Both found by actually launching v0.6.0 on a real Windows box and watching
 the running application rather than trusting its exit codes and log lines —
 the same discipline that produced the eleven `docs/VALIDATION.md` bugs.
