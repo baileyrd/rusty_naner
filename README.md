@@ -3,6 +3,61 @@
 Rust migration of [naner](https://github.com/baileyrd/naner), the portable terminal
 environment launcher for Windows.
 
+## Installation
+
+`rusty_naner` ships as a single self-bootstrapping executable — there is no
+separate installer.
+
+1. Download `naner-init.exe` from the
+   [latest release](https://github.com/baileyrd/rusty_naner/releases/latest).
+2. Put it in an empty folder. That folder becomes `NANER_ROOT` — everything
+   naner owns (its own config, vendor tools, and binary) lives under it, so
+   the whole install is self-contained and can be removed by deleting the
+   folder.
+3. Run `naner-init.exe`. On first run it:
+   - downloads `naner-bundle.zip` matching its own version and verifies it
+     against the release's published `SHA256SUMS` manifest before touching
+     disk — it refuses to install on a mismatch or a missing manifest;
+   - extracts the bundle into `NANER_ROOT` in place;
+   - prompts to bootstrap the four required tools, installed in a fixed
+     order: 7-Zip, PowerShell, Windows Terminal, then Git for Windows;
+   - offers to launch naner immediately once that's done.
+
+No admin rights are required, and nothing is written outside `NANER_ROOT`.
+
+## Usage
+
+Once initialized, `naner` (or `naner-init`, which passes unrecognized
+arguments straight through to it) launches your default terminal profile:
+
+```sh
+naner                          # launch the default profile
+naner --profile PowerShell     # launch a specific profile (Unified, PowerShell, Bash, CMD)
+naner -p Bash -d C:\projects   # launch Bash starting in a given directory
+naner --diagnose               # check installation health
+naner --export-env             # print env vars for sourcing into an existing shell
+```
+
+Optional developer tools — Node.js, Go, Rust, Ruby, Bun, Anaconda, .NET SDK,
+Podman, and more (see
+[`dist-assets/config/vendors.json`](dist-assets/config/vendors.json) for the
+full, current list) — install on demand:
+
+```sh
+naner install --list           # see what's available and what's already enabled
+naner install nodejs ruby      # install specific tools
+naner install --all            # install everything
+naner update-vendors           # update installed tools to their latest versions
+```
+
+Keep naner itself current with `naner self-update` (equivalent to running
+`naner-init update` directly).
+
+`naner --help` lists every subcommand — `doctor`, `schema`, `completions`,
+`setup-shell`, `repair`, `profile`, `diff`, `bench`, `migrate`, `pack`,
+`lock`, and more — each with its own `--help` text; the full reference is
+also in [Core CLI Subcommands](#core-cli-subcommands) below.
+
 ## Status
 
 Migration complete: `v0.6.5` is the Latest release on this repo
