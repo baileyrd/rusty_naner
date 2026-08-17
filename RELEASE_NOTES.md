@@ -9,6 +9,14 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.6.2.
+
+---
+
+## v0.6.2 — 2026-08-17
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.6.1...v0.6.2).
+
 Closes out the rest of the open backlog: #41, #52, #57.
 
 **A missing vendor used to fail one process too late.** `naner` checked
