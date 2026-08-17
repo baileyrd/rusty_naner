@@ -139,9 +139,6 @@ Set-Alias -Name ff -Value Find-File -ErrorAction SilentlyContinue
 function prompt {
     $location = Get-Location
 
-    # Update window title
-    $host.UI.RawUI.WindowTitle = "pwsh in $($location.Path.Split('\')[-1])"
-
     # Show username and computer (optional)
     # Write-Host "$env:USERNAME" -NoNewline -ForegroundColor Yellow
     # Write-Host "@" -NoNewline -ForegroundColor DarkGray

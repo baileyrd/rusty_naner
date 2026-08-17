@@ -9,7 +9,29 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.6.0.
+Both found by actually launching v0.6.0 on a real Windows box and watching
+the running application rather than trusting its exit codes and log lines —
+the same discipline that produced the eleven `docs/VALIDATION.md` bugs.
+
+**The Windows Terminal profiles naner installs were never portable.**
+`naner install WindowsTerminal` writes four profiles into
+`settings/settings.json` (`Naner (Unified)`, `Naner PowerShell`, `Naner Bash`,
+`Naner CMD`), and `defaultProfile` points at the first. The template those
+profiles come from has hardcoded `C:\tools\cmd_line\naner` — a path from
+whichever machine generated it — since `v0.5.0-alpha.0`. `naner.exe` and
+`naner.bat` themselves were never affected; they build their own `wt.exe`
+command line at runtime from the real, correctly-resolved root. What was
+broken is everything else: opening the portable `wt.exe` directly, or a
+shortcut pinned to a specific `Naner *` profile, launched a shell that could
+never find `naner.exe`, on every install except the one that happened to
+share that exact path (#58).
+
+**The bundled PowerShell profile fought its own launcher over the tab
+title.** `naner.exe` sets a descriptive `--title` (`Naner (Unified)`,
+`Naner PowerShell`) when it spawns Windows Terminal. `profile.ps1`'s custom
+prompt then overwrote it on every single command with a generic
+`pwsh in <folder>`, so the title was only ever correct for the fraction of a
+second before the first prompt drew (#59).
 
 ---
 
