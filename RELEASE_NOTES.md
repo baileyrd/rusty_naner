@@ -9,6 +9,24 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+A user installed Obsidian via `naner install` and it reported success —
+but `vendor/obsidian/` held nothing but the version marker file. Root
+cause: naner's `.exe`-installer path (`archives.rs`) only builds a
+`/D=<target>`/`/S`-style silent-install-to-custom-directory command line
+automatically when a vendor sets *no* `installerArgs` at all; the moment a
+vendor supplies its own (as HiFile, Obsidian, Zed and Zen — all added in
+the same batch — did, to get the right silent-install flag for their own
+installer technology), that smart fallback is bypassed entirely and
+naner-core trusts those args verbatim. None of the four referenced
+`%TARGETDIR%`, so each ran its installer silently, successfully, and
+somewhere naner never looks — Program Files or AppData, depending on the
+app — while still recording it as installed. Fixed by adding the correct
+target-directory switch for each installer's actual technology (Inno
+Setup's `/DIR=`, NSIS's `/D=`, which per NSIS's own requirement must come
+last and unquoted) and adding a test that loads the real shipped
+`vendors.json` so this exact class of mistake fails CI next time instead
+of shipping quietly.
+
 A user installing the Claude Code CLI inside a naner environment hit its
 "not on PATH" setup warning for `home\.local\bin` — the directory
 `PYTHONUSERBASE` already designates for user-level tool installs (pip's
