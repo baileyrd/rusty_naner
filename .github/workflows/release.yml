@@ -93,3 +93,64 @@ jobs:
             dist/naner-init.exe
             dist/naner-bundle.zip
             dist/SHA256SUMS
+
+      # Validation-driven hardening: a real `v0.6.3` release once served
+      # `naner.exe`/`naner-bundle.zip` bytes that did not match the
+      # SHA256SUMS this same job had just generated from what it actually
+      # built (root cause never pinned down - a stale pre-existing release
+      # object, upload/propagation lag, or an artifact specific to how it
+      # was downloaded - but whatever it was, nothing in this workflow would
+      # have noticed). `naner-init` verifies every asset against this exact
+      # manifest and refuses to install on a mismatch, so a broken upload is
+      # not merely unverified, it is silently uninstallable for every new
+      # user until someone runs the validation checklist by hand. Re-fetch
+      # what was just published, from the same public URL a real install
+      # uses, and fail loudly here instead.
+      - name: Verify published assets match what was built
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $assets = 'naner.exe', 'naner-init.exe', 'naner-bundle.zip', 'SHA256SUMS'
+          $verifyDir = 'dist/verify'
+          New-Item -ItemType Directory -Force $verifyDir | Out-Null
+
+          foreach ($a in $assets) {
+            $url = "https://github.com/baileyrd/naner/releases/download/$tag/$a"
+            $dest = Join-Path $verifyDir $a
+            $lastError = $null
+            $downloaded = $false
+            # A release/asset can take a few seconds to become fetchable
+            # right after publishing (the same eventual-consistency lag
+            # `softprops/action-gh-release` itself retries around when
+            # discovering the release object by tag).
+            for ($attempt = 1; $attempt -le 5; $attempt++) {
+              try {
+                Invoke-WebRequest -Uri $url -OutFile $dest -MaximumRetryCount 0 -TimeoutSec 60
+                $downloaded = $true
+                break
+              } catch {
+                $lastError = $_
+                Start-Sleep -Seconds (5 * $attempt)
+              }
+            }
+            if (-not $downloaded) {
+              throw "Could not download $url back for verification: $lastError"
+            }
+          }
+
+          $expected = Get-Content (Join-Path $verifyDir 'SHA256SUMS') | Where-Object { $_ -match '\S' }
+          $mismatches = @()
+          foreach ($line in $expected) {
+            $parts = $line -split '\s\s+', 2
+            if ($parts.Count -ne 2) { throw "Malformed SHA256SUMS line: $line" }
+            $expectedHash, $name = $parts
+            $actualHash = (Get-FileHash (Join-Path $verifyDir $name) -Algorithm SHA256).Hash.ToLower()
+            if ($actualHash -ne $expectedHash) {
+              $mismatches += "$name`: expected $expectedHash, got $actualHash"
+            }
+          }
+          if ($mismatches.Count -gt 0) {
+            $mismatches | ForEach-Object { Write-Host "::error::$_" }
+            throw "Published release assets do not match what this job built and hashed - the release is live but broken. See errors above."
+          }
+          Write-Host "Verified $($expected.Count) published asset(s) match SHA256SUMS."

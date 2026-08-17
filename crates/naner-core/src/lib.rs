@@ -16,6 +16,7 @@ pub mod console;
 pub mod constants;
 pub mod digest;
 pub mod env_export;
+mod fs_atomic;
 pub mod github;
 pub mod http;
 pub mod lockfile;

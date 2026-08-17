@@ -29,7 +29,13 @@ pub fn set_quiet(quiet: bool) {
     QUIET.store(quiet, Ordering::Relaxed);
 }
 
-fn quiet() -> bool {
+/// Whether `[*]`/`[OK]`/info chatter is currently suppressed (`--quiet`, or
+/// auto-quiet when stdout isn't a terminal -- see `naner`'s
+/// `commands::vendors::strip_quiet`). Exposed so other modules whose output
+/// isn't routed through this logger (the HTTP download progress bar) can
+/// respect the same setting instead of spamming raw `\r` percentage updates
+/// into a redirected/piped stream that already dropped everything else.
+pub fn quiet() -> bool {
     QUIET.load(Ordering::Relaxed)
 }
 

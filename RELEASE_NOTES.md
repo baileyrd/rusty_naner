@@ -9,7 +9,33 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.6.3.
+Real-world validation of v0.6.3's vendor-set swap turned up seven more
+issues — none of them CI-reachable, all of them the same shape as the
+session that shipped v0.6.0: naner did one thing and reported another.
+
+The load-bearing one: dropping a new `naner.exe` into an existing install
+(the documented, supported upgrade path) never touched `config/naner.json`
+or `config/vendors.json`. `update-vendors` already merged new Windows
+Terminal profiles into an existing `settings.json`; it now does the same
+for the launcher's own config — a pre-#64 tree's `Bash` profile and
+`VendorPaths.GitBash` no longer point at MSYS2 forever, and new vendor
+definitions (Git for Windows, Anaconda, Bun) reach installs that predate
+them (#72).
+
+Also fixed: a piped/logged `naner install` printed raw progress-percentage
+noise with none of the status text that would explain it, because the
+download progress bar was never gated by the same auto-quiet setting
+everything else already was (#67). `naner doctor` always exited 0 no
+matter what it found, so it was useless as a CI health gate (#68).
+`naner install A B C` could report overall success with one of the
+requested names silently dropped for being unknown or disabled (#69). The
+missing-Bash install hint still pointed at `naner install msys2` after
+#64 swapped the default provider (#70), and `--export-env` still set
+`MSYSTEM`/`MSYS2_PATH_TYPE` unconditionally even though MSYS2 is disabled
+by default now (#71). The release workflow gained a step that re-downloads
+every asset it just published and re-verifies it against `SHA256SUMS`,
+so a broken upload fails the job instead of shipping live and
+undetected (#66).
 
 ---
 

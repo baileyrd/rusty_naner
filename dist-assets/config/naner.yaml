@@ -68,8 +68,6 @@ Environment:
     GEM_PATH: "%NANER_ROOT%\\home\\.gem"
     DOTNET_ROOT: "%NANER_ROOT%\\vendor\\dotnet-sdk"
     DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-    MSYSTEM: "MINGW64"
-    MSYS2_PATH_TYPE: "inherit"
 
 DefaultProfile: Unified
 

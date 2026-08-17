@@ -75,8 +75,72 @@ pub fn execute_update(args: &[String]) -> i32 {
     installer.update_all_vendors();
 
     logger::newline();
+    merge_config_defaults(&naner_root);
+
+    logger::newline();
     logger::success("Vendor updates completed!");
     0
+}
+
+/// Bring `config/naner.json` (or `.yaml`/`.yml`) and `config/vendors.json`
+/// up to date with what this binary ships (see `config::merge` and
+/// `vendors::config_merge`) -- the counterpart to `WindowsTerminalConfigurator`'s
+/// `settings.json` merge, which already runs whenever Windows Terminal
+/// itself gets installed or updated. This is the fix for a bare
+/// `naner.exe`-swap upgrade never otherwise touching either file (#72).
+fn merge_config_defaults(naner_root: &std::path::Path) {
+    use naner_core::config::{
+        NanerConfigMergeOutcome, find_configuration_file, merge_shipped_naner_defaults,
+    };
+    use naner_core::vendors::{VendorsMergeOutcome, merge_shipped_vendor_defaults};
+
+    if let Some(config_path) = find_configuration_file(naner_root) {
+        match merge_shipped_naner_defaults(&config_path) {
+            Ok(NanerConfigMergeOutcome::Merged { added, refreshed }) => {
+                if !added.is_empty() {
+                    logger::info(&format!(
+                        "Added {} new naner.json default(s): {}",
+                        added.len(),
+                        added.join(", ")
+                    ));
+                }
+                if !refreshed.is_empty() {
+                    logger::info(&format!(
+                        "Refreshed {} naner.json field(s) that still matched a prior shipped default: {}",
+                        refreshed.len(),
+                        refreshed.join(", ")
+                    ));
+                }
+            }
+            Ok(NanerConfigMergeOutcome::LeftUnparsed) => {
+                logger::warning("    config/naner.json could not be parsed; left unchanged");
+            }
+            Ok(NanerConfigMergeOutcome::UpToDate | NanerConfigMergeOutcome::NoConfig) => {}
+            Err(e) => {
+                logger::warning(&format!("    Could not update config/naner.json: {e}"));
+            }
+        }
+    }
+
+    let vendors_path = naner_root
+        .join(constants::directory_names::CONFIG)
+        .join(constants::VENDORS_CONFIG_FILE_NAME);
+    match merge_shipped_vendor_defaults(&vendors_path) {
+        Ok(VendorsMergeOutcome::Added(keys)) => {
+            logger::info(&format!(
+                "Added {} new vendor definition(s) to vendors.json: {}",
+                keys.len(),
+                keys.join(", ")
+            ));
+        }
+        Ok(VendorsMergeOutcome::LeftUnparsed) => {
+            logger::warning("    config/vendors.json could not be parsed; left unchanged");
+        }
+        Ok(VendorsMergeOutcome::UpToDate | VendorsMergeOutcome::NoConfig) => {}
+        Err(e) => {
+            logger::warning(&format!("    Could not update config/vendors.json: {e}"));
+        }
+    }
 }
 
 /// The built-in essential set, minus anything `vendors.json` switches off.
@@ -321,7 +385,7 @@ fn install_specific(
             logger::newline();
             logger::success("Nothing to install.");
         }
-        return 0;
+        return if disabled + not_found.len() > 0 { 1 } else { 0 };
     }
     if !already.is_empty() {
         logger::newline();
@@ -332,25 +396,32 @@ fn install_specific(
 
     let http = UreqHttp::new();
     let installer = UnifiedVendorInstaller::new(naner_root, all_vendors, &http);
-    let mut failed = 0;
+    let mut install_failed = 0;
     for vendor in &needs {
         if !install_with_dependencies(&installer, loader, vendor) {
-            failed += 1;
+            install_failed += 1;
         }
         logger::newline();
     }
     installer.cleanup_downloads();
 
+    // Names that were unknown or disabled never reached the install loop, so
+    // `install_failed` alone would under-report: `naner install Foo Bar` with
+    // `Bar` unknown and `Foo` installed successfully must not print
+    // "Installation completed successfully!" and exit 0 -- the user asked for
+    // two vendors and got one.
+    let total_failed = disabled + not_found.len() + install_failed;
+
     logger::newline();
-    if failed == 0 {
+    if total_failed == 0 {
         logger::success("Installation completed successfully!");
     } else {
-        logger::warning(&format!("Completed with {failed} failure(s)."));
+        logger::warning(&format!("Completed with {total_failed} failure(s)."));
     }
-    if restart_hint_applies(needs.len(), failed) {
+    if restart_hint_applies(needs.len(), install_failed) {
         logger::info("Restart your terminal to use the newly installed tools.");
     }
-    if failed > 0 { 1 } else { 0 }
+    if total_failed > 0 { 1 } else { 0 }
 }
 
 /// `InstallVendorWithDependencies`: dependencies first (by key), then the
@@ -442,6 +513,51 @@ mod tests {
     #[test]
     fn a_partial_install_still_needs_a_restart() {
         assert!(restart_hint_applies(3, 1), "two of three landed");
+    }
+
+    /// The bug: `naner install SevenZip DisabledVendor` with `SevenZip`
+    /// already installed took the "nothing to install" early return and
+    /// reported success, even though `DisabledVendor` was never honoured.
+    /// Two vendors were requested; only the exit code for the one that
+    /// mattered got checked.
+    #[test]
+    fn already_installed_plus_a_disabled_name_still_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("config")).unwrap();
+        std::fs::write(
+            dir.path().join("config/vendors.json"),
+            r#"{
+                "vendors": {
+                    "TestVendor": {
+                        "name": "Test Vendor",
+                        "description": "test",
+                        "extractDir": "testvendor",
+                        "enabled": true,
+                        "required": false
+                    },
+                    "TestDisabled": {
+                        "name": "Test Disabled",
+                        "description": "test",
+                        "extractDir": "testdisabled",
+                        "enabled": false,
+                        "required": false
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.path().join("vendor/testvendor")).unwrap();
+        std::fs::write(dir.path().join("vendor/testvendor/marker"), "x").unwrap();
+
+        let loader = VendorConfigurationLoader::new(dir.path());
+        let all_vendors = loader.load_vendors();
+        let code = super::install_specific(
+            dir.path(),
+            &loader,
+            all_vendors,
+            &["TestVendor".to_string(), "TestDisabled".to_string()],
+        );
+        assert_eq!(code, 1, "one of the two requested vendors was refused");
     }
 
     #[test]

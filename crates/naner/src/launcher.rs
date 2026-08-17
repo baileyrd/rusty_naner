@@ -378,7 +378,7 @@ impl<'a> TerminalLauncher<'a> {
         // actionable rather than a false alarm.
         let install_hint = match profile.shell.to_lowercase().as_str() {
             "powershell" => Some("naner install powershell"),
-            "bash" => Some("naner install msys2"),
+            "bash" => Some("naner install GitForWindows"),
             _ => None,
         };
         match install_hint {
@@ -694,7 +694,7 @@ mod tests {
         assert!(found.is_ok());
         assert_eq!(
             missing.unwrap_err(),
-            "Bash is not installed - run `naner install msys2`"
+            "Bash is not installed - run `naner install GitForWindows`"
         );
     }
 
