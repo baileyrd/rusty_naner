@@ -27,6 +27,8 @@ Environment:
     - "%NANER_ROOT%\\home\\go\\bin"
     - "%NANER_ROOT%\\home\\.cargo\\bin"
     - "%NANER_ROOT%\\home\\.gem\\bin"
+    - "%NANER_ROOT%\\home\\.local\\bin"
+    - "%NANER_ROOT%\\home\\.local\\Scripts"
     - "%NANER_ROOT%\\vendor\\go\\bin"
     - "%NANER_ROOT%\\vendor\\rust\\cargo\\bin"
     - "%NANER_ROOT%\\vendor\\rust\\rustc\\bin"

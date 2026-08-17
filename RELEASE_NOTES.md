@@ -9,6 +9,21 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+A user installing the Claude Code CLI inside a naner environment hit its
+"not on PATH" setup warning for `home\.local\bin` — the directory
+`PYTHONUSERBASE` already designates for user-level tool installs (pip's
+`--user` flag, and apparently Claude Code's own native installer, both
+land things there). Turned out naner's own `Environment.PathPrecedence`
+never included that directory, so anything installed there was invisible
+even inside a shell naner itself launched, not just to tools checking the
+real Windows PATH. Added `%NANER_ROOT%\home\.local\bin` and `\Scripts` to
+the shipped `naner.json`/`naner.yaml` so this class of tool is picked up
+automatically going forward. This doesn't touch the real Windows PATH —
+that's deliberate; naner stays fully portable and admin-rights-free — so
+a tool's installer will still warn if it also checks the persistent OS
+PATH, but it will now actually run without hunting for it manually inside
+any naner-launched terminal.
+
 The README explained the migration's phase history and listed every CLI
 subcommand, but never actually said how to install or start using the
 thing — someone landing on the repo had no path from "what is this" to
