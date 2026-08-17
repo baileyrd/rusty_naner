@@ -9,6 +9,17 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Anaconda (~1 GB — by far the biggest thing naner ever downloads) failed
+partway through with "response body closed before all bytes were read"
+at 60%, no retry, install just failed. `Http::download` had no retry at
+all: a single dropped connection — more likely the longer a download runs
+and the bigger the file — failed the whole install outright, and
+`static`-type vendors like Anaconda don't even have a fallback URL to
+fall through to the way `github`-type ones do. It now retries up to 3
+times with a short backoff before giving up, and a new local-server test
+reproduces a truncated-then-complete connection deterministically and
+offline, so this doesn't need a live 1 GB download to verify again.
+
 A user installed Obsidian via `naner install` and it reported success —
 but `vendor/obsidian/` held nothing but the version marker file. Root
 cause: naner's `.exe`-installer path (`archives.rs`) only builds a
