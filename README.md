@@ -5,7 +5,7 @@ environment launcher for Windows.
 
 ## Status
 
-Migration complete: `v0.6.1` is the Latest release on
+Migration complete: `v0.6.2` is the Latest release on
 [baileyrd/naner](https://github.com/baileyrd/naner), built from this repo and
 published through the Phase 5 release workflow. Phases 0–5 done:
 

@@ -6,7 +6,7 @@ members = ["crates/naner-core", "crates/naner", "crates/naner-init"]
 # The release workflow enforces tag == this version (MIGRATION_ANALYSIS §4.2):
 # deployed naner-init.exe installations look up the GitHub release whose tag
 # matches their embedded version, so the two must never drift.
-version = "0.6.1"
+version = "0.6.2"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/baileyrd/rusty_naner"

@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing yet.
+
+## [0.6.2] - 2026-08-17
 ### Added
 - `update-vendors`/`install WindowsTerminal` now reconciles Naner's own
   profiles into an existing `settings/settings.json` by GUID instead of
