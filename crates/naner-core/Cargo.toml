@@ -8,7 +8,12 @@ repository.workspace = true
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `preserve_order`: the WT settings merge (#52) reads a user's
+# settings.json into a Value and writes it back; without this the JSON
+# object type is a BTreeMap and every key -- not just the ones actually
+# touched -- comes back alphabetized instead of in the order the user left
+# them.
+serde_json = { version = "1", features = ["preserve_order"] }
 # serde_yaml is archived; the _ng fork is the maintained continuation
 # (MIGRATION_ANALYSIS §2.3). YAML is a fallback format behind JSON.
 serde_yaml_ng = "0.10"

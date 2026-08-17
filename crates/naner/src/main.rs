@@ -179,6 +179,7 @@ fn run_launcher(opts: &cli::LaunchOptions) -> i32 {
     }
 
     // 4–5. Pick the profile and launch.
+    let explicit = opts.profile.is_some();
     let profile_name = opts
         .profile
         .clone()
@@ -189,7 +190,7 @@ fn run_launcher(opts: &cli::LaunchOptions) -> i32 {
         logger::newline();
     }
     let terminal = launcher::TerminalLauncher::new(&naner_root, &cfg, opts.debug);
-    terminal.launch_profile(&profile_name, opts.directory.as_deref())
+    terminal.launch_profile(&profile_name, explicit, opts.directory.as_deref())
 }
 
 /// `PathResolver.SetupEnvironment`: NANER_ROOT, NANER_ENVIRONMENT, and (iff

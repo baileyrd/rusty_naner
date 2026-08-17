@@ -48,8 +48,21 @@ impl<'a> TerminalLauncher<'a> {
 
     /// `LaunchProfile`: resolve profile → find wt.exe → build args → set
     /// PATH → spawn without waiting.
-    pub fn launch_profile(&self, profile_name: &str, starting_directory: Option<&str>) -> i32 {
-        let profile = match self.config.get_profile(profile_name, true) {
+    ///
+    /// `explicit` distinguishes a user-supplied `-p <name>` from the
+    /// implicit default profile (#57: every call site used to pass
+    /// `use_default_on_not_found = true`, and since the configured default
+    /// always resolves, a mistyped `-p` silently launched the default
+    /// profile instead of failing — exit 0, no signal anything went wrong).
+    /// A mistyped explicit name now fails loudly; the implicit case keeps
+    /// today's fall-back-to-default behavior unchanged.
+    pub fn launch_profile(
+        &self,
+        profile_name: &str,
+        explicit: bool,
+        starting_directory: Option<&str>,
+    ) -> i32 {
+        let profile = match self.config.get_profile(profile_name, !explicit) {
             Ok(p) => p,
             Err(_) => {
                 logger::failure(&format!("Profile not found: {profile_name}"));
@@ -58,6 +71,7 @@ impl<'a> TerminalLauncher<'a> {
                     self.config
                         .profiles
                         .keys()
+                        .chain(self.config.custom_profiles.keys())
                         .map(String::as_str)
                         .collect::<Vec<_>>()
                         .join(", ")
@@ -92,6 +106,11 @@ impl<'a> TerminalLauncher<'a> {
                 path
             }
         };
+
+        if let Err(err) = self.resolve_shell(profile) {
+            logger::failure(&err);
+            return 1;
+        }
 
         let arguments = match terminal_kind {
             TerminalKind::WindowsTerminal => {
@@ -319,6 +338,54 @@ impl<'a> TerminalLauncher<'a> {
             _ => None,
         }
     }
+    /// Validate the shell a profile will run before it is handed to a
+    /// spawned terminal as an argument that was never checked (#41: naner
+    /// verified the terminal existed and then trusted whatever shell path
+    /// it built, so a missing vendor surfaced as an NT status code from a
+    /// different program one process later, instead of "run
+    /// `naner install powershell`").
+    ///
+    /// `Ok(())` covers both "the shell resolves" and "there is nothing to
+    /// resolve" -- an unrecognised `shell` type with no `CustomShell`
+    /// silently omits the `-- <shell>` section entirely, a separate,
+    /// deliberately preserved quirk
+    /// (`cmd_is_hardcoded_and_unknown_shell_omits_command`) this check does
+    /// not start erroring on.
+    fn resolve_shell(&self, profile: &ProfileConfig) -> Result<(), String> {
+        if let Some(custom) = &profile.custom_shell
+            && !custom.executable_path.is_empty()
+        {
+            let root = self.naner_root.to_string_lossy();
+            let shell_path = paths::expand_naner_path(&custom.executable_path, &root);
+            return if shell_is_reachable(&shell_path) {
+                Ok(())
+            } else {
+                Err(format!("Custom shell not found: {shell_path}"))
+            };
+        }
+
+        let Some(shell_path) = self.default_shell_path(&profile.shell) else {
+            return Ok(());
+        };
+
+        if shell_is_reachable(&shell_path) {
+            return Ok(());
+        }
+
+        // A user with the shell on PATH but not in VendorPaths already
+        // works via the bare-name fallback above; only a genuinely
+        // unreachable shell gets here, so the install hint is always
+        // actionable rather than a false alarm.
+        let install_hint = match profile.shell.to_lowercase().as_str() {
+            "powershell" => Some("naner install powershell"),
+            "bash" => Some("naner install msys2"),
+            _ => None,
+        };
+        match install_hint {
+            Some(hint) => Err(format!("{} is not installed - run `{hint}`", profile.shell)),
+            None => Err(format!("{shell_path} not found on PATH")),
+        }
+    }
 
     /// `SetupPathEnvironment`: rebuild the unified PATH and set it on the
     /// process so the spawned terminal inherits it.
@@ -431,6 +498,15 @@ fn find_executable_in_path(executable_name: &str) -> Option<PathBuf> {
     None
 }
 
+/// A shell path is reachable if it exists on disk as given, or resolves as
+/// a bare executable name via `PATH` -- the same two-step chain
+/// `windows_terminal_path` uses for the terminal itself, so a shell reachable
+/// through `PATH` but absent from `VendorPaths` keeps working exactly as it
+/// does today.
+fn shell_is_reachable(path: &str) -> bool {
+    Path::new(path).is_file() || find_executable_in_path(path).is_some()
+}
+
 /// Fire-and-forget spawn with the pre-built argument string (the C# code
 /// passes `ProcessStartInfo.Arguments` as one raw string, which only Windows
 /// can reproduce via `raw_arg`).
@@ -519,6 +595,107 @@ mod tests {
             "unknown shell adds no -- section: {weird}"
         );
         assert_eq!(weird, "--title \"W\" --startingDirectory \"C:\\work\"");
+    }
+
+    // ---- shell existence check (#41) ----
+
+    #[test]
+    fn resolve_shell_ok_for_a_real_vendor_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let pwsh = tmp.path().join("pwsh.exe");
+        std::fs::write(&pwsh, "x").unwrap();
+
+        let mut cfg = config();
+        cfg.vendor_paths
+            .insert("PowerShell".to_string(), pwsh.to_string_lossy().to_string());
+        // Custom shell would otherwise take over resolution -- drop it so
+        // the VendorPaths lookup is what's under test.
+        cfg.profiles.get_mut("Unified").unwrap().custom_shell = None;
+        let launcher = TerminalLauncher::new(Path::new("C:\\naner"), &cfg, false);
+        assert!(
+            launcher
+                .resolve_shell(cfg.profiles.get("Unified").unwrap())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn resolve_shell_fails_when_the_vendor_path_does_not_exist() {
+        let mut cfg = config();
+        cfg.profiles.get_mut("Unified").unwrap().custom_shell = None;
+        let launcher = TerminalLauncher::new(Path::new("C:\\naner"), &cfg, false);
+        let err = launcher
+            .resolve_shell(cfg.profiles.get("Unified").unwrap())
+            .unwrap_err();
+        assert_eq!(
+            err,
+            "PowerShell is not installed - run `naner install powershell`"
+        );
+    }
+
+    #[test]
+    fn resolve_shell_fails_with_a_named_custom_shell_path() {
+        let cfg = config();
+        // CONFIG's Unified profile has a CustomShell pointing at a path
+        // that does not exist on the machine running the test.
+        let launcher = TerminalLauncher::new(Path::new("C:\\naner"), &cfg, false);
+        let err = launcher
+            .resolve_shell(cfg.profiles.get("Unified").unwrap())
+            .unwrap_err();
+        assert_eq!(
+            err,
+            "Custom shell not found: C:\\naner\\vendor\\powershell\\pwsh.exe"
+        );
+    }
+
+    #[test]
+    fn resolve_shell_ignores_an_unrecognised_shell_type() {
+        let cfg = config();
+        let launcher = TerminalLauncher::new(Path::new("C:\\naner"), &cfg, false);
+        // "Weird" profile's Shell is "fish", which build_terminal_arguments
+        // already treats as nothing to append -- this must not start
+        // erroring on that same case.
+        assert!(
+            launcher
+                .resolve_shell(cfg.profiles.get("Weird").unwrap())
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn resolve_shell_falls_back_to_path_like_the_terminal_does() {
+        let path_dir = tempfile::tempdir().unwrap();
+        let bash_exe = path_dir.path().join("bash.exe");
+        std::fs::write(&bash_exe, "x").unwrap();
+
+        // No VendorPaths["GitBash"] entry at all -- the "works by accident"
+        // case the issue calls out must keep working.
+        let mut cfg = config();
+        cfg.vendor_paths.remove("GitBash");
+        let launcher = TerminalLauncher::new(Path::new("C:\\naner"), &cfg, false);
+
+        let saved_path = std::env::var("PATH").ok();
+        // SAFETY: test-local mutation, restored below; no other test in
+        // this binary reads PATH concurrently.
+        unsafe { std::env::set_var("PATH", path_dir.path()) };
+        let found = launcher.resolve_shell(cfg.profiles.get("Bash").unwrap());
+        let missing = {
+            // A bare name resolvable nowhere on PATH must fail with the
+            // install hint, not silently hand a broken bash.exe to WT.
+            let empty_dir = tempfile::tempdir().unwrap();
+            unsafe { std::env::set_var("PATH", empty_dir.path()) };
+            launcher.resolve_shell(cfg.profiles.get("Bash").unwrap())
+        };
+        match saved_path {
+            Some(p) => unsafe { std::env::set_var("PATH", p) },
+            None => unsafe { std::env::remove_var("PATH") },
+        }
+
+        assert!(found.is_ok());
+        assert_eq!(
+            missing.unwrap_err(),
+            "Bash is not installed - run `naner install msys2`"
+        );
     }
 
     #[test]
