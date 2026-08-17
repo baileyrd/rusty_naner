@@ -5,9 +5,11 @@ environment launcher for Windows.
 
 ## Status
 
-Migration complete: `v0.6.4` is the Latest release on
-[baileyrd/naner](https://github.com/baileyrd/naner), built from this repo and
-published through the Phase 5 release workflow. Phases 0–5 done:
+Migration complete: `v0.6.5` is the Latest release on this repo
+([baileyrd/rusty_naner](https://github.com/baileyrd/rusty_naner)), published
+through the Phase 5 release workflow. Releases through `v0.6.4` were
+published to [baileyrd/naner](https://github.com/baileyrd/naner) instead;
+that cross-publish has been removed. Phases 0–5 done:
 
 - **Phase 0**: Cargo workspace (`naner-core` / `naner` / `naner-init`), the
   Windows console attach/alloc/pipe-detection spike, CI (fmt + clippy + test on

@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.6.5.
+
+## [0.6.5] - 2026-08-17
 ### Added
 - Eight new optional vendor definitions in `config/vendors.json`: HiFile,
   OneCommander, Podman, ImageGlass, Inkscape, Obsidian, Zed and Zen. Like
@@ -6,7 +10,7 @@
   when explicitly requested.
 
 ### Changed
-- **Breaking for pre-v0.6.4 installs.** `.github/workflows/release.yml` now
+- **Breaking for pre-v0.6.5 installs.** `.github/workflows/release.yml` now
   publishes tagged releases to this repo (`baileyrd/rusty_naner`) instead of
   cross-publishing to the pre-rewrite `baileyrd/naner` repo, and
   `constants::github::REPO` now points `naner-init`'s update check at
