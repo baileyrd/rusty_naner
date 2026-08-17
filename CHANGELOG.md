@@ -1,4 +1,12 @@
 ## [Unreleased]
+### Fixed
+- `Environment.PathPrecedence` in the shipped `naner.json`/`naner.yaml` now
+  includes `%NANER_ROOT%\home\.local\bin` and `\Scripts` — `PYTHONUSERBASE`
+  already pointed at `home\.local` (for `pip install --user` and, as it
+  turns out, the Claude Code CLI's native installer), but nothing on that
+  path was ever added to naner's own PATH, so tools placed there were
+  invisible even inside naner-launched shells.
+
 ### Added
 - README now has real "Installation" and "Usage" sections — how to get
   `naner-init.exe`, what it does on first run, and the common `naner`
