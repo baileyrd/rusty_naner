@@ -15,13 +15,22 @@ separate installer.
    the whole install is self-contained and can be removed by deleting the
    folder.
 3. Run `naner-init.exe` — double-clicking it in Explorer or running it from
-   an existing cmd/PowerShell/Windows Terminal window both work. It's a
+   an existing PowerShell or Windows Terminal window both work. It's a
    console-less GUI-subsystem binary, so on first run it opens its own
    console window if you double-clicked it, or attaches to the one you're
    already in if you ran it from a shell; either way you'll see the same
    prompts. (Double-clicked, it also pauses with "press any key to exit"
-   at the end so the window doesn't disappear before you can read it.) On
-   first run it:
+   at the end so the window doesn't disappear before you can read it.)
+
+   **From `cmd.exe` specifically**, run it as `start /wait naner-init.exe`
+   rather than typing its name directly — `cmd.exe` does not wait for a
+   GUI-subsystem process the way PowerShell does, so its own next-command
+   prompt races `naner-init.exe`'s `(Y/n)` prompt for your keystrokes, and
+   the plain-`naner-init.exe` form can silently fail to initialize
+   ([#81](https://github.com/baileyrd/rusty_naner/issues/81)). `start /wait`
+   makes `cmd.exe` actually wait, which avoids the race.
+
+   On first run it:
    - downloads `naner-bundle.zip` matching its own version and verifies it
      against the release's published `SHA256SUMS` manifest before touching
      disk — it refuses to install on a mismatch or a missing manifest;
