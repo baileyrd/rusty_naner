@@ -22,7 +22,7 @@ if ($ShowNanerBanner) {
     # Display vendor tools status
     $vendorTools = @{
         "PowerShell" = "$env:NANER_ROOT\vendor\powershell\pwsh.exe"
-        "Git Bash"   = "$env:NANER_ROOT\vendor\msys64\usr\bin\bash.exe"
+        "Git Bash"   = "$env:NANER_ROOT\vendor\git\bin\bash.exe"
         "7-Zip"      = "$env:NANER_ROOT\vendor\7zip\7z.exe"
         "Terminal"   = "$env:NANER_ROOT\vendor\terminal\wt.exe"
     }

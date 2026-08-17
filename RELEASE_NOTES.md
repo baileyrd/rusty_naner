@@ -9,7 +9,20 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.6.2.
+**The default vendor set changes shape.** Git for Windows replaces MSYS2 as
+the vendor that's required and enabled out of the box — it's the same
+self-extracting-archive install pattern already used elsewhere (a
+`PortableGit-*-64-bit.7z.exe` run with `-y -o<dir>`, not a real archive
+extraction), and it's what now backs the shipped `Bash` profile and
+`VendorPaths.GitBash`. MSYS2 stays fully installable by name, just no
+longer part of the default set. Anaconda replaces Miniconda as the optional
+Python distribution — same `repo.anaconda.com` listing-scrape digest
+verification, just pointed at `/archive/` (Miniconda's `/miniconda/` has a
+stable `-latest-` alias; Anaconda's archive index doesn't, so its fallback
+URL is a dated version that will need bumping occasionally). Bun joins as a
+new optional, disabled-by-default vendor. The .NET SDK — enabled by default
+since the C# migration needed it, not because naner itself does — is now
+disabled by default too.
 
 ---
 

@@ -672,8 +672,8 @@ impl<'a> UnifiedVendorInstaller<'a> {
     /// A cached file is complete by construction — `Http::download` publishes
     /// with a rename, so nothing truncated ever carries the final name. What
     /// completeness cannot tell us is whether it is the *right* artifact: file
-    /// names like `Miniconda3-latest-Windows-x86_64.exe` are stable while their
-    /// contents move. So when a digest is known the cache entry has to match
+    /// names like `rustup-init.exe` are stable while their contents move.
+    /// So when a digest is known the cache entry has to match
     /// it, and a stale one is deleted and re-fetched instead of being handed to
     /// the verifier, which would fail the install rather than fix it.
     fn reuse_cached(
@@ -1254,19 +1254,19 @@ mod live_digest_tests {
 
     #[test]
     #[ignore = "hits the network"]
-    fn miniconda_scrape_resolves() {
+    fn anaconda_scrape_resolves() {
         let http = UreqHttp::new();
         let vendor = VendorDefinition {
-            name: "Miniconda".into(),
+            name: "Anaconda".into(),
             checksum_source: Some(ChecksumSource::Scrape {
-                url: "https://repo.anaconda.com/miniconda/".into(),
+                url: "https://repo.anaconda.com/archive/".into(),
                 pattern: "{FILE}</a></td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td>([0-9a-f]{64})".into(),
             }),
             ..Default::default()
         };
         let info = VendorDownloadInfo {
-            url: "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe".into(),
-            file_name: "Miniconda3-latest-Windows-x86_64.exe".into(),
+            url: "https://repo.anaconda.com/archive/Anaconda3-2026.07-1-Windows-x86_64.exe".into(),
+            file_name: "Anaconda3-2026.07-1-Windows-x86_64.exe".into(),
             version: None,
             checksum: None,
         };
@@ -1277,7 +1277,7 @@ mod live_digest_tests {
                 ..info.clone()
             },
             256,
-            "miniconda",
+            "anaconda",
         );
     }
 }
@@ -1286,28 +1286,29 @@ mod live_digest_tests {
 mod digest_tests {
     use super::*;
 
-    /// The real shape of a repo.anaconda.com/miniconda/ row, including the
+    /// The real shape of a repo.anaconda.com/archive/ row, including the
     /// newline+indent runs between tags and the duplicate filename in href.
-    const MINICONDA_LISTING: &str = r#"    <tr>
+    /// Captured from the live listing (2026-08-17).
+    const ANACONDA_LISTING: &str = r#"    <tr>
       <th>Last Modified</th>
       <th>SHA256</th>
     </tr>
     <tr>
-      <td><a href="Miniconda3-py39_4.9.2-Windows-x86_64.exe">Miniconda3-py39_4.9.2-Windows-x86_64.exe</a></td>
-      <td class="s">70.7M</td>
-      <td>2021-01-12 20:03:36</td>
-      <td>1111111111111111111111111111111111111111111111111111111111111111</td>
+      <td><a href="Anaconda3-2025.12-2-Windows-x86_64.exe">Anaconda3-2025.12-2-Windows-x86_64.exe</a></td>
+      <td class="s">1.1G</td>
+      <td>2026-01-13 11:06:18</td>
+      <td>2e0b8e40ec7600793f116250f5c1775c866833bac32d184ad575ecc0d360a88f</td>
     </tr>
     <tr>
-      <td><a href="Miniconda3-latest-Windows-x86_64.exe">Miniconda3-latest-Windows-x86_64.exe</a></td>
-      <td class="s">124.7M</td>
-      <td>2026-07-29 18:22:05</td>
-      <td>4441b50816f866f4e6e774e90f90a71bde756f06c94144407a6d93677c539e46</td>
+      <td><a href="Anaconda3-2026.07-1-Windows-x86_64.exe">Anaconda3-2026.07-1-Windows-x86_64.exe</a></td>
+      <td class="s">1.0G</td>
+      <td>2026-07-29 16:08:18</td>
+      <td>b545f4bd8ab3bf32d99002a0779a887668ebfe479ee32ecbf060375670d5ee09</td>
     </tr>
 "#;
 
     /// The pattern shipped in dist-assets/config/vendors.json.
-    const MINICONDA_PATTERN: &str =
+    const ANACONDA_PATTERN: &str =
         "{FILE}</a></td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td>([0-9a-f]{64})";
 
     /// Guards the shipped config against the engine: `rusty_regx` is POSIX-ERE
@@ -1315,28 +1316,28 @@ mod digest_tests {
     /// the bounded `[^<]*` runs keep the match inside the requested row rather
     /// than sliding to a neighbouring one.
     #[test]
-    fn miniconda_scrape_pattern_selects_the_right_row() {
-        let file = "Miniconda3-latest-Windows-x86_64.exe";
-        let pattern = MINICONDA_PATTERN.replace("{FILE}", &crate::regex_shim::escape(file));
+    fn anaconda_scrape_pattern_selects_the_right_row() {
+        let file = "Anaconda3-2026.07-1-Windows-x86_64.exe";
+        let pattern = ANACONDA_PATTERN.replace("{FILE}", &crate::regex_shim::escape(file));
         let regex = crate::regex_shim::compile_ci(&pattern).expect("pattern compiles");
         let captured = regex
-            .captures(MINICONDA_LISTING)
+            .captures(ANACONDA_LISTING)
             .and_then(|c| c.get(1))
             .expect("hash captured");
         assert_eq!(
             captured,
-            "4441b50816f866f4e6e774e90f90a71bde756f06c94144407a6d93677c539e46"
+            "b545f4bd8ab3bf32d99002a0779a887668ebfe479ee32ecbf060375670d5ee09"
         );
     }
 
     #[test]
-    fn miniconda_pattern_picks_the_named_file_not_the_first_row() {
-        let file = "Miniconda3-py39_4.9.2-Windows-x86_64.exe";
-        let pattern = MINICONDA_PATTERN.replace("{FILE}", &crate::regex_shim::escape(file));
+    fn anaconda_pattern_picks_the_named_file_not_the_first_row() {
+        let file = "Anaconda3-2025.12-2-Windows-x86_64.exe";
+        let pattern = ANACONDA_PATTERN.replace("{FILE}", &crate::regex_shim::escape(file));
         let regex = crate::regex_shim::compile_ci(&pattern).unwrap();
         assert_eq!(
-            regex.captures(MINICONDA_LISTING).and_then(|c| c.get(1)),
-            Some("1111111111111111111111111111111111111111111111111111111111111111")
+            regex.captures(ANACONDA_LISTING).and_then(|c| c.get(1)),
+            Some("2e0b8e40ec7600793f116250f5c1775c866833bac32d184ad575ecc0d360a88f")
         );
     }
 
@@ -1654,7 +1655,7 @@ mod tests {
     }
 
     /// The stale-cache case that used to turn into a failed install: the file
-    /// name is stable (`Miniconda3-latest-...`) while the contents move, so the
+    /// name is stable (`rustup-init.exe`) while the contents move, so the
     /// cached bytes no longer match the digest we now expect.
     #[test]
     fn a_stale_cached_asset_is_discarded_and_refetched() {

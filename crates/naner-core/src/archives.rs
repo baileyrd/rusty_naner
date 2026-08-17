@@ -563,9 +563,9 @@ mod tests {
         assert!(rustup.contains(&"--no-modify-path".to_string()));
 
         let conda = build_installer_arguments(
-            Path::new("Miniconda3-latest.exe"),
+            Path::new("Anaconda3-2026.07-1-Windows-x86_64.exe"),
             Path::new("C:\\v\\conda"),
-            "Miniconda",
+            "Anaconda",
             None,
         );
         assert_eq!(conda, vec!["/S", "/D=C:\\v\\conda"]);

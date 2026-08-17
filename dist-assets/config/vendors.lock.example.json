@@ -62,15 +62,15 @@
       "installedDate": "2026-01-07T10:45:00Z",
       "extractDir": "nodejs"
     },
-    "Miniconda": {
-      "name": "Miniconda Python",
-      "version": "latest",
-      "url": "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe",
-      "fileName": "Miniconda3-latest-Windows-x86_64.exe",
-      "size": "~90",
+    "Anaconda": {
+      "name": "Anaconda",
+      "version": "2026.07-1",
+      "url": "https://repo.anaconda.com/archive/Anaconda3-2026.07-1-Windows-x86_64.exe",
+      "fileName": "Anaconda3-2026.07-1-Windows-x86_64.exe",
+      "size": "~1000",
       "installed": true,
       "installedDate": "2026-01-07T10:50:00Z",
-      "extractDir": "miniconda"
+      "extractDir": "anaconda"
     },
     "Go": {
       "name": "Go",

@@ -127,7 +127,7 @@ pub enum ChecksumSource {
     Sidecar { suffix: String },
     /// A digest embedded in a listing page, captured by group 1 of `pattern`
     /// after `{FILE}` is replaced with the resolved file name — the form
-    /// `repo.anaconda.com/miniconda/` uses.
+    /// `repo.anaconda.com/archive/` uses.
     Scrape { url: String, pattern: String },
 }
 
@@ -190,20 +190,23 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
             ..Default::default()
         },
         VendorDefinition {
-            name: constants::vendor_names::MSYS2.into(),
-            key: "MSYS2".into(),
-            extract_dir: "msys64".into(),
-            source_type: VendorSourceType::WebScrape,
-            web_scrape: Some(WebScrapeConfig {
-                url: "https://repo.msys2.org/distrib/x86_64/".into(),
-                // Group 2 is the date, so the newest archive on the index is
-                // picked by numeric comparison rather than by page order.
-                pattern: r#"href="(msys2-base-x86_64-(\d{8})\.tar\.xz)""#.into(),
-                base_url: "https://repo.msys2.org/distrib/x86_64/".into(),
-            }),
+            name: constants::vendor_names::GIT_FOR_WINDOWS.into(),
+            key: "GitForWindows".into(),
+            extract_dir: "git".into(),
+            source_type: VendorSourceType::GitHub,
+            github_owner: Some("git-for-windows".into()),
+            github_repo: Some("git".into()),
+            asset_pattern: Some("PortableGit-*-64-bit.7z.exe".into()),
             fallback_url: Some(
-                "https://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20240727.tar.xz".into(),
+                "https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.4/PortableGit-2.55.0.4-64-bit.7z.exe"
+                    .into(),
             ),
+            // PortableGit is a self-extracting 7z archive (.exe), so it runs
+            // through the installer path rather than a real archive
+            // extractor; -y -o<dir> is 7z SFX's own silent-extract syntax,
+            // not the NSIS/Inno defaults build_installer_arguments falls
+            // back to for an unrecognised .exe.
+            installer_args: Some(vec!["-y".into(), "-o%TARGETDIR%".into()]),
             ..Default::default()
         },
         VendorDefinition {
@@ -286,7 +289,7 @@ mod builtin_tests {
             "SevenZip",
             "PowerShell",
             "WindowsTerminal",
-            "MSYS2",
+            "GitForWindows",
             "RustyTerm",
             "Rush",
         ];
