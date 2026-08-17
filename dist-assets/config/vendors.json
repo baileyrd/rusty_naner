@@ -312,7 +312,7 @@
         "size": "~17"
       },
       "installType": "installer",
-      "installerArgs": ["/VERYSILENT", "/NORESTART"],
+      "installerArgs": ["/VERYSILENT", "/NORESTART", "/DIR=%TARGETDIR%"],
       "postInstallFunction": "HiFile.PostInstall"
     },
     "OneCommander": {
@@ -426,7 +426,7 @@
         "required": true
       },
       "installType": "installer",
-      "installerArgs": ["/S"],
+      "installerArgs": ["/S", "/D=%TARGETDIR%"],
       "postInstallFunction": "Obsidian.PostInstall"
     },
     "Zed": {
@@ -453,7 +453,7 @@
         "required": true
       },
       "installType": "installer",
-      "installerArgs": ["/VERYSILENT", "/NORESTART"],
+      "installerArgs": ["/VERYSILENT", "/NORESTART", "/DIR=%TARGETDIR%"],
       "postInstallFunction": "Zed.PostInstall"
     },
     "Zen": {
@@ -480,7 +480,7 @@
         "required": true
       },
       "installType": "installer",
-      "installerArgs": ["/S", "/PreventRebootRequired=true"],
+      "installerArgs": ["/S", "/PreventRebootRequired=true", "/D=%TARGETDIR%"],
       "postInstallFunction": "Zen.PostInstall"
     }
   },

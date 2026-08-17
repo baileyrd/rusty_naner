@@ -1,5 +1,16 @@
 ## [Unreleased]
 ### Fixed
+- Four vendors added in the same batch as HiFile/OneCommander/etc. (HiFile,
+  Obsidian, Zed, Zen) shipped `installerArgs` that never referenced
+  `%TARGETDIR%`, so `naner install` ran their installer silently and
+  successfully but let it fall through to its own default location
+  (Program Files/AppData) instead of the vendor directory — naner still
+  reported success and pinned a version over an empty `vendor/<name>/`
+  folder. Added the missing target-directory switch for each installer
+  technology (`/DIR=` for the two Inno Setup installers, `/D=` — last,
+  unquoted — for the two NSIS ones), and a regression test that loads the
+  real shipped `vendors.json` and fails if any future `.exe`-installer
+  vendor's `installerArgs` omits the placeholder.
 - `Environment.PathPrecedence` in the shipped `naner.json`/`naner.yaml` now
   includes `%NANER_ROOT%\home\.local\bin` and `\Scripts` — `PYTHONUSERBASE`
   already pointed at `home\.local` (for `pip install --user` and, as it

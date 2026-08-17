@@ -413,6 +413,45 @@ mod enabled_tests {
         assert_eq!(loader.load_vendors().len(), 2);
     }
 
+    /// Regression: a vendor whose release asset is a bare `.exe` and that
+    /// sets its own `installerArgs` overrides `build_installer_arguments`'s
+    /// smart per-installer-technology fallback entirely (`archives.rs`) --
+    /// if none of those args reference `%TARGETDIR%`/`$TARGETDIR`, the
+    /// installer runs silently and successfully, but installs to wherever
+    /// its own default is (Program Files, AppData, ...) instead of its
+    /// vendor directory. `naner install` still reports success and pins a
+    /// version; nothing lands where every other vendor expects it, and the
+    /// only visible symptom is an empty `vendor/<name>/` folder. Caught for
+    /// real: Obsidian shipped with `["/S"]`, no target-dir switch at all.
+    #[test]
+    fn every_installer_arg_exe_vendor_redirects_into_its_target_dir() {
+        const SHIPPED: &str = include_str!("../../../../dist-assets/config/vendors.json");
+        let (_tmp, loader) = loader_for(SHIPPED);
+        let vendors = loader.load_all_vendors();
+        assert!(!vendors.is_empty());
+
+        for vendor in &vendors {
+            let Some(args) = &vendor.installer_args else {
+                continue;
+            };
+            if vendor.key.eq_ignore_ascii_case("Rust") {
+                // Redirected via RUSTUP_HOME/CARGO_HOME env vars in
+                // archives::run_exe_installer, not a command-line switch --
+                // the one documented exception.
+                continue;
+            }
+            assert!(
+                args.iter()
+                    .any(|a| a.contains("%TARGETDIR%") || a.contains("$TARGETDIR")),
+                "{}'s installerArgs {args:?} never redirect into its own vendor \
+                 directory -- it will install to the installer's own default \
+                 location instead of vendor/{}",
+                vendor.name,
+                vendor.extract_dir,
+            );
+        }
+    }
+
     /// The other way this change could have gone catastrophically wrong: the
     /// hardcoded fallback set never sets `enabled`, so a derived `Default` of
     /// `false` would have made a missing vendors.json install nothing at all.
