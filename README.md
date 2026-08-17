@@ -14,7 +14,14 @@ separate installer.
    naner owns (its own config, vendor tools, and binary) lives under it, so
    the whole install is self-contained and can be removed by deleting the
    folder.
-3. Run `naner-init.exe`. On first run it:
+3. Run `naner-init.exe` — double-clicking it in Explorer or running it from
+   an existing cmd/PowerShell/Windows Terminal window both work. It's a
+   console-less GUI-subsystem binary, so on first run it opens its own
+   console window if you double-clicked it, or attaches to the one you're
+   already in if you ran it from a shell; either way you'll see the same
+   prompts. (Double-clicked, it also pauses with "press any key to exit"
+   at the end so the window doesn't disappear before you can read it.) On
+   first run it:
    - downloads `naner-bundle.zip` matching its own version and verifies it
      against the release's published `SHA256SUMS` manifest before touching
      disk — it refuses to install on a mismatch or a missing manifest;
