@@ -2,10 +2,12 @@
 //! installer with its six release-source resolvers and two-level fallback
 //! cascade, and the Windows Terminal portable-mode configurator.
 
+mod config_merge;
 mod installer;
 mod loader;
 mod wt_config;
 
+pub use config_merge::{VendorsMergeOutcome, merge_shipped_vendor_defaults};
 pub use installer::{UnifiedVendorInstaller, VendorDownloadInfo};
 pub use loader::VendorConfigurationLoader;
 pub use wt_config::{WindowsTerminalConfigurator, is_windows_terminal};

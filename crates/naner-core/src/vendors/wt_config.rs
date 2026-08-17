@@ -31,7 +31,8 @@ use std::path::{Path, PathBuf};
 use serde_json::{Map, Value};
 
 use crate::config::strip_json_comments;
-use crate::{logger, timestamp};
+use crate::fs_atomic::{back_up, write_atomic};
+use crate::logger;
 
 /// `IsWindowsTerminal`: substring match on the display name.
 pub fn is_windows_terminal(vendor_name: &str) -> bool {
@@ -280,33 +281,6 @@ impl<'a> WindowsTerminalConfigurator<'a> {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         std::fs::write(marker, body)
     }
-}
-
-/// Copy `target` aside before it is overwritten. Timestamped so a second run
-/// cannot clobber the only copy of the original. Mirrors `naner`'s
-/// `config_file::back_up` -- duplicated rather than shared because that one
-/// lives in the binary crate and this merge runs from `naner-core`, used by
-/// both `naner` and `naner-init`.
-fn back_up(target: &Path) -> std::io::Result<Option<PathBuf>> {
-    if !target.is_file() {
-        return Ok(None);
-    }
-    let backup = target.with_extension(format!("{}.bak", timestamp::file_stamp()));
-    std::fs::copy(target, &backup)?;
-    Ok(Some(backup))
-}
-
-/// Write via a temp file and a rename, so an interrupted write leaves the
-/// previous file intact rather than a truncated one Windows Terminal cannot
-/// parse.
-fn write_atomic(target: &Path, contents: &str) -> std::io::Result<()> {
-    let temp = target.with_extension("tmp");
-    std::fs::write(&temp, contents)?;
-    if let Err(e) = std::fs::rename(&temp, target) {
-        let _ = std::fs::remove_file(&temp);
-        return Err(e);
-    }
-    Ok(())
 }
 
 const DEFAULT_SETTINGS: &str = r#"{

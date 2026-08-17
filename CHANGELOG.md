@@ -1,6 +1,37 @@
 ## [Unreleased]
+### Added
+- `update-vendors` now reconciles `config/naner.json` (or `.yaml`/`.yml`) and
+  `config/vendors.json` against the defaults this binary ships, not just
+  `settings/settings.json` — a bare `naner.exe` swap (the documented update
+  path) previously never touched either file, so a vendor-set change like
+  #64 never reached an already-installed tree. New `VendorPaths`/`Profiles`/
+  vendor keys are always added; a handful of specific fields changed by #64
+  (`VendorPaths.GitBash`, `Profiles.Bash.Description`,
+  `Profiles.Bash.CustomShell.ExecutablePath`) refresh only when the current
+  value still matches exactly what naner last shipped there — a hand-edited
+  value is never touched (#72).
+- `.github/workflows/release.yml` re-downloads every published asset from
+  its real public URL after publishing and re-hashes it against
+  `SHA256SUMS`, failing the job if they do not match — closes the gap that
+  let a broken upload ship live and undetected (#66).
 
-Nothing yet.
+### Fixed
+- `naner install`/`update-vendors` no longer print the raw
+  `\r    Progress: N%` download bar when stdout is not a terminal — the
+  existing "Tier-3 auto-quiet in pipelines" behavior already suppressed
+  every other status line in that case; the progress bar was the one thing
+  left over, noise with none of the substantive text to explain it (#67).
+- `naner doctor` now returns a non-zero exit code when a required vendor is
+  missing or the configuration file cannot be loaded, instead of always
+  reporting success regardless of what it found (#68).
+- `naner install A B C` now reflects an unknown or disabled name in its
+  final exit code even when another requested vendor installs
+  successfully, instead of reporting overall success with part of the
+  request silently dropped (#69).
+- `resolve_shell`'s missing-Bash install hint now says
+  `naner install GitForWindows`, not the pre-#64 `naner install msys2` (#70).
+- `--export-env` no longer sets `MSYSTEM`/`MSYS2_PATH_TYPE` unconditionally
+  on a fresh install, now that MSYS2 is disabled by default (#71).
 
 ## [0.6.3] - 2026-08-17
 ### Changed

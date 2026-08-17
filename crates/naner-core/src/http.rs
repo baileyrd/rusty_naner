@@ -112,6 +112,7 @@ impl Http for UreqHttp {
                         let percent = pct as i64;
                         if percent != last_percent
                             && percent % constants::PROGRESS_UPDATE_INTERVAL as i64 == 0
+                            && !logger::quiet()
                         {
                             print!("\r    Progress: {percent}%");
                             let _ = std::io::stdout().flush();
@@ -132,7 +133,7 @@ impl Http for UreqHttp {
                     ));
                     return discard_partial(writer, &part_path);
                 }
-                if total_bytes > 0 {
+                if total_bytes > 0 && !logger::quiet() {
                     print!("\r    Progress: 100%");
                     println!();
                 }

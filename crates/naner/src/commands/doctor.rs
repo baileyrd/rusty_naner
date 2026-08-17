@@ -40,30 +40,46 @@ pub fn execute(args: &[String]) -> i32 {
     for v in &vendor_defs {
         let path = vendor_dir.join(&v.extract_dir);
         let exists = path.is_dir();
-        vendor_status.push((v.name.clone(), v.extract_dir.clone(), exists));
+        vendor_status.push((v.name.clone(), v.extract_dir.clone(), exists, v.required));
     }
+
+    // Health, not just a printable report: a required vendor missing or an
+    // unparseable/absent configuration file means this install cannot
+    // actually launch, and the exit code needs to say so -- `naner doctor`
+    // reporting success on a broken tree is the same over-claim this repo's
+    // validation work keeps finding elsewhere. Optional vendors missing is
+    // normal (most ship disabled by default) and does not count.
+    let missing_required: Vec<&str> = vendor_status
+        .iter()
+        .filter(|(_, _, exists, required)| *required && !*exists)
+        .map(|(name, ..)| name.as_str())
+        .collect();
 
     let config_path = config::find_configuration_file(&naner_root);
     let config_ok = config_path
         .as_ref()
         .is_some_and(|p| config::load(&naner_root, Some(p)).is_ok());
 
+    let healthy = missing_required.is_empty() && config_ok;
+    let exit_code = if healthy { 0 } else { 1 };
+
     if porcelain {
         let json_output = json!({
-            "status": "ok",
+            "status": if healthy { "ok" } else { "unhealthy" },
             "naner_root": naner_root.display().to_string(),
             "config_valid": config_ok,
             "config_path": config_path.map(|p| p.display().to_string()),
-            "vendors": vendor_status.iter().map(|(name, dir, installed)| {
+            "vendors": vendor_status.iter().map(|(name, dir, installed, required)| {
                 json!({
                     "name": name,
                     "directory": dir,
-                    "installed": installed
+                    "installed": installed,
+                    "required": required
                 })
             }).collect::<Vec<_>>()
         });
         println!("{}", json_output);
-        return 0;
+        return exit_code;
     }
 
     logger::header("Naner Environment Doctor");
@@ -71,7 +87,7 @@ pub fn execute(args: &[String]) -> i32 {
     logger::success(&format!("Naner Root: {}", naner_root.display()));
 
     logger::status("Vendor Installation Status:");
-    for (name, dir, installed) in &vendor_status {
+    for (name, dir, installed, _required) in &vendor_status {
         let (symbol, color) = if *installed { ("+", "92") } else { ("x", "91") };
         println!("\x1b[{color}m  {symbol} {name} (vendor/{dir})\x1b[0m");
     }
@@ -129,6 +145,19 @@ pub fn execute(args: &[String]) -> i32 {
     }
 
     logger::newline();
-    logger::success("Doctor check complete!");
-    0
+    if healthy {
+        logger::success("Doctor check complete!");
+    } else {
+        if !missing_required.is_empty() {
+            logger::failure(&format!(
+                "Missing required vendor(s): {}",
+                missing_required.join(", ")
+            ));
+        }
+        if !config_ok {
+            logger::failure("Configuration file is missing or could not be parsed");
+        }
+        logger::warning("Doctor check found problems.");
+    }
+    exit_code
 }
