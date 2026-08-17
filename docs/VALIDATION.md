@@ -206,7 +206,7 @@ Enable `NodeJS` in `config\vendors.json`, then:
 
 This is the separate path: a digest fetched from the distributor's own
 `SHA256SUMS`, not one naner recorded. Go, Node.js, .NET SDK, rustup and
-Miniconda publish them; GitHub-sourced vendors and MSYS2 do not, and rely on the
+Anaconda publish them; GitHub-sourced vendors and MSYS2 do not, and rely on the
 lock instead.
 
 ### 4d — Verification fails closed

@@ -245,7 +245,7 @@ fn download_essentials(naner_root: &std::path::Path) {
         constants::vendor_names::SEVEN_ZIP,
         constants::vendor_names::POWERSHELL,
         constants::vendor_names::WINDOWS_TERMINAL,
-        constants::vendor_names::MSYS2,
+        constants::vendor_names::GIT_FOR_WINDOWS,
     ] {
         success &= installer.install_vendor(name);
         logger::newline();

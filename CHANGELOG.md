@@ -1,6 +1,19 @@
 ## [Unreleased]
-
-Nothing yet.
+### Changed
+- Default vendor set: **Git for Windows** replaces MSYS2 as the required,
+  enabled-by-default provider of Bash/Git (portable `PortableGit-*.7z.exe`,
+  installed like the other self-extracting `.exe` vendors). MSYS2 remains
+  installable by name but is no longer enabled or required. **Anaconda**
+  replaces Miniconda as the optional Python distribution (same
+  `repo.anaconda.com` digest-scrape verification, pointed at `/archive/`
+  instead of `/miniconda/`). **.NET SDK** is now disabled by default.
+- Added **Bun** as an optional vendor (disabled by default, GitHub-sourced,
+  no upstream digest — installs trust-on-first-use like the other
+  GitHub-sourced vendors).
+- `VendorPaths.GitBash` and the shipped `Bash` profile now point at
+  `vendor\git\bin\bash.exe`; `PathPrecedence` gains `vendor\bun` and the
+  Git for Windows subdirectories ahead of MSYS2's (still listed, for a
+  tree where it has been re-enabled).
 
 ## [0.6.2] - 2026-08-17
 ### Added

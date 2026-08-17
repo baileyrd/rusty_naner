@@ -63,12 +63,33 @@
       },
       "postInstallFunction": "WindowsTerminal.PostInstall"
     },
+    "GitForWindows": {
+      "name": "Git for Windows",
+      "description": "Portable Git, Bash and core POSIX tools for Windows",
+      "extractDir": "git",
+      "enabled": true,
+      "required": true,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "git-for-windows/git",
+        "assetPattern": "PortableGit-*-64-bit.7z.exe",
+        "fallback": {
+          "version": "v2.55.0.windows.4",
+          "url": "https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.4/PortableGit-2.55.0.4-64-bit.7z.exe",
+          "fileName": "PortableGit-2.55.0.4-64-bit.7z.exe",
+          "size": "~60"
+        }
+      },
+      "installerArgs": ["-y", "-o%TARGETDIR%"],
+      "postInstallFunction": "GitForWindows.PostInstall"
+    },
     "MSYS2": {
       "name": "MSYS2",
       "description": "Collection of tools and libraries for Windows",
       "extractDir": "msys64",
-      "enabled": true,
-      "required": true,
+      "enabled": false,
+      "required": false,
       "dependencies": ["SevenZip"],
       "releaseSource": {
         "type": "web-scrape",
@@ -112,26 +133,46 @@
       },
       "postInstallFunction": "NodeJS.PostInstall"
     },
-    "Miniconda": {
-      "name": "Miniconda",
-      "description": "Minimal Python distribution with conda package manager",
-      "extractDir": "miniconda",
+    "Bun": {
+      "name": "Bun",
+      "description": "Fast all-in-one JavaScript runtime, bundler, test runner and package manager",
+      "extractDir": "bun",
+      "enabled": false,
+      "required": false,
+      "dependencies": [],
+      "releaseSource": {
+        "type": "github",
+        "repo": "oven-sh/bun",
+        "assetPattern": "bun-windows-x64.zip",
+        "fallback": {
+          "version": "bun-v1.3.14",
+          "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-windows-x64.zip",
+          "fileName": "bun-windows-x64.zip",
+          "size": "~40"
+        }
+      },
+      "postInstallFunction": "Bun.PostInstall"
+    },
+    "Anaconda": {
+      "name": "Anaconda",
+      "description": "Full Python distribution with conda package manager and the Anaconda package set",
+      "extractDir": "anaconda",
       "enabled": false,
       "required": false,
       "dependencies": [],
       "releaseSource": {
         "type": "static",
-        "url": "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe",
-        "version": "latest",
-        "fileName": "Miniconda3-latest-Windows-x86_64.exe",
-        "size": "~50"
+        "url": "https://repo.anaconda.com/archive/Anaconda3-2026.07-1-Windows-x86_64.exe",
+        "version": "2026.07-1",
+        "fileName": "Anaconda3-2026.07-1-Windows-x86_64.exe",
+        "size": "~1000"
       },
       "checksumSource": {
         "type": "scrape",
-        "url": "https://repo.anaconda.com/miniconda/",
+        "url": "https://repo.anaconda.com/archive/",
         "pattern": "{FILE}</a></td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td>([0-9a-f]{64})"
       },
-      "postInstallFunction": "Miniconda.PostInstall"
+      "postInstallFunction": "Anaconda.PostInstall"
     },
     "Go": {
       "name": "Go",
@@ -242,7 +283,7 @@
       "name": ".NET SDK",
       "description": "Software development kit for building .NET applications (required for C# migration)",
       "extractDir": "dotnet-sdk",
-      "enabled": true,
+      "enabled": false,
       "required": false,
       "dependencies": [],
       "releaseSource": {
@@ -259,7 +300,7 @@
   },
   "metadata": {
     "createdDate": "2026-01-07",
-    "lastModified": "2026-01-07",
+    "lastModified": "2026-08-17",
     "configVersion": "1.0.0",
     "notes": [
       "This configuration file documents the current vendor setup for Naner.",

@@ -65,17 +65,21 @@ pub mod vendor_names {
     pub const SEVEN_ZIP: &str = "7-Zip";
     pub const POWERSHELL: &str = "PowerShell";
     pub const WINDOWS_TERMINAL: &str = "Windows Terminal";
-    /// vendors.json says plain "MSYS2"; the constants (and install-order
-    /// matching) say this. Keep both exact (MIGRATION_ANALYSIS §3 drift).
-    pub const MSYS2: &str = "MSYS2 (Git/Bash)";
+    pub const GIT_FOR_WINDOWS: &str = "Git for Windows";
 
     // Optional vendors
     pub const NODEJS: &str = "Node.js";
-    pub const MINICONDA: &str = "Miniconda";
+    pub const BUN: &str = "Bun";
+    pub const ANACONDA: &str = "Anaconda";
     pub const GO: &str = "Go";
     pub const RUST: &str = "Rust";
     pub const RUBY: &str = "Ruby";
     pub const DOTNET_SDK: &str = ".NET SDK";
+    /// Demoted from essential: Git for Windows now provides the default
+    /// Bash profile's shell. Still installable by name. vendors.json says
+    /// plain "MSYS2"; this constant (and install-order matching) says this.
+    /// Keep both exact (MIGRATION_ANALYSIS §3 drift).
+    pub const MSYS2: &str = "MSYS2 (Git/Bash)";
     /// Additive (no C# counterpart): experimental rusty_term terminal.
     pub const RUSTY_TERM: &str = "Rusty Term";
     /// Additive (no C# counterpart): experimental rush shell.
