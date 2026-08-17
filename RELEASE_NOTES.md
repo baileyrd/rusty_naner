@@ -16,6 +16,18 @@ Zed code editor and the Zen browser. All ship disabled by default (`enabled:
 false`), same as every other optional vendor — `naner install <Name>` turns
 one on explicitly.
 
+Releases now publish to this repo instead of cross-publishing to the
+pre-rewrite `baileyrd/naner` repo. Through v0.6.4, tagging `rusty_naner`
+built the exes but shipped them as a release on `baileyrd/naner`, so this
+repo's own Releases page was always empty — by design, to keep pre-rewrite
+installs' auto-updater (which checks `baileyrd/naner`) working. That
+cross-publish is now removed: `release.yml` publishes to `rusty_naner`
+itself, and `naner-init`'s update check (`constants::github::REPO`) now
+points here too. The tradeoff is explicit and was asked for: any install
+from before this change stops seeing new releases, since `baileyrd/naner`
+no longer receives new tags. Bringing such an install forward requires
+manually fetching a current `naner-init.exe` from `rusty_naner`.
+
 ---
 
 ## v0.6.4 — 2026-08-17
