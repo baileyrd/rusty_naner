@@ -16,7 +16,7 @@
 //! the merge possible at all on that upgrade path: the new `naner.exe`
 //! always knows its own current defaults, regardless of what is on disk.
 //!
-//! Two kinds of change:
+//! Three kinds of change:
 //! - A `VendorPaths`/`Profiles` key entirely missing from the user's file is
 //!   always added. A missing key cannot be a customization; there is nothing
 //!   to protect by leaving it out.
@@ -26,8 +26,17 @@
 //!   means the user (or a prior hand-edit) set it deliberately, and it is
 //!   left alone -- the same "never resurrect a deliberate change" rule
 //!   `wt_config.rs` already applies to profile deletions.
+//! - `Environment.PathPrecedence` entries the shipped config has that the
+//!   user's list does not get appended, with the same GUID-marker technique
+//!   `wt_config.rs` uses for profiles -- a `.naner-managed-path-precedence.json`
+//!   sidecar (next to the config file) records which shipped entries are
+//!   currently under naner's management, so an entry the user removed on
+//!   purpose is never silently added back. A tree upgrading from before this
+//!   marker existed cannot tell "never added" apart from "deliberately
+//!   removed"; it is treated as "never added" (added), the same accepted
+//!   one-time trade-off `wt_config.rs` already makes for a marker-less tree.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
@@ -88,14 +97,25 @@ pub enum NanerConfigMergeOutcome {
     /// Every `VendorPaths`/`Profiles` key already matches or exceeds the
     /// shipped defaults, and no known field migration applies.
     UpToDate,
-    /// `added` names newly-introduced `VendorPaths`/`Profiles` keys;
-    /// `refreshed` names field pointers updated because they still matched
-    /// what naner had last shipped there.
+    /// `added` names newly-introduced `VendorPaths`/`Profiles` keys and any
+    /// `Environment.PathPrecedence` entries appended; `refreshed` names
+    /// field pointers updated because they still matched what naner had
+    /// last shipped there. `respected_deletions` counts shipped
+    /// `PathPrecedence` entries left out because the user removed them on
+    /// purpose.
     Merged {
         added: Vec<String>,
         refreshed: Vec<String>,
+        respected_deletions: usize,
     },
 }
+
+/// Sidecar recording which shipped `Environment.PathPrecedence` entries are
+/// currently under naner's management -- the `PathPrecedence` counterpart to
+/// `wt_config.rs`'s `.naner-managed-profiles.json`, and for the same reason:
+/// telling "the user never had this" apart from "the user removed this on
+/// purpose" needs a record of what naner itself last added.
+const MANAGED_PATH_PRECEDENCE_FILE: &str = ".naner-managed-path-precedence.json";
 
 pub fn merge_shipped_naner_defaults(
     config_path: &Path,
@@ -154,6 +174,10 @@ pub fn merge_shipped_naner_defaults(
         }
     }
 
+    let (path_precedence_added, respected_deletions) =
+        merge_path_precedence(&mut existing, &shipped, config_path)?;
+    added.extend(path_precedence_added);
+
     if added.is_empty() && refreshed.is_empty() {
         return Ok(NanerConfigMergeOutcome::UpToDate);
     }
@@ -164,7 +188,100 @@ pub fn merge_shipped_naner_defaults(
     let rendered = render_document(&existing, is_yaml)?;
     write_atomic(config_path, &rendered)?;
 
-    Ok(NanerConfigMergeOutcome::Merged { added, refreshed })
+    Ok(NanerConfigMergeOutcome::Merged {
+        added,
+        refreshed,
+        respected_deletions,
+    })
+}
+
+fn managed_path_precedence_marker(config_path: &Path) -> PathBuf {
+    config_path
+        .parent()
+        .map(|dir| dir.join(MANAGED_PATH_PRECEDENCE_FILE))
+        .unwrap_or_else(|| PathBuf::from(MANAGED_PATH_PRECEDENCE_FILE))
+}
+
+fn read_managed_path_precedence(marker_path: &Path) -> Vec<String> {
+    std::fs::read_to_string(marker_path)
+        .ok()
+        .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
+        .unwrap_or_default()
+}
+
+fn write_managed_path_precedence(config_path: &Path, entries: &[String]) -> std::io::Result<()> {
+    let marker = managed_path_precedence_marker(config_path);
+    let body = serde_json::to_string(entries)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    std::fs::write(marker, body)
+}
+
+/// Reconcile `Environment.PathPrecedence`: a shipped entry missing from the
+/// user's list is appended, unless it was previously under naner's
+/// management and has since been removed -- the same rule `wt_config.rs`
+/// applies to a deliberately deleted profile. Entries the user added
+/// themselves (never shipped by naner) are never touched or removed.
+///
+/// Writes the managed-entries marker unconditionally, same as
+/// `wt_config.rs`'s equivalent -- a marker refresh with no other change is
+/// not itself reported as a merge.
+fn merge_path_precedence(
+    existing: &mut Value,
+    shipped: &Value,
+    config_path: &Path,
+) -> std::io::Result<(Vec<String>, usize)> {
+    let shipped_entries: Vec<String> = shipped
+        .pointer("/Environment/PathPrecedence")
+        .and_then(Value::as_array)
+        .map(|list| {
+            list.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    if shipped_entries.is_empty() {
+        return Ok((Vec::new(), 0));
+    }
+
+    let Some(list) = existing
+        .pointer_mut("/Environment/PathPrecedence")
+        .and_then(Value::as_array_mut)
+    else {
+        return Ok((Vec::new(), 0));
+    };
+
+    let marker_path = managed_path_precedence_marker(config_path);
+    let had_marker = marker_path.is_file();
+    let previously_managed = read_managed_path_precedence(&marker_path);
+
+    let mut added = Vec::new();
+    let mut respected_deletions = 0usize;
+    let mut now_managed = Vec::new();
+
+    for entry in &shipped_entries {
+        let present = list.iter().any(|v| v.as_str() == Some(entry.as_str()));
+        if present {
+            now_managed.push(entry.clone());
+            continue;
+        }
+        if had_marker && previously_managed.contains(entry) {
+            // The user removed this on purpose; adding it back would be the
+            // same class of bug #50 already was for Windows Terminal
+            // profiles.
+            respected_deletions += 1;
+            continue;
+        }
+        // Never offered before -- a fresh PathPrecedence entry, or a
+        // marker-less pre-existing tree, where "never added" and "already
+        // deleted" cannot be told apart. Add it; see the module doc for why
+        // that is the safe default.
+        list.push(Value::String(entry.clone()));
+        added.push(format!("Environment.PathPrecedence: {entry}"));
+        now_managed.push(entry.clone());
+    }
+
+    write_managed_path_precedence(config_path, &now_managed)?;
+    Ok((added, respected_deletions))
 }
 
 /// Parse a config document as JSON (comments/trailing commas tolerated, same
@@ -359,6 +476,124 @@ mod tests {
         let updated: Value =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert!(updated["VendorPaths"]["Bun"].is_string());
+    }
+
+    /// The concrete regression this was built for: a tree from before
+    /// `home\.local\bin`/`\Scripts` existed in the shipped config gets them
+    /// appended, and nothing else in the user's list is disturbed.
+    #[test]
+    fn a_pre_local_bin_tree_gets_path_precedence_entries_added() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut without_local: Value =
+            serde_json::from_str(&strip_json_comments(SHIPPED_NANER_JSON)).unwrap();
+        {
+            let list = without_local["Environment"]["PathPrecedence"]
+                .as_array_mut()
+                .unwrap();
+            list.retain(|v| {
+                v.as_str() != Some("%NANER_ROOT%\\home\\.local\\bin")
+                    && v.as_str() != Some("%NANER_ROOT%\\home\\.local\\Scripts")
+            });
+        }
+        let path = write(
+            dir.path(),
+            "naner.json",
+            &serde_json::to_string_pretty(&without_local).unwrap(),
+        );
+
+        let outcome = merge_shipped_naner_defaults(&path).unwrap();
+        let NanerConfigMergeOutcome::Merged {
+            added,
+            respected_deletions,
+            ..
+        } = outcome
+        else {
+            panic!("expected a merge, got {outcome:?}");
+        };
+        assert!(added.iter().any(|a| a.contains("home\\.local\\bin")));
+        assert!(added.iter().any(|a| a.contains("home\\.local\\Scripts")));
+        assert_eq!(respected_deletions, 0);
+
+        let updated: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let list = updated["Environment"]["PathPrecedence"].as_array().unwrap();
+        assert!(
+            list.iter()
+                .any(|v| v.as_str() == Some("%NANER_ROOT%\\home\\.local\\bin"))
+        );
+        assert!(
+            list.iter()
+                .any(|v| v.as_str() == Some("%NANER_ROOT%\\home\\.local\\Scripts"))
+        );
+        // Every entry the tree already had survives, in place.
+        assert_eq!(list[0], "%NANER_ROOT%\\bin");
+    }
+
+    /// A `PathPrecedence` entry the user added themselves -- never shipped
+    /// by naner at all -- must never be touched, same as a hand-set
+    /// `VendorPaths` value.
+    #[test]
+    fn a_users_own_path_precedence_entry_is_preserved() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write(
+            dir.path(),
+            "naner.json",
+            r#"{
+                "VendorPaths": {},
+                "Profiles": {},
+                "Environment": {
+                    "PathPrecedence": ["C:\\my-own-tools", "%NANER_ROOT%\\bin"]
+                }
+            }"#,
+        );
+
+        merge_shipped_naner_defaults(&path).unwrap();
+
+        let updated: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        let list = updated["Environment"]["PathPrecedence"].as_array().unwrap();
+        assert_eq!(list[0], "C:\\my-own-tools");
+        assert_eq!(list[1], "%NANER_ROOT%\\bin");
+    }
+
+    /// Unit-level test of the deletion-respecting rule directly, independent
+    /// of the JSON-file round trip: a `PathPrecedence` entry naner itself
+    /// added and the user later removed must not be silently added back on
+    /// the next merge, the same guarantee `wt_config.rs` makes for profiles.
+    #[test]
+    fn path_precedence_respects_a_deliberate_removal() {
+        let dir = tempfile::tempdir().unwrap();
+        let config_path = dir.path().join("naner.json");
+        std::fs::write(&config_path, "{}").unwrap();
+
+        let shipped = serde_json::json!({
+            "Environment": {
+                "PathPrecedence": ["%NANER_ROOT%\\bin", "%NANER_ROOT%\\home\\.local\\bin"]
+            }
+        });
+
+        // First pass: nothing present yet, no marker -- both entries are
+        // added and recorded as managed.
+        let mut existing = serde_json::json!({ "Environment": { "PathPrecedence": [] } });
+        let (added, respected) =
+            merge_path_precedence(&mut existing, &shipped, &config_path).unwrap();
+        assert_eq!(added.len(), 2);
+        assert_eq!(respected, 0);
+
+        // The user removes one of the two naner just added.
+        existing["Environment"]["PathPrecedence"] = serde_json::json!(["%NANER_ROOT%\\bin"]);
+
+        // Second pass: the marker says both were managed; the missing one
+        // must be respected as a deliberate removal, not re-added.
+        let (added2, respected2) =
+            merge_path_precedence(&mut existing, &shipped, &config_path).unwrap();
+        assert!(added2.is_empty());
+        assert_eq!(respected2, 1);
+        let list = existing["Environment"]["PathPrecedence"]
+            .as_array()
+            .unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0], "%NANER_ROOT%\\bin");
     }
 
     #[test]

@@ -6,6 +6,14 @@
   turns out, the Claude Code CLI's native installer), but nothing on that
   path was ever added to naner's own PATH, so tools placed there were
   invisible even inside naner-launched shells.
+- `merge_shipped_naner_defaults` now reconciles `Environment.PathPrecedence`
+  into an existing `naner.json`/`.yaml`, not just `VendorPaths`/`Profiles`
+  keys and the hardcoded field-migration list — the entries added above
+  (and any future `PathPrecedence` addition) now reach an already-installed
+  tree via `naner update-vendors`, not only a fresh init. Uses the same
+  `.naner-managed-*.json` marker technique `wt_config.rs` already uses for
+  Windows Terminal profiles, so an entry the user deliberately removed is
+  never silently added back.
 
 ### Added
 - README now has real "Installation" and "Usage" sections — how to get

@@ -24,6 +24,22 @@ a tool's installer will still warn if it also checks the persistent OS
 PATH, but it will now actually run without hunting for it manually inside
 any naner-launched terminal.
 
+That fix alone only reaches a *fresh* install, though — the follow-up
+question was "do I have to reinstall naner?" and the honest answer turned
+out to be worse than a plain no: neither `naner self-update` (which only
+swaps the binary) nor `naner update-vendors` (which does reconcile
+`naner.json` against shipped defaults) would have delivered the new
+`PathPrecedence` entries to an already-installed tree, because that
+reconciliation only ever added whole-missing `VendorPaths`/`Profiles` keys
+and a short hardcoded list of specific field migrations — a plain list
+addition like this had no path in at all. `merge_shipped_naner_defaults`
+now reconciles `Environment.PathPrecedence` the same principled way
+`wt_config.rs` already reconciles Windows Terminal profiles: a shipped
+entry missing from the user's list gets appended, unless a
+`.naner-managed-path-precedence.json` marker says the user removed it on
+purpose, in which case it's left alone. `naner update-vendors` on an
+existing install now actually catches up.
+
 The README explained the migration's phase history and listed every CLI
 subcommand, but never actually said how to install or start using the
 thing — someone landing on the repo had no path from "what is this" to

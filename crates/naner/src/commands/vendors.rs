@@ -96,13 +96,23 @@ fn merge_config_defaults(naner_root: &std::path::Path) {
 
     if let Some(config_path) = find_configuration_file(naner_root) {
         match merge_shipped_naner_defaults(&config_path) {
-            Ok(NanerConfigMergeOutcome::Merged { added, refreshed }) => {
+            Ok(NanerConfigMergeOutcome::Merged {
+                added,
+                refreshed,
+                respected_deletions,
+            }) => {
                 if !added.is_empty() {
-                    logger::info(&format!(
+                    let mut line = format!(
                         "Added {} new naner.json default(s): {}",
                         added.len(),
                         added.join(", ")
-                    ));
+                    );
+                    if respected_deletions > 0 {
+                        line.push_str(&format!(
+                            " ({respected_deletions} left removed, as you left them)"
+                        ));
+                    }
+                    logger::info(&line);
                 }
                 if !refreshed.is_empty() {
                     logger::info(&format!(
