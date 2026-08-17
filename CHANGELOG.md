@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.6.4.
+
+## [0.6.4] - 2026-08-17
 ### Added
 - `update-vendors` now reconciles `config/naner.json` (or `.yaml`/`.yml`) and
   `config/vendors.json` against the defaults this binary ships, not just

@@ -9,6 +9,14 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.6.4.
+
+---
+
+## v0.6.4 — 2026-08-17
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.6.3...v0.6.4).
+
 Real-world validation of v0.6.3's vendor-set swap turned up seven more
 issues — none of them CI-reachable, all of them the same shape as the
 session that shipped v0.6.0: naner did one thing and reported another.
