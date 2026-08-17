@@ -1,6 +1,9 @@
 ## [Unreleased]
-
-Nothing merged since v0.6.5.
+### Added
+- README now has real "Installation" and "Usage" sections — how to get
+  `naner-init.exe`, what it does on first run, and the common `naner`
+  commands — instead of only the migration-phase history and CLI reference
+  it had before.
 
 ## [0.6.5] - 2026-08-17
 ### Added

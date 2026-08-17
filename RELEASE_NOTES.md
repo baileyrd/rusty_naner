@@ -9,7 +9,13 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.6.5.
+The README explained the migration's phase history and listed every CLI
+subcommand, but never actually said how to install or start using the
+thing — someone landing on the repo had no path from "what is this" to
+"running terminal." Added Installation (download `naner-init.exe`, what it
+verifies and bootstraps on first run) and Usage (the common `naner`
+commands, installing optional dev tools, self-update) sections right after
+the intro, ahead of the migration-status writeup.
 
 ---
 
