@@ -1,6 +1,21 @@
 ## [Unreleased]
+### Added
+- `update-vendors`/`install WindowsTerminal` now reconciles Naner's own
+  profiles into an existing `settings/settings.json` by GUID instead of
+  leaving it untouched: a profile the user still has is refreshed to match
+  the current template, one they never had is added, and one they removed
+  on purpose stays gone (tracked via `.naner-managed-profiles.json`) (#52).
 
-Nothing yet.
+### Fixed
+- `naner -p <name>` now fails loudly (`Profile not found`, the available
+  list, exit 1) on a mistyped or removed profile instead of silently
+  falling back to the default profile with exit 0. Only the explicit `-p`
+  case is stricter; not passing `-p` at all keeps today's behavior (#57).
+- Launching a profile whose shell vendor is not installed now fails with
+  `<Shell> is not installed - run \`naner install <vendor>\`` instead of
+  handing Windows Terminal a path it cannot find, which surfaced as a raw
+  NT status code (`0x80070002`) from a different program naming a path the
+  user never typed (#41).
 
 ## [0.6.1] - 2026-08-16
 ### Fixed

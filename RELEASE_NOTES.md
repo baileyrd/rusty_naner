@@ -9,7 +9,37 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.6.1.
+Closes out the rest of the open backlog: #41, #52, #57.
+
+**A missing vendor used to fail one process too late.** `naner` checked
+that Windows Terminal existed, then handed it a shell path it had never
+checked — `pwsh.exe`, `bash.exe`, whatever `VendorPaths` said or a bare
+default guessed. On a tree with nothing installed yet (the ordinary state
+before `naner install`, not an edge case), the terminal opened and
+immediately showed an NT status code from itself, naming a path the user
+never typed. `naner` now resolves and checks the shell before ever building
+that argument string, and fails with "PowerShell is not installed — run
+`naner install powershell`" instead (#41).
+
+**A mistyped profile name used to just... work, wrong.** `naner -p
+SomeTypo` silently launched the default profile instead — exit 0, a
+terminal opens, and the only trace is a warning most callers never see.
+Every call site resolved a profile the same way regardless of whether the
+name came from an explicit `-p` or the configured default, so the failure
+path this always claimed to have was dead code. An explicit, unresolvable
+`-p` now fails loudly with the profile list and exit 1; not passing `-p` at
+all is unaffected (#57).
+
+**Windows Terminal profiles finally reach an existing install.** #50 made
+`naner` stop overwriting a user's `settings.json` outright, which was the
+right emergency fix and left a real gap: template changes never reached
+anyone who had already installed. `update-vendors` now reconciles Naner's
+own profiles into the file by GUID — refreshed if still present, added if
+never offered before, left alone if the user removed one on purpose
+(tracked in a small sidecar so "never added" and "deleted" are never
+confused). The trade is the same one `naner migrate` already makes for
+`naner.json`: the merge is a JSON round-trip, so comments do not survive
+it, and every rewrite is backed up first (#52).
 
 ---
 

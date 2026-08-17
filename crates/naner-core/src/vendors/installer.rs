@@ -2271,14 +2271,29 @@ mod tests {
         assert!(target.join(".portable").is_file());
 
         // Asserting `is_file()` here is what let the overwrite through: the
-        // configurator rewrote settings.json from the template on every
-        // update, and a file was still present afterwards, so this passed
-        // while every colour scheme and key binding the user had set was
-        // being destroyed. Read the contents.
+        // configurator used to rewrite settings.json from the template on
+        // every update, wholesale, and a file was still present afterward,
+        // so this passed while every colour scheme and key binding the user
+        // had set was being destroyed. Read the contents.
+        //
+        // #52: naner now reconciles its own profiles into the file by GUID
+        // instead of leaving it untouched or overwriting it whole. This
+        // fixture's settings.json has never seen a Naner profile before, so
+        // one is added -- but the user's own key survives right alongside
+        // it, which is the property #50 needed and #52 keeps.
+        let updated: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(target.join("settings/settings.json")).unwrap(),
+        )
+        .unwrap();
         assert_eq!(
-            std::fs::read_to_string(target.join("settings/settings.json")).unwrap(),
-            "{\"user\":\"edited\"}",
-            "an update must not replace the user's Windows Terminal settings"
+            updated["user"], "edited",
+            "an update must not drop the user's own Windows Terminal settings"
+        );
+        assert!(
+            updated["profiles"]["list"]
+                .as_array()
+                .is_some_and(|list| !list.is_empty()),
+            "a Naner profile the user never had should be offered: {updated}"
         );
     }
 
