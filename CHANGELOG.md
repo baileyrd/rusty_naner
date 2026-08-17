@@ -1,5 +1,13 @@
 ## [Unreleased]
 ### Fixed
+- `Http::download` now retries up to 3 times on a dropped connection
+  instead of failing the install outright — observed for real on Anaconda
+  (~1 GB, by far the largest artifact naner downloads): a connection reset
+  partway through failed the whole install, and `static`-type vendors like
+  it have no fallback URL to fall through to the way `github`-type ones
+  do. Added a local-server regression test that deterministically
+  reproduces a truncated-then-complete connection without touching the
+  real network.
 - Four vendors added in the same batch as HiFile/OneCommander/etc. (HiFile,
   Obsidian, Zed, Zen) shipped `installerArgs` that never referenced
   `%TARGETDIR%`, so `naner install` ran their installer silently and
