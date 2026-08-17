@@ -39,7 +39,13 @@ manually fetching a current `naner-init.exe` from `rusty_naner`.
 This is also the first release actually being used to test the new
 publish target end-to-end (real exe assets attached to a real `rusty_naner`
 tag), so treat it as a workflow shakedown release rather than a
-feature-complete milestone.
+feature-complete milestone. That test caught a real bug before it shipped:
+CI's `windows-latest` job failed on the first attempt at this PR, tracing
+back to two `launcher` tests that mutate the process-global `PATH` env var
+without synchronizing against each other. Under `cargo test`'s default
+multi-threaded runner they raced, and the real system `bash.exe` (Git for
+Windows ships one on `windows-latest`) leaked into a window one test
+expected `PATH` to be empty. Both now hold a shared test-only mutex.
 
 ---
 
