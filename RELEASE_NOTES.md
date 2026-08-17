@@ -9,6 +9,14 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.6.3.
+
+---
+
+## v0.6.3 — 2026-08-17
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.6.2...v0.6.3).
+
 **The default vendor set changes shape.** Git for Windows replaces MSYS2 as
 the vendor that's required and enabled out of the box — it's the same
 self-extracting-archive install pattern already used elsewhere (a

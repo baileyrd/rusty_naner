@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing yet.
+
+## [0.6.3] - 2026-08-17
 ### Changed
 - Default vendor set: **Git for Windows** replaces MSYS2 as the required,
   enabled-by-default provider of Bash/Git (portable `PortableGit-*.7z.exe`,
