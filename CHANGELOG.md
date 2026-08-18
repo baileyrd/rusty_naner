@@ -1,6 +1,10 @@
 ## [Unreleased]
-
-Nothing merged since v0.8.2.
+### Added
+- The first-run bootstrap (and `naner init`) now offers to put naner on the
+  user PATH after a successful install — the same edit `naner add-to-path`
+  makes, as an opt-in `(Y/n)` prompt. Declining just prints how to do it
+  later, a registry failure does not fail the bootstrap, and non-interactive
+  runs (EOF) decline automatically.
 
 ## [0.8.2] - 2026-08-18
 ### Added

@@ -9,7 +9,10 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.8.2.
+- The first-run bootstrap offers PATH setup: after a successful install it
+  asks whether to put `vendor\bin` on the user PATH (the `add-to-path`
+  edit), so a fresh install ends with `naner` callable from any new shell
+  without a second command. Opt-in, decline-safe, and EOF declines.
 
 
 ## v0.8.2 — 2026-08-18

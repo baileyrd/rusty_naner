@@ -29,6 +29,14 @@ pub fn execute(args: &[String]) -> i32 {
     run(&naner_root, remove, dry_run)
 }
 
+/// Add without the CLI arg parsing — the bootstrap calls this after a
+/// successful install to make `naner` resolve from any new shell. Windows
+/// only, like its one caller: on other platforms it would be dead code.
+#[cfg(windows)]
+pub fn add(naner_root: &Path) -> i32 {
+    run(naner_root, false, false)
+}
+
 /// Same location `setup-shell` points at: `vendor/bin` is where the release
 /// workflow stages `naner.exe` and where updates install it. `bin/` is the
 /// user's own directory.
