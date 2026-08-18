@@ -9,7 +9,36 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.7.0.
+The self-update mechanism worked; the discovery didn't. `naner-init`'s
+"update" was sync-to-embedded — it installed the release matching its own
+compiled-in version, and its update check compared two local values, so no
+naner installation ever learned that a newer release existed. Updating
+really meant: know somehow that a release happened, manually download the
+new `naner-init.exe`, and let it drag `naner.exe` up to match. Coherent,
+verifiable, and invisible.
+
+`naner-init update` now asks GitHub for the latest release and installs it —
+both binaries. Replacing itself uses the rename-aside trick (Windows will
+rename a running exe but not overwrite one); the displaced file is parked as
+`.old` and swept on the next launch. Two details carry the safety. Both
+downloads are verified against the release's `SHA256SUMS` before either
+file is touched — half a verified update is not an update. And the init is
+swapped *first*: if the second swap fails, the tree holds a new init and an
+old `naner.exe`, and the next run offers the update again — the other order
+leaves a new `naner.exe` under a stale init whose sync check would offer to
+"update" it back down. A release missing either binary installs nothing,
+for the same reason, and a test pins each of these properties.
+
+Plain launches stay offline — the fast local check is unchanged, and
+`naner-init check-update` is the explicit "ask the network" command.
+
+`naner.bat` is gone. It survived this long on the theory that it was the
+one launcher with no network round-trip; reading the code killed that — the
+launch check was always two local file reads, so the bat had no advantage
+over `naner-init`'s pass-through launch from the same root directory. Its
+other history this session was drifting twice (a trailing-backslash
+`NANER_ROOT` and a PowerShell fallback that didn't exist), which is the
+usual fate of a file nothing executes in CI.
 
 
 ## v0.7.0 — 2026-08-18

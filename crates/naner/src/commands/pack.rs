@@ -14,7 +14,6 @@ use zip::write::SimpleFileOptions;
 /// reported rather than silently producing a thinner bundle than the name
 /// implies.
 const BUNDLED: [&str; 4] = ["bin", "config", "home", "icons"];
-const BUNDLED_FILES: [&str; 1] = ["naner.bat"];
 
 /// Never bundle transient working files: vendor staging, in-flight downloads,
 /// or the timestamped backups `migrate` and `profile import` leave behind. A
@@ -120,23 +119,6 @@ pub fn execute(args: &[String]) -> i32 {
             }
         }
     }
-    for name in BUNDLED_FILES {
-        let path = source.join(name);
-        if !path.is_file() {
-            missing.push(name);
-            continue;
-        }
-        let write = zip
-            .start_file(name, options)
-            .map_err(std::io::Error::other)
-            .and_then(|()| fs::read(&path).and_then(|b| zip.write_all(&b)));
-        if let Err(err) = write {
-            logger::failure(&format!("Failed while adding {name}: {err}"));
-            return 1;
-        }
-        total += 1;
-    }
-
     if let Err(err) = zip.finish() {
         logger::failure(&format!("Failed to finalize bundle: {err}"));
         return 1;

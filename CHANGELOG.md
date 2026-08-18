@@ -1,6 +1,24 @@
 ## [Unreleased]
+### Changed
+- `naner-init update` (and `naner self-update`, which hands over to it) now
+  updates to the **latest published release** and replaces both binaries —
+  `naner-init.exe` itself included, via rename-aside, since Windows will
+  rename a running exe but not overwrite one. Previously the update synced
+  `naner.exe` to the init's own embedded version, so nothing ever surfaced
+  that a newer release existed; updating meant knowing to manually download
+  a new `naner-init.exe` first. Both downloads are verified against the
+  release's `SHA256SUMS` before either file is touched, and the init is
+  swapped first so an interrupted update leaves a tree that offers the
+  update again rather than one whose stale init would offer a downgrade.
+  `naner-init check-update` now also compares against the latest release.
+  Plain launches stay offline: the launch-time check is unchanged.
 
-Nothing merged since v0.7.0.
+### Removed
+- `naner.bat`. Nothing in the workspace called it, and its one remaining
+  justification — launching without a network round-trip — turned out to be
+  no justification at all: the launch-time check was always two local file
+  reads. `naner-init` covers the double-click and pass-through cases from
+  the same root directory, with bootstrap on top.
 
 ## [0.7.0] - 2026-08-18
 ### Fixed

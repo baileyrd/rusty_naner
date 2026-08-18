@@ -13,7 +13,7 @@
 # checks here, per `constants::github::REPO`.
 #
 # Bundle layout mirrors the C# first-run extraction contract; the static
-# files (bin/, config/, home/, icons/, naner.bat) were originally vendored
+# files (bin/, config/, home/, icons/) were originally vendored
 # from baileyrd/naner into dist-assets/.
 
 name: Release
