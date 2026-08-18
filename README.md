@@ -70,6 +70,7 @@ naner --profile PowerShell     # launch a specific profile (Unified, PowerShell,
 naner -p Bash -d C:\projects   # launch Bash starting in a given directory
 naner --diagnose               # check installation health
 naner --export-env             # print env vars for sourcing into an existing shell
+naner add-to-path              # make `naner` callable from any shell (undo: --remove)
 ```
 
 Optional developer tools — Node.js, Go, Rust, Ruby, Bun, Anaconda, .NET SDK,
@@ -167,6 +168,7 @@ that cross-publish has been removed. Phases 0–5 done:
 - **`naner completions <shell>`**: Generates tab-completion scripts for PowerShell, Bash, Zsh, and Fish.
 - **`naner shell-integration <shell>`**: Emits OSC 133 prompt-marking and command lifecycle hooks for **rusty_term** / `l13` / MCP protocols.
 - **`naner setup-shell [pwsh|bash|cmd] [--dry-run]`**: Adds the naner environment export to the shell's startup file, idempotently and with a backup. `cmd` has no startup file to edit, so it prints the line and says why.
+- **`naner add-to-path [--remove] [--dry-run]`**: Puts `%NANER_ROOT%\vendor\bin` on the *user* PATH (`HKCU\Environment`, no admin), so `naner` itself resolves from any shell without importing the whole environment the way `setup-shell` does. Edits the registry value directly — `setx` truncates at 1024 characters — preserving its type and the rest of its contents, then broadcasts the change so new shells see it. `--remove` undoes it.
 - **`naner repair`**: Cleans broken staging directories and re-bootstraps missing essential vendor tools.
 - **`naner profile [list|export|import]`**: Lists profiles, exports one to JSON, and imports one back. `import` writes into `CustomProfiles` (so a built-in of the same name is never overwritten in place), keeps a timestamped backup, and supports `--as <name>` and `--dry-run`.
 - **`naner diff [profile]`**: Compares host environment variables against target profile environment definitions.

@@ -3,6 +3,7 @@
 //! the launcher path should run (the C# `NoCommandMatch = -1` sentinel that
 //! never escapes to the OS).
 
+pub mod add_to_path;
 pub mod bench;
 pub mod bootstrap;
 pub mod checksum;
@@ -52,8 +53,9 @@ pub mod names {
     pub const INIT: &str = "init";
     pub const UPDATE: &str = "update";
     pub const CHECK_UPDATE: &str = "check-update";
+    pub const ADD_TO_PATH: &str = "add-to-path";
 
-    pub const CONSOLE_COMMANDS: [&str; 28] = [
+    pub const CONSOLE_COMMANDS: [&str; 29] = [
         VERSION,
         VERSION_SHORT,
         HELP,
@@ -82,6 +84,7 @@ pub mod names {
         INIT,
         UPDATE,
         CHECK_UPDATE,
+        ADD_TO_PATH,
     ];
 }
 
@@ -115,6 +118,7 @@ pub enum Verb {
     Init,
     Update,
     CheckUpdate,
+    AddToPath,
 }
 
 impl Verb {
@@ -145,6 +149,7 @@ impl Verb {
             names::INIT => Self::Init,
             names::UPDATE => Self::Update,
             names::CHECK_UPDATE => Self::CheckUpdate,
+            names::ADD_TO_PATH => Self::AddToPath,
             _ => return None,
         })
     }
@@ -176,6 +181,7 @@ impl Verb {
             Self::Init => bootstrap::execute_init(state),
             Self::Update => bootstrap::execute_update(state),
             Self::CheckUpdate => bootstrap::execute_check_update(),
+            Self::AddToPath => add_to_path::execute(rest),
         }
     }
 }
@@ -242,6 +248,10 @@ mod tests {
             names::INSTALL,
             names::ROOT,
             names::LOCK,
+            names::INIT,
+            names::UPDATE,
+            names::CHECK_UPDATE,
+            names::ADD_TO_PATH,
         ] {
             assert!(
                 names::CONSOLE_COMMANDS.contains(&name),
@@ -307,6 +317,10 @@ mod tests {
             Verb::Install,
             Verb::Root,
             Verb::Lock,
+            Verb::Init,
+            Verb::Update,
+            Verb::CheckUpdate,
+            Verb::AddToPath,
         ];
         for verb in all {
             assert!(

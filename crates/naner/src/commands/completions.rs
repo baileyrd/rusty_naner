@@ -53,6 +53,7 @@ fn build_cli_command() -> Command {
         .subcommand(Command::new("install").about("Install vendor tools"))
         .subcommand(Command::new("update-vendors").about("Update installed vendors"))
         .subcommand(Command::new("root").about("Print NANER_ROOT path"))
+        .subcommand(Command::new("add-to-path").about("Add naner to the user PATH"))
 }
 
 #[cfg(test)]
