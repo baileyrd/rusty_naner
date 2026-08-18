@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.7.1.
+
+## [0.7.1] - 2026-08-18
 ### Changed
 - `naner-init update` (and `naner self-update`, which hands over to it) now
   updates to the **latest published release** and replaces both binaries —
