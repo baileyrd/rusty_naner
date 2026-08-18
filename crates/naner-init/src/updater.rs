@@ -141,25 +141,14 @@ impl<'a> NanerUpdater<'a> {
         )
     }
 
-    /// Update both binaries to the newest published release.
-    ///
-    /// This replaced the sync-to-embedded `update_naner_exe`, whose model was
-    /// "replace naner-init by hand, and it pulls naner.exe up to match". The
-    /// check that model relied on compared two local values, so nothing ever
-    /// told a user that a newer release existed — the mechanism worked and
-    /// the discovery did not.
-    pub fn update_to_latest(&self) -> bool {
-        let Some(release) = self.fetch_latest() else {
-            return false;
-        };
-        let Ok(self_path) = std::env::current_exe() else {
-            logger::failure("Could not determine this executable's own path");
-            return false;
-        };
-        self.update_from_release(&release, &self_path)
-    }
-
     /// The newest published release, with the failure logged.
+    ///
+    /// Callers pair this with [`update_from_release`](Self::update_from_release)
+    /// — fetch, show the tag, prompt, then act — which together replaced the
+    /// sync-to-embedded `update_naner_exe`. That model was "replace naner-init
+    /// by hand, and it pulls naner.exe up to match"; its check compared two
+    /// local values, so nothing ever told a user a newer release existed —
+    /// the mechanism worked and the discovery did not.
     pub fn fetch_latest(&self) -> Option<GitHubRelease> {
         let release = self.github.get_latest_release();
         if release.is_none() {
