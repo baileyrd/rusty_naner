@@ -9,6 +9,37 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Two follow-ups to moving vendor environment data into the vendor files, both
+closing gaps that move deliberately left open.
+
+A vendor switched off now contributes nothing. Before the split every PATH
+entry and variable lived in `naner.json` unconditionally, and what actually
+kept an uninstalled vendor off PATH was `build_unified_path` discarding
+directories that do not exist — a side effect doing a job nobody had assigned
+it. The case it never covered is the one that matters: a vendor installed and
+then disabled kept its directory on PATH and its variables set, which is
+precisely what disabling it is for. `enabled` now gates the contribution
+directly. On a fresh tree nothing changes, because those directories are not
+there either way; the difference appears exactly where the old behavior was
+wrong.
+
+This did mean the test asserting the assembled PATH still matches the original
+26-entry list had to stop reading the shipped `enabled` flags — eight of the
+eleven vendors with PATH entries ship `enabled: false`, so reading them as
+shipped would have left most of the `pathPriority` data unexercised. It now
+switches every vendor on first, which is the right scope for it: that test is
+about the ordering data being correct, not about which vendors are on.
+
+And `DOTNET_CLI_TELEMETRY_OPTOUT` now has one source instead of two. It was
+force-set in `apply_env_overrides` and also declared in `DotNetSDK.json`, and
+because the overrides run before the merge — which only fills in keys still
+missing — the code won every time and the vendor file's copy never did
+anything. The vendor file is now the only source, which also means the
+variable follows the vendor it belongs to: no .NET SDK enabled, no `dotnet`
+CLI, nothing to opt out of. `POWERSHELL_TELEMETRY_OPTOUT` and
+`AZURE_CORE_COLLECT_TELEMETRY` stay in code, having no vendor to belong to —
+the Azure CLI is not something naner installs at all.
+
 Splitting `vendors.json` into a file per vendor only did half the job, which
 became obvious the moment anyone opened one: a vendor file said how to
 download and unpack a tool and nothing about what it means once installed.
