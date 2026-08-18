@@ -9,6 +9,33 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.8.0.
+
+
+## v0.8.0 — 2026-08-18
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.7.1...v0.8.0).
+
+The single-binary release. `naner.exe` is launcher, installer, and updater
+in one; `naner-init.exe` is retired as a separate program but every release
+still publishes an asset by that name — a byte-copy — so deployed
+0.6.x–0.7.x installs keep updating. Also ships the legacy-YAML convert
+hint and the install-doc corrections from the v0.7.1 field validation.
+
+### Known limitations for this release
+
+The single-binary flows are CI-verified but not yet field-validated.
+Three tests close that gap, in order (see docs/VALIDATION.md Step 6):
+
+1. **Fresh install** — new folder, this release's `naner.exe`,
+   `Unblock-File`, run, `Y` twice; pass = Windows Terminal opens.
+2. **Update with leftovers** — same folder, set `.naner-version` to
+   `v0.0.1`, `naner update`; pass = every copy refreshed, including
+   `vendor\\bin\\naner-init.exe`.
+3. **0.7.x compat** — in a 0.7.1 tree, run its old `naner-init update`;
+   pass = it installs this release and the old name now holds the new
+   binary.
+
 naner is one binary now. The `naner`/`naner-init` split existed for a single
 reason — a process cannot overwrite its own executable — and the v0.7.1
 self-update validation proved in the field that it never needed to: Windows
