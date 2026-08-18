@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.8.1.
+
+## [0.8.1] - 2026-08-18
 ### Fixed
 - The #81 keystroke race is closed in code instead of documentation. Neither
   `cmd.exe` nor PowerShell waits for a GUI-subsystem process, so an
