@@ -44,6 +44,16 @@
   releases page instead. Added a regression test that reads the real shipped
   file, since nothing else in the workspace does.
 
+- `naner.bat` now hands over to `naner-init.exe` when `vendor\bin\naner.exe`
+  is missing, instead of only printing an error — it looks at the root (where
+  a first-time user drops it) then `vendor\bin` (where an install that has
+  updated itself keeps it), and launches it via `start /wait`, since
+  `naner-init` is a GUI-subsystem binary that `cmd.exe` does not wait for
+  (the same race as #81). `naner-init` prompts before downloading anything
+  and then launches naner with the original arguments, so the shim recovers
+  a half-installed tree without doing anything silently. With neither binary
+  present it still fails loudly, listing every path it checked.
+
 ### Added
 - README now has real "Installation" and "Usage" sections — how to get
   `naner-init.exe`, what it does on first run, and the common `naner`
