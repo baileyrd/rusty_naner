@@ -157,13 +157,14 @@ pub const VENDOR_PATHS_MARKER: &str = "%VENDOR_PATHS%";
 /// A variable the user set in `naner.json` always wins over a vendor's: the
 /// vendor value is a default, the config file is an instruction.
 fn merge_vendor_environment(config: &mut NanerConfig, naner_root: &Path) {
-    // `load_all_vendors`, not `load_vendors`: every one of these entries used
-    // to sit unconditionally in `naner.json`, disabled vendors included, with
-    // `build_unified_path` dropping the directories that do not exist. Gating
-    // on `enabled` here would be a defensible behavior change -- disabling a
-    // vendor arguably should strip it from PATH -- but it is a change, and
-    // this is a move. It stays a separate decision.
-    let mut vendors = crate::vendors::VendorConfigurationLoader::new(naner_root).load_all_vendors();
+    // `load_vendors`, so a vendor switched off contributes nothing: no PATH
+    // entry, no variable. `enabled` means "I want this vendor", and installing
+    // one requires it, so on a real tree this mostly agrees with what
+    // `build_unified_path` already did by dropping directories that do not
+    // exist. Where it differs is the case that motivated the change -- a vendor
+    // installed and later switched off used to keep its directory on PATH and
+    // its variables set, which is precisely what switching it off should stop.
+    let mut vendors = crate::vendors::VendorConfigurationLoader::new(naner_root).load_vendors();
     vendors.sort_by(|a, b| match (a.path_priority, b.path_priority) {
         (Some(x), Some(y)) => x.cmp(&y).then_with(|| a.key.cmp(&b.key)),
         (Some(_), None) => std::cmp::Ordering::Less,
@@ -392,6 +393,20 @@ mod vendor_merge_tests {
             .unwrap();
         }
 
+        // Every shipped vendor is switched on for this test. The assertion is
+        // about `pathPriority` being right, and eight of the eleven vendors
+        // carrying PATH entries ship `enabled: false` -- reading them as
+        // shipped would leave most of the ordering data unexercised.
+        for entry in std::fs::read_dir(config.join("vendors")).unwrap() {
+            let path = entry.unwrap().path();
+            let text = std::fs::read_to_string(&path).unwrap();
+            std::fs::write(
+                &path,
+                text.replace("\"enabled\": false", "\"enabled\": true"),
+            )
+            .unwrap();
+        }
+
         let mut cfg = load_file(&config.join("naner.json")).unwrap();
         merge_vendor_environment(&mut cfg, tmp.path());
 
@@ -404,14 +419,12 @@ mod vendor_merge_tests {
         assert_eq!(actual, EXPECTED, "assembled PATH order drifted");
     }
 
-    /// A disabled vendor still contributes, deliberately. Every one of these
-    /// entries used to sit unconditionally in `naner.json` -- eight of the
-    /// eleven vendors carrying PATH entries ship `enabled: false` -- and
-    /// `build_unified_path` drops the directories that do not exist, which is
-    /// what actually keeps an uninstalled vendor off PATH. Filtering on
-    /// `enabled` here would quietly change what a tree resolves.
+    /// A vendor switched off contributes nothing at all. Before the split
+    /// every entry sat unconditionally in `naner.json`, so a vendor installed
+    /// and then disabled kept its directory on PATH and its variables set --
+    /// exactly what switching it off is supposed to stop.
     #[test]
-    fn a_disabled_vendor_still_contributes_as_it_did_before_the_split() {
+    fn a_disabled_vendor_contributes_neither_path_nor_variables() {
         let tmp = tempfile::tempdir().unwrap();
         let vendors = tmp.path().join("config/vendors");
         std::fs::create_dir_all(&vendors).unwrap();
@@ -432,13 +445,16 @@ mod vendor_merge_tests {
         };
         merge_vendor_environment(&mut cfg, tmp.path());
 
-        assert_eq!(
-            cfg.environment.path_precedence,
-            vec!["%NANER_ROOT%\\vendor\\off"],
-            "a disabled vendor's PATH entry is still emitted; the directory not \
-             existing is what removes it later"
+        assert!(
+            cfg.environment.path_precedence.is_empty(),
+            "a disabled vendor must not put a directory on PATH"
         );
-        assert_eq!(cfg.environment.environment_variables["OFF_HOME"], "x");
+        assert!(
+            !cfg.environment
+                .environment_variables
+                .contains_key("OFF_HOME"),
+            "a disabled vendor must not set its variables"
+        );
     }
 
     /// A value in `naner.json` is an instruction; a vendor's is a default.
@@ -499,6 +515,49 @@ mod vendor_merge_tests {
             cfg.environment.path_precedence,
             vec!["early", "late", "unranked", "last"],
             "priority order, then unranked by key, and the marker's neighbours stay put"
+        );
+    }
+
+    /// `DOTNET_CLI_TELEMETRY_OPTOUT` used to be force-set in
+    /// `apply_env_overrides` *and* declared in `DotNetSDK.json`. Because the
+    /// overrides run first and the merge only fills in missing keys, the code
+    /// won and the vendor file's copy was dead. The vendor file is now the only
+    /// source -- which also means the variable follows the vendor: no .NET SDK
+    /// enabled, nothing to opt out of.
+    #[test]
+    fn the_dotnet_opt_out_comes_from_the_vendor_file_alone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vendors = tmp.path().join("config/vendors");
+        std::fs::create_dir_all(&vendors).unwrap();
+        std::fs::write(
+            vendors.join("DotNetSDK.json"),
+            r#"{"DotNetSDK":{"name":".NET SDK","extractDir":"dotnet-sdk","enabled":true,
+                 "environmentVariables":{"DOTNET_CLI_TELEMETRY_OPTOUT":"1"}}}"#,
+        )
+        .unwrap();
+
+        let mut cfg = NanerConfig::default();
+        crate::config::apply_env_overrides_from(&mut cfg, Vec::new());
+        assert!(
+            !cfg.environment
+                .environment_variables
+                .contains_key("DOTNET_CLI_TELEMETRY_OPTOUT"),
+            "the env-override layer must no longer set this itself"
+        );
+        // The two with no vendor to belong to are still guaranteed there.
+        assert_eq!(
+            cfg.environment.environment_variables["POWERSHELL_TELEMETRY_OPTOUT"],
+            "1"
+        );
+        assert_eq!(
+            cfg.environment.environment_variables["AZURE_CORE_COLLECT_TELEMETRY"],
+            "0"
+        );
+
+        merge_vendor_environment(&mut cfg, tmp.path());
+        assert_eq!(
+            cfg.environment.environment_variables["DOTNET_CLI_TELEMETRY_OPTOUT"], "1",
+            "an enabled .NET SDK supplies it"
         );
     }
 }

@@ -31,17 +31,16 @@ pub fn apply_env_overrides_from(
             .map(|(_, v)| v.as_str())
     };
 
-    // Ensure privacy telemetry opt-out variables are set by default
-    if !config
-        .environment
-        .environment_variables
-        .contains_key("DOTNET_CLI_TELEMETRY_OPTOUT")
-    {
-        config
-            .environment
-            .environment_variables
-            .insert("DOTNET_CLI_TELEMETRY_OPTOUT".to_string(), "1".to_string());
-    }
+    // Ensure privacy telemetry opt-out variables are set by default.
+    //
+    // `DOTNET_CLI_TELEMETRY_OPTOUT` is deliberately absent: it belongs to the
+    // .NET SDK and now lives in `config/vendors/DotNetSDK.json` with the rest
+    // of that vendor's environment. Setting it here as well made the code the
+    // winner over the vendor file -- this runs first, and the merge only fills
+    // in keys that are still missing -- so the vendor file's value was dead.
+    // The two below have no vendor to belong to: PowerShell's opt-out covers a
+    // shell naner may launch from the host, and the Azure CLI is not a vendor
+    // naner installs at all.
     if !config
         .environment
         .environment_variables

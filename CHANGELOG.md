@@ -110,6 +110,24 @@
   guarded by tests for dangling `$ref`s and for every field the shipped
   vendor files actually use.
 
+### Changed
+- **Breaking:** a vendor with `enabled: false` no longer contributes its
+  `pathPrecedence` entries or `environmentVariables`. Previously every entry
+  sat in `naner.json` unconditionally and only `build_unified_path` dropping
+  nonexistent directories kept an uninstalled vendor off PATH — so a vendor
+  installed and then switched off kept its directory on PATH and its variables
+  set, which is what switching it off should have stopped. On a fresh tree the
+  effect is nil (the directories do not exist yet); the difference shows on a
+  tree where a vendor was installed and later disabled.
+- `DOTNET_CLI_TELEMETRY_OPTOUT` is no longer force-set by
+  `apply_env_overrides`; `config/vendors/DotNetSDK.json` is its only source.
+  The overrides ran first and the merge only fills in missing keys, so the
+  code always won and the vendor file's copy was dead. Combined with the
+  change above, the variable now follows its vendor: with no .NET SDK enabled
+  it is not set, there being no `dotnet` CLI to opt out of.
+  `POWERSHELL_TELEMETRY_OPTOUT` and `AZURE_CORE_COLLECT_TELEMETRY` stay in
+  code — neither belongs to a vendor naner installs.
+
 ### Added
 - README now has real "Installation" and "Usage" sections — how to get
   `naner-init.exe`, what it does on first run, and the common `naner`
