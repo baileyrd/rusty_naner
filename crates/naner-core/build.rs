@@ -94,8 +94,6 @@ fn build_catalog(vendors_dir: &Path) -> String {
     // read `{"vendors": {...}}` and ignore anything alongside it.
     let mut root = serde_json::Map::new();
     root.insert("vendors".into(), serde_json::Value::Object(vendors));
-    let catalog = serde_json::to_string_pretty(&serde_json::Value::Object(root))
-        .expect("a catalog assembled from parsed JSON always re-serializes");
-
-    catalog
+    serde_json::to_string_pretty(&serde_json::Value::Object(root))
+        .expect("a catalog assembled from parsed JSON always re-serializes")
 }
