@@ -9,6 +9,28 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.8.1.
+
+
+## v0.8.1 — 2026-08-18
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.8.0...v0.8.1).
+
+One fix: the #81 keystroke race dies in code. Interactive flows
+(bootstrap, `init`, `update`) run bare from a shell now open a console
+of their own instead of racing the shell for keystrokes — the
+`Start-Process -Wait` / `start /wait` wrappers keep working but are no
+longer needed. Pipes, scripts, and CI keep the inline path.
+
+### Known limitations for this release
+
+- The re-exec is untested on a real Windows box until this release's
+  three bare-invocation checks run: bare bootstrap in an empty folder,
+  bare `naner init`, bare `naner update` — each should open its own
+  console window with a working prompt.
+- A tree on 0.8.0 must update to this release with a wrapped
+  invocation one last time (0.8.0's prompt code predates the fix).
+
 Third strike for the #81 keystroke race, and this time it dies in code. The
 sequence: documented for `cmd.exe` in 0.6.x; discovered to bite PowerShell
 identically during the v0.7.1 validation (the docs were corrected to demand
