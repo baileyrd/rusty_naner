@@ -81,6 +81,8 @@ pub fn run_bootstrap(updater: &NanerUpdater, naner_root: &Path, state: ConsoleSt
     logger::success("Naner is ready!");
     logger::newline();
 
+    offer_add_to_path(naner_root);
+
     if prompt_yes("Launch Naner now? (Y/n): ") {
         return updater.launch_naner(&[]);
     }
@@ -209,6 +211,24 @@ fn download_essentials(naner_root: &Path) {
         logger::warning("Some vendors failed to install, but Naner may still function");
     }
 }
+
+/// Offer PATH setup right after a successful install, so `naner` resolves
+/// from any new shell without a second command. Declining is not a dead end
+/// — the standalone `naner add-to-path` covers it later — and a registry
+/// failure does not fail the bootstrap: the install itself is already done
+/// and working. Windows-only; elsewhere there is no user PATH to edit.
+#[cfg(windows)]
+fn offer_add_to_path(naner_root: &Path) {
+    if prompt_yes("Add naner to your PATH so 'naner' works in any new shell? (Y/n): ") {
+        super::add_to_path::add(naner_root);
+    } else {
+        logger::info("Run 'naner add-to-path' to add it later.");
+    }
+    logger::newline();
+}
+
+#[cfg(not(windows))]
+fn offer_add_to_path(_naner_root: &Path) {}
 
 /// Interactive prompts accept a bare Enter/`y`/`yes` (trimmed,
 /// case-insensitive) as yes.

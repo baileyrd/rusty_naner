@@ -56,9 +56,12 @@ separate installer.
    - extracts the bundle into `NANER_ROOT` in place;
    - prompts to bootstrap the four required tools, installed in a fixed
      order: 7-Zip, PowerShell, Windows Terminal, then Git for Windows;
+   - offers to put naner on your user PATH so `naner` works from any new
+     shell (same as running `naner add-to-path` later; `--remove` undoes it);
    - offers to launch naner immediately once that's done.
 
-No admin rights are required, and nothing is written outside `NANER_ROOT`.
+No admin rights are required, and nothing is written outside `NANER_ROOT` —
+except the user-PATH entry above, and only if you say yes to it.
 
 ## Usage
 
