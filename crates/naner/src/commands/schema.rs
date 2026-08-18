@@ -115,17 +115,22 @@ fn config_schema_value() -> serde_json::Value {
     })
 }
 
-/// The `vendors.json` schema.
+/// The schema for one vendor definition file under `config/vendors/`.
+///
+/// Each file holds exactly one top-level key -- the vendor key -- so the
+/// schema is a single-property object, not the `{"vendors": {...}}` root the
+/// pre-split `vendors.json` used.
 fn vendors_schema_value() -> serde_json::Value {
     json!({
                 "$schema": "http://json-schema.org/draft-07/schema#",
-                "title": "VendorsConfig",
-                "description": "Configuration schema for naner vendors manifest",
+                "title": "VendorDefinition",
+                "description": "Configuration schema for a single naner vendor definition file",
                 "type": "object",
-                "properties": {
-                    "vendors": {
-                        "type": "object",
-                        "additionalProperties": {
+                "minProperties": 1,
+                "maxProperties": 1,
+                "additionalProperties": false,
+                "patternProperties": {
+                    "^[A-Z][A-Za-z0-9]+$": {
                             "type": "object",
                             "properties": {
                                 "name": { "type": "string" },
@@ -183,7 +188,6 @@ fn vendors_schema_value() -> serde_json::Value {
                             }
                         }
                     }
-                }
     })
 }
 

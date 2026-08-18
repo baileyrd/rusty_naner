@@ -1,0 +1,31 @@
+{
+  "Rust": {
+    "name": "Rust",
+    "description": "Systems programming language via rustup",
+    "extractDir": "rust",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe",
+      "version": "latest",
+      "fileName": "rustup-init.exe",
+      "size": "~10"
+    },
+    "checksumSource": {
+      "type": "sidecar",
+      "suffix": ".sha256"
+    },
+    "postInstallFunction": "Rust.PostInstall",
+    "installType": "installer",
+    "installerArgs": [
+      "-y",
+      "--default-toolchain",
+      "stable",
+      "--profile",
+      "default",
+      "--no-modify-path"
+    ]
+  }
+}

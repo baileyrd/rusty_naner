@@ -16,7 +16,13 @@ pub const PHASE_NAME: &str = "Production Release - Pure Rust Implementation";
 pub const INITIALIZATION_MARKER_FILE: &str = ".naner-initialized";
 pub const VERSION_FILE: &str = ".naner-version";
 pub const CONFIG_FILE_NAME: &str = "naner.json";
-pub const VENDORS_CONFIG_FILE_NAME: &str = "vendors.json";
+/// Directory of per-vendor definition files, one JSON file per vendor,
+/// under `config/`. Replaced the single `vendors.json`; the old name is
+/// kept below only so the loader can recognise a pre-split tree and say so.
+pub const VENDORS_CONFIG_DIR_NAME: &str = "vendors";
+/// The pre-split monolithic file. No longer read -- see
+/// `VendorConfigurationLoader::load_all_vendors`.
+pub const LEGACY_VENDORS_CONFIG_FILE_NAME: &str = "vendors.json";
 
 /// Supported configuration file names in priority order (no cross-file
 /// merging: the first that exists wins).

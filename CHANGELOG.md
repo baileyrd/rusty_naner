@@ -54,6 +54,20 @@
   a half-installed tree without doing anything silently. With neither binary
   present it still fails loudly, listing every path it checked.
 
+- **Breaking:** `config/vendors.json` is replaced by `config/vendors/`, one
+  JSON file per vendor named after the key it declares. The pre-split file is
+  no longer read; a tree that still has one gets an explicit warning saying so
+  rather than the generic "not found", because the silent consequence is
+  falling back to four hardcoded essentials and losing the other eighteen.
+  `build.rs` assembles the files into the single catalog `config_merge.rs`
+  embeds, so `include_str!` still has one file to point at and a bare
+  `naner.exe` swap still carries the catalog. `merge_shipped_vendor_defaults`
+  now writes a file per missing vendor instead of editing the user's JSON,
+  which makes "never overwrite a customized entry" structural rather than a
+  key-by-key check, and stops one malformed entry blocking every other vendor
+  from being added. `vendors-schema.json` and `naner schema vendors` describe
+  a single-vendor file. Vendor listing order is now sorted by file name.
+
 ### Added
 - README now has real "Installation" and "Usage" sections — how to get
   `naner-init.exe`, what it does on first run, and the common `naner`

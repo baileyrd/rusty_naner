@@ -1,0 +1,33 @@
+{
+  "Zed": {
+    "name": "Zed",
+    "description": "High-performance, multiplayer code editor from the creators of Atom and Tree-sitter",
+    "extractDir": "zed",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "zed-industries/zed",
+      "assetPattern": "Zed-x86_64.exe",
+      "fallback": {
+        "version": "v1.15.0",
+        "url": "https://github.com/zed-industries/zed/releases/download/v1.15.0/Zed-x86_64.exe",
+        "fileName": "Zed-x86_64.exe",
+        "size": "~88"
+      }
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "cfb4a1d9dd2e7959c4ebe29bb7436487a8766c4c3e086111fde5bb6fcf19766c",
+      "required": true
+    },
+    "installType": "installer",
+    "installerArgs": [
+      "/VERYSILENT",
+      "/NORESTART",
+      "/DIR=%TARGETDIR%"
+    ],
+    "postInstallFunction": "Zed.PostInstall"
+  }
+}

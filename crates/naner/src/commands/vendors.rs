@@ -132,23 +132,20 @@ fn merge_config_defaults(naner_root: &std::path::Path) {
         }
     }
 
-    let vendors_path = naner_root
+    let vendors_dir = naner_root
         .join(constants::directory_names::CONFIG)
-        .join(constants::VENDORS_CONFIG_FILE_NAME);
-    match merge_shipped_vendor_defaults(&vendors_path) {
+        .join(constants::VENDORS_CONFIG_DIR_NAME);
+    match merge_shipped_vendor_defaults(&vendors_dir) {
         Ok(VendorsMergeOutcome::Added(keys)) => {
             logger::info(&format!(
-                "Added {} new vendor definition(s) to vendors.json: {}",
+                "Added {} new vendor definition(s) to config/vendors/: {}",
                 keys.len(),
                 keys.join(", ")
             ));
         }
-        Ok(VendorsMergeOutcome::LeftUnparsed) => {
-            logger::warning("    config/vendors.json could not be parsed; left unchanged");
-        }
         Ok(VendorsMergeOutcome::UpToDate | VendorsMergeOutcome::NoConfig) => {}
         Err(e) => {
-            logger::warning(&format!("    Could not update config/vendors.json: {e}"));
+            logger::warning(&format!("    Could not update config/vendors/: {e}"));
         }
     }
 }
@@ -592,15 +589,28 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let config = dir.path().join("config");
         std::fs::create_dir_all(&config).unwrap();
-        std::fs::write(
-            config.join("vendors.json"),
-            r#"{"vendors":{
-                 "SevenZip":{"name":"7-Zip","extractDir":"7zip","enabled":true},
-                 "RustyTerm":{"name":"Rusty Term","extractDir":"rusty_term","enabled":false},
-                 "Rush":{"name":"Rush","extractDir":"rush","enabled":false}
-               }}"#,
-        )
-        .unwrap();
+        let vendors = config.join("vendors");
+        std::fs::create_dir_all(&vendors).unwrap();
+        for (key, definition) in [
+            (
+                "SevenZip",
+                r#"{"name":"7-Zip","extractDir":"7zip","enabled":true}"#,
+            ),
+            (
+                "RustyTerm",
+                r#"{"name":"Rusty Term","extractDir":"rusty_term","enabled":false}"#,
+            ),
+            (
+                "Rush",
+                r#"{"name":"Rush","extractDir":"rush","enabled":false}"#,
+            ),
+        ] {
+            std::fs::write(
+                vendors.join(format!("{key}.json")),
+                format!(r#"{{"{key}":{definition}}}"#),
+            )
+            .unwrap();
+        }
 
         let kept = enabled_essential_vendors(&VendorConfigurationLoader::new(dir.path()));
         let keys: Vec<&str> = kept.iter().map(|v| v.key.as_str()).collect();

@@ -1,0 +1,21 @@
+{
+  "Go": {
+    "name": "Go",
+    "description": "Statically typed, compiled programming language",
+    "extractDir": "go",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "golang-api",
+      "url": "https://go.dev/dl/?mode=json",
+      "fallback": {
+        "version": "go1.21.6",
+        "url": "https://go.dev/dl/go1.21.6.windows-amd64.zip",
+        "fileName": "go1.21.6.windows-amd64.zip",
+        "size": "~140"
+      }
+    },
+    "postInstallFunction": "Go.PostInstall"
+  }
+}

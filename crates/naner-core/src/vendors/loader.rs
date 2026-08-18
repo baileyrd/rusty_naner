@@ -22,11 +22,6 @@ use crate::{constants, logger};
 // ---- vendors.json wire models (`VendorJsonModels`) ----
 
 #[derive(Debug, Deserialize)]
-struct VendorsJsonRoot {
-    vendors: Option<crate::collections::OrderedMap<VendorJsonEntry>>,
-}
-
-#[derive(Debug, Deserialize)]
 #[serde(default)]
 struct VendorJsonEntry {
     name: String,
@@ -123,16 +118,17 @@ struct FallbackJson {
 }
 
 pub struct VendorConfigurationLoader {
-    config_path: PathBuf,
+    config_dir: PathBuf,
+    legacy_config_path: PathBuf,
     vendor_dir: PathBuf,
 }
 
 impl VendorConfigurationLoader {
     pub fn new(naner_root: &Path) -> Self {
+        let config = naner_root.join(constants::directory_names::CONFIG);
         Self {
-            config_path: naner_root
-                .join(constants::directory_names::CONFIG)
-                .join(constants::VENDORS_CONFIG_FILE_NAME),
+            config_dir: config.join(constants::VENDORS_CONFIG_DIR_NAME),
+            legacy_config_path: config.join(constants::LEGACY_VENDORS_CONFIG_FILE_NAME),
             vendor_dir: naner_root.join(constants::directory_names::VENDOR),
         }
     }
@@ -155,36 +151,89 @@ impl VendorConfigurationLoader {
     /// Every vendor in the file, disabled ones included — for tooling that
     /// needs to show what exists rather than what is switched on.
     pub fn load_all_vendors(&self) -> Vec<VendorDefinition> {
-        if !self.config_path.is_file() {
-            logger::warning(&format!(
-                "Vendor configuration not found: {}",
-                self.config_path.display()
-            ));
-            logger::info("Using default vendor definitions");
+        if !self.config_dir.is_dir() {
+            self.report_missing_config_dir();
             return essential_vendor_definitions();
         }
 
-        let parsed: Result<VendorsJsonRoot, String> = std::fs::read_to_string(&self.config_path)
-            .map_err(|e| e.to_string())
-            .and_then(|json| {
-                serde_json::from_str(&strip_json_comments(&json)).map_err(|e| e.to_string())
-            });
-
-        match parsed {
-            Ok(root) => match root.vendors {
-                Some(vendors) if !vendors.is_empty() => convert(vendors),
-                _ => {
-                    logger::warning("Vendor configuration is empty");
-                    logger::info("Using default vendor definitions");
-                    essential_vendor_definitions()
-                }
-            },
+        match self.read_vendor_files() {
+            Ok(vendors) if !vendors.is_empty() => convert(vendors),
+            Ok(_) => {
+                logger::warning("Vendor configuration is empty");
+                logger::info("Using default vendor definitions");
+                essential_vendor_definitions()
+            }
             Err(e) => {
                 logger::warning(&format!("Failed to load vendor configuration: {e}"));
                 logger::info("Using default vendor definitions");
                 essential_vendor_definitions()
             }
         }
+    }
+
+    /// Read every `*.json` in the vendor directory, in sorted file-name order
+    /// so the listing is stable rather than whatever `read_dir` returns.
+    ///
+    /// One unreadable or malformed file does not take the whole catalog down
+    /// with it: it is reported and skipped. The old single-file layout had no
+    /// such choice -- a stray comma cost the user every vendor at once, which
+    /// is a large part of why the split is worth having.
+    fn read_vendor_files(&self) -> Result<crate::collections::OrderedMap<VendorJsonEntry>, String> {
+        let mut paths: Vec<PathBuf> = std::fs::read_dir(&self.config_dir)
+            .map_err(|e| e.to_string())?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|p| {
+                p.extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("json"))
+            })
+            .collect();
+        paths.sort();
+
+        let mut vendors = crate::collections::OrderedMap::new();
+        for path in paths {
+            match Self::read_one_vendor_file(&path) {
+                Ok(file) => {
+                    for (key, entry) in file {
+                        vendors.insert(key, entry);
+                    }
+                }
+                Err(e) => logger::warning(&format!("Skipping {}: {e}", path.display())),
+            }
+        }
+        Ok(vendors)
+    }
+
+    /// A vendor file is `{"<Key>": { ...definition... }}` -- the key inside
+    /// rather than taken from the file name, so renaming a file cannot
+    /// silently re-key a vendor and orphan its `naner.lock` pin.
+    fn read_one_vendor_file(
+        path: &Path,
+    ) -> Result<crate::collections::OrderedMap<VendorJsonEntry>, String> {
+        let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&strip_json_comments(&text)).map_err(|e| e.to_string())
+    }
+
+    /// The pre-split layout is not read any more. Saying only "not found"
+    /// would leave a user staring at a `vendors.json` that is plainly right
+    /// there, while naner quietly falls back to four essentials and drops the
+    /// other eighteen.
+    fn report_missing_config_dir(&self) {
+        logger::warning(&format!(
+            "Vendor configuration not found: {}",
+            self.config_dir.display()
+        ));
+        if self.legacy_config_path.is_file() {
+            logger::warning(&format!(
+                "{} is the pre-split layout and is no longer read.",
+                self.legacy_config_path.display()
+            ));
+            logger::info(
+                "Each vendor now lives in its own file under config/vendors/. \
+                 Update this installation to get them.",
+            );
+        }
+        logger::info("Using default vendor definitions");
     }
 
     pub fn optional_vendors(&self) -> Vec<VendorDefinition> {
@@ -363,13 +412,45 @@ fn base_url_of(url: Option<&str>) -> String {
 }
 
 #[cfg(test)]
+/// Write a `{"vendors": {...}}` fixture out as the per-vendor files the
+/// loader now reads, one file per key. Lets the fixtures below stay in the
+/// shape they document -- the whole catalog in one readable literal --
+/// while exercising the real on-disk layout.
+fn write_vendor_files(config_dir: &Path, json: &str) {
+    let vendors_dir = config_dir.join("vendors");
+    std::fs::create_dir_all(&vendors_dir).unwrap();
+
+    let Ok(root) = serde_json::from_str::<serde_json::Value>(&strip_json_comments(json)) else {
+        // A deliberately-malformed fixture is the point of some tests: put it
+        // on disk as-is so the loader meets the same garbage it used to.
+        std::fs::write(vendors_dir.join("malformed.json"), json).unwrap();
+        return;
+    };
+    let Some(vendors) = root.get("vendors").and_then(|v| v.as_object()) else {
+        // A fixture with no `vendors` key at all still has to produce a
+        // directory: that is the "present but empty" case.
+        return;
+    };
+    for (key, definition) in vendors {
+        let mut one = serde_json::Map::new();
+        one.insert(key.clone(), definition.clone());
+        std::fs::write(
+            vendors_dir.join(format!("{key}.json")),
+            serde_json::to_string_pretty(&serde_json::Value::Object(one)).unwrap(),
+        )
+        .unwrap();
+    }
+}
+
+#[cfg(test)]
 mod enabled_tests {
     use super::*;
 
     fn loader_for(json: &str) -> (tempfile::TempDir, VendorConfigurationLoader) {
         let tmp = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(tmp.path().join("config")).unwrap();
-        std::fs::write(tmp.path().join("config/vendors.json"), json).unwrap();
+        let config = tmp.path().join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        super::write_vendor_files(&config, json);
         let loader = VendorConfigurationLoader::new(tmp.path());
         (tmp, loader)
     }
@@ -425,7 +506,10 @@ mod enabled_tests {
     /// real: Obsidian shipped with `["/S"]`, no target-dir switch at all.
     #[test]
     fn every_installer_arg_exe_vendor_redirects_into_its_target_dir() {
-        const SHIPPED: &str = include_str!("../../../../dist-assets/config/vendors.json");
+        // The catalog `build.rs` assembles from dist-assets/config/vendors/*.json,
+        // which is both what ships and what gets compiled into the binary --
+        // so this checks the real shipped set, not a fixture of it.
+        const SHIPPED: &str = include_str!(concat!(env!("OUT_DIR"), "/vendors_catalog.json"));
         let (_tmp, loader) = loader_for(SHIPPED);
         let vendors = loader.load_all_vendors();
         assert!(!vendors.is_empty());
@@ -477,9 +561,10 @@ mod tests {
 
     fn loader_with(vendors_json: Option<&str>) -> (tempfile::TempDir, VendorConfigurationLoader) {
         let tmp = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(tmp.path().join("config")).unwrap();
+        let config = tmp.path().join("config");
+        std::fs::create_dir_all(&config).unwrap();
         if let Some(json) = vendors_json {
-            std::fs::write(tmp.path().join("config/vendors.json"), json).unwrap();
+            super::write_vendor_files(&config, json);
         }
         let loader = VendorConfigurationLoader::new(tmp.path());
         (tmp, loader)
@@ -536,7 +621,14 @@ mod tests {
         let vendors = loader.load_vendors();
         assert_eq!(vendors.len(), 3);
 
-        let ps = &vendors[0];
+        let by_key = |key: &str| {
+            vendors
+                .iter()
+                .find(|v| v.key == key)
+                .unwrap_or_else(|| panic!("{key} missing from the loaded set"))
+        };
+
+        let ps = by_key("PowerShell");
         assert_eq!(ps.key, "PowerShell");
         assert_eq!(ps.source_type, VendorSourceType::GitHub);
         assert_eq!(ps.github_owner.as_deref(), Some("PowerShell"));
@@ -553,13 +645,13 @@ mod tests {
             Some("PowerShell-7.4.6-win-x64.zip")
         );
 
-        let sz = &vendors[1];
+        let sz = by_key("SevenZip");
         assert_eq!(sz.source_type, VendorSourceType::WebScrape);
         let scrape = sz.web_scrape.as_ref().unwrap();
         assert_eq!(scrape.base_url, "https://www.7-zip.org/");
 
         // Unknown source type silently parses as static (drift preserved).
-        let ruby = &vendors[2];
+        let ruby = by_key("Ruby");
         assert_eq!(ruby.source_type, VendorSourceType::StaticUrl);
         assert_eq!(ruby.static_url.as_deref(), Some("https://x.example/r.7z"));
     }

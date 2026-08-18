@@ -1,0 +1,23 @@
+{
+  "Anaconda": {
+    "name": "Anaconda",
+    "description": "Full Python distribution with conda package manager and the Anaconda package set",
+    "extractDir": "anaconda",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://repo.anaconda.com/archive/Anaconda3-2026.07-1-Windows-x86_64.exe",
+      "version": "2026.07-1",
+      "fileName": "Anaconda3-2026.07-1-Windows-x86_64.exe",
+      "size": "~1000"
+    },
+    "checksumSource": {
+      "type": "scrape",
+      "url": "https://repo.anaconda.com/archive/",
+      "pattern": "{FILE}</a></td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td>([0-9a-f]{64})"
+    },
+    "postInstallFunction": "Anaconda.PostInstall"
+  }
+}

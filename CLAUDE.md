@@ -10,4 +10,4 @@
 - Merge with a **merge commit** (not squash, not rebase) — see
   [CONTRIBUTING.md](./CONTRIBUTING.md#review--merge) for why.
 - Use `.github/PULL_REQUEST_TEMPLATE/vendor_change.md` for any change to
-  `dist-assets/config/vendors.json`; the default template otherwise.
+  `dist-assets/config/vendors/`; the default template otherwise.

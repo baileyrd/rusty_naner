@@ -198,7 +198,7 @@ the pin is not doing its job.
 
 ### 4c — Upstream digests
 
-Enable `NodeJS` in `config\vendors.json`, then:
+Enable `NodeJS` in `config\vendors\NodeJS.json`, then:
 
 ```powershell
 .\vendor\bin\naner.exe install NodeJS
@@ -259,7 +259,7 @@ template on every update, destroying every colour scheme and key binding, while
 the run printed "Preserving settings configuration". **Read the contents. A
 present file is not a preserved file.**
 
-Also confirm `update-vendors` does not install vendors that `vendors.json`
+Also confirm `update-vendors` does not install vendors that their definition
 marks `"enabled": false` (#48).
 
 ## Step 5 — Drop-in daily driving
@@ -333,7 +333,7 @@ These are choices, not bugs. Do not file them.
 - **An invalid environment variable name is an error, not a warning.** Names
   must match `[A-Za-z_][A-Za-z0-9_]*`, because `--export-env` output is
   evaluated by the calling shell.
-- **`enabled: false` in `vendors.json` is honoured** by `install`. Disabled
+- **`enabled: false` in a vendor definition is honoured** by `install`. Disabled
   vendors are still *listed*, marked `[--]`, so they stay discoverable.
 - **Hooks run under `-ExecutionPolicy Bypass`.** A hook is a script the config
   owner supplied on purpose and the default policy would refuse it. A deliberate

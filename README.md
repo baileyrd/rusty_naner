@@ -56,7 +56,7 @@ naner --export-env             # print env vars for sourcing into an existing sh
 
 Optional developer tools — Node.js, Go, Rust, Ruby, Bun, Anaconda, .NET SDK,
 Podman, and more (see
-[`dist-assets/config/vendors.json`](dist-assets/config/vendors.json) for the
+[`dist-assets/config/vendors/`](dist-assets/config/vendors) for the
 full, current list) — install on demand:
 
 ```sh
@@ -142,7 +142,7 @@ that cross-publish has been removed. Phases 0–5 done:
 
 ### Core CLI Subcommands
 - **`naner doctor [--porcelain] [--conflicts]`**: Health checks `%NANER_ROOT%`, vendor directories, config health, and reports `PATH` binary collisions.
-- **`naner schema [config|vendors]`**: Generates official JSON Schema definitions for `naner.json` and `vendors.json` for instant IDE autocompletion.
+- **`naner schema [config|vendors]`**: Generates official JSON Schema definitions for `naner.json` and for a single vendor definition file for instant IDE autocompletion.
 - **`naner completions <shell>`**: Generates tab-completion scripts for PowerShell, Bash, Zsh, and Fish.
 - **`naner shell-integration <shell>`**: Emits OSC 133 prompt-marking and command lifecycle hooks for **rusty_term** / `l13` / MCP protocols.
 - **`naner setup-shell [pwsh|bash|cmd] [--dry-run]`**: Adds the naner environment export to the shell's startup file, idempotently and with a backup. `cmd` has no startup file to edit, so it prints the line and says why.
@@ -156,7 +156,7 @@ that cross-publish has been removed. Phases 0–5 done:
 - **`naner lock [--refresh [vendor...]] [--porcelain]`**: Inspects `naner.lock`, the pin of exactly which vendor artifacts this environment installs, and drops pins so the next install re-resolves.
 
 ### Infrastructure & Subsystem Enhancements
-- **Download Integrity Verification**: every vendor download is checked against a digest published by the distributor itself where one exists — Go and Node.js (SHA-256), the .NET SDK (SHA-512, via the channel manifest that also supplies the authoritative URL), `rustup-init.exe` (`.sha256` sidecar) and Anaconda (repository listing). A vendor may also pin a digest via `checksum` in `vendors.json`, which takes precedence. A mismatch against an upstream digest blocks installation. Sources that publish no digest (MSYS2, GitHub release assets) install unverified unless pinned.
+- **Download Integrity Verification**: every vendor download is checked against a digest published by the distributor itself where one exists — Go and Node.js (SHA-256), the .NET SDK (SHA-512, via the channel manifest that also supplies the authoritative URL), `rustup-init.exe` (`.sha256` sidecar) and Anaconda (repository listing). A vendor may also pin a digest via `checksum` in its own definition file, which takes precedence. A mismatch against an upstream digest blocks installation. Sources that publish no digest (MSYS2, GitHub release assets) install unverified unless pinned.
 - **Reproducible Environments (`naner.lock`)**: a successful install pins the vendor's exact version, URL and SHA-256. Later installs reproduce that artifact instead of re-resolving to upstream latest, and verify it — which is the only verification MSYS2 and the GitHub-sourced vendors get, since their distributors publish no digest. `update-vendors` deliberately ignores the pin and rewrites it. The first install of an unpinned vendor is still trust-on-first-use.
 - **Verified Self-Update**: `naner-init` verifies `naner.exe` and `naner-bundle.zip` against the `SHA256SUMS` manifest published with each release before replacing anything on disk, and refuses to install if the manifest is missing or does not match.
 - **Corporate Proxy & CA Support**: Auto-detects and respects `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy`, with `NO_PROXY=*` as a blanket opt-out. Applied to every outbound request — vendor downloads, `naner-init` bootstrap and update alike.

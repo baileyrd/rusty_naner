@@ -1,0 +1,22 @@
+{
+  "Bun": {
+    "name": "Bun",
+    "description": "Fast all-in-one JavaScript runtime, bundler, test runner and package manager",
+    "extractDir": "bun",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "oven-sh/bun",
+      "assetPattern": "bun-windows-x64.zip",
+      "fallback": {
+        "version": "bun-v1.3.14",
+        "url": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-windows-x64.zip",
+        "fileName": "bun-windows-x64.zip",
+        "size": "~40"
+      }
+    },
+    "postInstallFunction": "Bun.PostInstall"
+  }
+}

@@ -26,6 +26,18 @@ fn init_tree(root: &Path) {
     .unwrap();
 }
 
+/// Write a vendor definition to `config/vendors/<Key>.json`, the per-vendor
+/// layout the loader reads. One file per vendor, key inside the file.
+fn write_vendor(root: &Path, key: &str, definition: &str) {
+    let dir = root.join("config").join("vendors");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join(format!("{key}.json")),
+        format!("{{ \"{key}\": {definition} }}"),
+    )
+    .unwrap();
+}
+
 fn run_doctor(root: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_naner"))
         .arg("doctor")
@@ -39,21 +51,17 @@ fn run_doctor(root: &Path, args: &[&str]) -> std::process::Output {
 fn a_missing_required_vendor_fails_the_exit_code() {
     let root = tempfile::tempdir().expect("temp dir");
     init_tree(root.path());
-    std::fs::write(
-        root.path().join("config").join("vendors.json"),
+    write_vendor(
+        root.path(),
+        "SevenZip",
         r#"{
-            "vendors": {
-                "SevenZip": {
-                    "name": "7-Zip",
-                    "description": "test",
-                    "extractDir": "7zip",
-                    "enabled": true,
-                    "required": true
-                }
-            }
+            "name": "7-Zip",
+            "description": "test",
+            "extractDir": "7zip",
+            "enabled": true,
+            "required": true
         }"#,
-    )
-    .unwrap();
+    );
     // vendor/7zip is deliberately never created: SevenZip stays "missing".
 
     let out = run_doctor(root.path(), &[]);
@@ -73,21 +81,17 @@ fn a_missing_required_vendor_fails_the_exit_code() {
 fn only_optional_vendors_missing_still_succeeds() {
     let root = tempfile::tempdir().expect("temp dir");
     init_tree(root.path());
-    std::fs::write(
-        root.path().join("config").join("vendors.json"),
+    write_vendor(
+        root.path(),
+        "NodeJS",
         r#"{
-            "vendors": {
-                "NodeJS": {
-                    "name": "Node.js",
-                    "description": "test",
-                    "extractDir": "nodejs",
-                    "enabled": false,
-                    "required": false
-                }
-            }
+            "name": "Node.js",
+            "description": "test",
+            "extractDir": "nodejs",
+            "enabled": false,
+            "required": false
         }"#,
-    )
-    .unwrap();
+    );
 
     let out = run_doctor(root.path(), &[]);
     assert_eq!(
@@ -101,21 +105,17 @@ fn only_optional_vendors_missing_still_succeeds() {
 fn porcelain_output_reflects_the_same_exit_code() {
     let root = tempfile::tempdir().expect("temp dir");
     init_tree(root.path());
-    std::fs::write(
-        root.path().join("config").join("vendors.json"),
+    write_vendor(
+        root.path(),
+        "SevenZip",
         r#"{
-            "vendors": {
-                "SevenZip": {
-                    "name": "7-Zip",
-                    "description": "test",
-                    "extractDir": "7zip",
-                    "enabled": true,
-                    "required": true
-                }
-            }
+            "name": "7-Zip",
+            "description": "test",
+            "extractDir": "7zip",
+            "enabled": true,
+            "required": true
         }"#,
-    )
-    .unwrap();
+    );
 
     let out = run_doctor(root.path(), &["--porcelain"]);
     assert_eq!(out.status.code(), Some(1));

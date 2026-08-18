@@ -1,0 +1,26 @@
+{
+  "GitForWindows": {
+    "name": "Git for Windows",
+    "description": "Portable Git, Bash and core POSIX tools for Windows",
+    "extractDir": "git",
+    "enabled": true,
+    "required": true,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "git-for-windows/git",
+      "assetPattern": "PortableGit-*-64-bit.7z.exe",
+      "fallback": {
+        "version": "v2.55.0.windows.4",
+        "url": "https://github.com/git-for-windows/git/releases/download/v2.55.0.windows.4/PortableGit-2.55.0.4-64-bit.7z.exe",
+        "fileName": "PortableGit-2.55.0.4-64-bit.7z.exe",
+        "size": "~60"
+      }
+    },
+    "installerArgs": [
+      "-y",
+      "-o%TARGETDIR%"
+    ],
+    "postInstallFunction": "GitForWindows.PostInstall"
+  }
+}
