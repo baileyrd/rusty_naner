@@ -9,6 +9,33 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Following on from the `naner.bat` fixes below: the branch that used to
+advertise a dead PowerShell fallback now does something useful instead of
+just failing politely. If `vendor\bin\naner.exe` is missing, the shim hands
+the arguments to `naner-init.exe` — at the root, where a first-time user
+drops it, or in `vendor\bin`, where an install that has updated itself keeps
+it, matching the two locations `self_update::find_naner_init` already
+searches. `naner-init` is the component that owns bootstrapping: it prompts
+before downloading anything, installs `naner.exe`, and then launches it with
+the arguments it was handed, so this recovers a half-installed tree rather
+than starting a surprise download.
+
+The one detail that makes it work rather than misfire is `start /wait`.
+`naner-init.exe` is a GUI-subsystem binary, so `cmd.exe` does not wait for
+it — invoked bare, cmd's own next prompt races `naner-init`'s `(Y/n)` for the
+user's keystrokes and initialization can silently fail. That is issue #81,
+already documented in the README for people typing `naner-init.exe` by hand;
+a shim calling it from inside `cmd.exe` would have walked straight into the
+same trap.
+
+Two new assertions cover it, plus a third that is really about `cmd.exe`
+rather than about naner: a `REM` containing a parenthesis inside an
+`if exist (...)` block closes the block early and silently changes control
+flow. Writing the `(Y/n)` explanation as a comment next to the code it
+explains would have done exactly that. The test walks block depth and fails
+on any parenthesis in a comment inside one — a mistake that is invisible in
+a diff and produces no error when it happens.
+
 `naner.bat` — the little shim that sits at the root of every bundle and is
 the thing a lot of people actually type — had been carried over from the C#
 repo untouched and had drifted out of sync with the tree it ships in. Two

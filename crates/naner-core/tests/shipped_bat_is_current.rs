@@ -9,7 +9,10 @@
 //! 2. It still advertised a PowerShell fallback at `src\powershell\
 //!    Invoke-Naner.ps1` and a `src\csharp` build tree, neither of which
 //!    exists in this repo -- so the not-found path printed instructions that
-//!    could not work.
+//!    could not work. That branch now hands over to `naner-init.exe`, which
+//!    is the third thing guarded here: the handoff has to go through
+//!    `start /wait`, because `naner-init` is a GUI-subsystem binary that
+//!    `cmd.exe` will not wait for (rusty_naner#81).
 
 use std::path::{Path, PathBuf};
 
@@ -82,4 +85,58 @@ fn the_shim_keeps_crlf_line_endings() {
 
     assert_eq!(lf, crlf, "naner.bat has {} bare LF line endings", lf - crlf);
     assert!(lf > 0, "naner.bat is empty");
+}
+
+#[test]
+fn the_missing_exe_branch_hands_over_to_naner_init() {
+    let bat = bat();
+
+    // Both locations naner-init is ever found at: the root, where a
+    // first-time user drops it, and vendor\bin, where an install that has
+    // updated itself keeps it (`self_update::find_naner_init`).
+    assert!(
+        bat.contains("%NANER_ROOT%\\naner-init.exe"),
+        "the handoff must look for naner-init.exe at the root"
+    );
+    assert!(
+        bat.contains("%NANER_ROOT%\\vendor\\bin\\naner-init.exe"),
+        "the handoff must also look in vendor\\bin"
+    );
+
+    // `naner-init` is GUI-subsystem, so cmd.exe does not wait for it: invoked
+    // bare, cmd's own next prompt races naner-init's `(Y/n)` for the user's
+    // keystrokes and initialization can silently fail (rusty_naner#81). This
+    // is the one detail that makes the handoff work rather than misfire.
+    assert!(
+        bat.contains("start /wait \"\" \"%NANER_INIT%\""),
+        "naner-init must be launched via `start /wait`, not called directly"
+    );
+
+    // Falling through both is still a hard error, not a silent success.
+    assert!(
+        bat.contains("exit /b 1"),
+        "with neither binary present the shim must fail loudly"
+    );
+}
+
+/// `cmd.exe` ends a parenthesized block at the first unescaped `)` -- including
+/// one inside a `REM`. A comment mentioning `(Y/n)` inside an `if exist (...)`
+/// block would close the block early and silently change control flow, which is
+/// exactly the kind of thing that looks fine in a diff.
+#[test]
+fn no_parenthesized_block_contains_a_paren_in_a_comment() {
+    let mut depth = 0i32;
+    for (n, line) in bat().lines().enumerate() {
+        let trimmed = line.trim_start();
+        if depth > 0 && trimmed.to_lowercase().starts_with("rem") {
+            assert!(
+                !trimmed.contains(')') && !trimmed.contains('('),
+                "line {}: a REM inside a block contains a paren, which cmd.exe \
+                 treats as block structure: {trimmed}",
+                n + 1
+            );
+        }
+        depth += line.matches('(').count() as i32 - line.matches(')').count() as i32;
+        depth = depth.max(0);
+    }
 }
