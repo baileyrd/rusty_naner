@@ -29,29 +29,25 @@ separate installer.
 
    (or right-click → Properties → tick **Unblock**.)
 
-4. Run `naner.exe` — double-clicking it in Explorer works and opens its
-   own console window. (Double-clicked, it also pauses with "press any key
-   to exit" at the end so the window doesn't disappear before you can read
-   it.)
+4. Run `naner.exe` — bare, however you like:
 
-   **From a shell — PowerShell and `cmd.exe` alike — launch it with a
-   waiting wrapper**, not by typing its name directly:
+   - **Double-click in Explorer**: it opens its own console window.
+   - **From a shell** (PowerShell or `cmd.exe`): just type `.\naner.exe`.
+     For interactive commands started from a shared console, it re-launches
+     itself into its own console window, so its prompts never compete with
+     the shell for your keystrokes.
+   - Either way, it pauses with "press any key to exit" at the end so the
+     window doesn't disappear before you can read it.
 
-   ```powershell
-   Start-Process -Wait .\naner.exe           # PowerShell
-   ```
-   ```bat
-   start /wait naner.exe                     :: cmd.exe
-   ```
-
-   Neither shell waits for a GUI-subsystem process, so run bare, the
-   shell's own next prompt and `naner.exe`'s `(Y/n)` prompt race for
-   your keystrokes and initialization can silently fail
-   ([#81](https://github.com/baileyrd/rusty_naner/issues/81) — observed in
-   `cmd.exe` originally and reproduced in PowerShell since; an earlier
-   version of this note wrongly claimed PowerShell waits). The wrappers
-   make the shell actually wait, and give naner its own console where
-   nothing competes for input.
+   (Why the extra window: neither PowerShell nor `cmd.exe` waits for a
+   GUI-subsystem process, so in a shared console the shell's next prompt
+   races naner's `(Y/n)` prompt for input and initialization could
+   silently fail —
+   [#81](https://github.com/baileyrd/rusty_naner/issues/81). Versions
+   before 0.8.1 need a waiting wrapper as a workaround —
+   `Start-Process -Wait .\naner.exe` in PowerShell, `start /wait naner.exe`
+   in `cmd.exe`. The wrappers still work on current versions; they're just
+   no longer necessary.)
 
    On first run (an uninitialized folder) it:
    - downloads `naner-bundle.zip` matching its own version and verifies it
