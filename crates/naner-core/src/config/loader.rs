@@ -20,6 +20,12 @@ pub enum ConfigError {
     /// No file in the search order exists.
     NotFound,
 
+    /// No supported file exists, but a pre-v0.7.0 YAML config does. Its own
+    /// variant rather than a NotFound footnote because the failure is quiet
+    /// by nature -- the tree looks configured to its owner -- and the fix is
+    /// specific: convert the named file, not create one from scratch.
+    LegacyYaml(PathBuf),
+
     /// An explicit path was given but its extension is not `.json`.
     UnsupportedFormat(String),
 
@@ -38,6 +44,13 @@ impl std::fmt::Display for ConfigError {
         match self {
             ConfigError::NotFound => f.write_str(
                 "No configuration file found. Please create naner.json in the config directory.",
+            ),
+            ConfigError::LegacyYaml(path) => write!(
+                f,
+                "{} is a YAML configuration, which naner no longer reads (since \
+                 v0.7.0). Convert it to config/naner.json -- same structure, JSON \
+                 syntax -- and remove the YAML file.",
+                path.display()
             ),
             ConfigError::UnsupportedFormat(path) => write!(
                 f,
@@ -80,7 +93,10 @@ pub fn find_configuration_file(naner_root: &Path) -> Option<PathBuf> {
 pub fn load(naner_root: &Path, config_path: Option<&Path>) -> Result<NanerConfig, ConfigError> {
     let path = match config_path {
         Some(p) => p.to_path_buf(),
-        None => find_configuration_file(naner_root).ok_or(ConfigError::NotFound)?,
+        None => match find_configuration_file(naner_root) {
+            Some(found) => found,
+            None => return Err(not_found_error(naner_root)),
+        },
     };
 
     let mut config = load_file(&path)?;
@@ -110,6 +126,20 @@ pub fn load(naner_root: &Path, config_path: Option<&Path>) -> Result<NanerConfig
     }
 
     Ok(config)
+}
+
+/// The error for a tree with no loadable configuration: [`ConfigError::LegacyYaml`]
+/// naming the file when a pre-v0.7.0 YAML config is sitting where the JSON
+/// should be, plain [`ConfigError::NotFound`] otherwise.
+fn not_found_error(naner_root: &Path) -> ConfigError {
+    let config_dir = naner_root.join(constants::directory_names::CONFIG);
+    for name in constants::LEGACY_YAML_CONFIG_FILE_NAMES {
+        let candidate = config_dir.join(name);
+        if candidate.is_file() {
+            return ConfigError::LegacyYaml(candidate);
+        }
+    }
+    ConfigError::NotFound
 }
 
 /// Parse a config file exactly as written, with no environment overrides and
@@ -274,13 +304,33 @@ mod tests {
     }
 
     /// YAML support went away with the shipped `naner.yaml` twin. A tree whose
-    /// only config is YAML now reports no configuration at all -- deliberately,
-    /// and loudly, rather than half-loading a format nothing else supports.
+    /// only config is YAML gets told exactly that, by file name, with the fix
+    /// -- not a generic "not found" while a good-looking file sits right there.
     #[test]
-    fn a_yaml_only_tree_reports_no_configuration() {
-        let yaml = "DefaultProfile: P\nProfiles:\n  P:\n    Name: P\n";
-        let tmp = fixture_root(&[("naner.yaml", yaml)]);
-        assert!(find_configuration_file(tmp.path()).is_none());
+    fn a_yaml_only_tree_is_told_to_convert_by_name() {
+        for legacy in ["naner.yaml", "naner.yml"] {
+            let yaml = "DefaultProfile: P\nProfiles:\n  P:\n    Name: P\n";
+            let tmp = fixture_root(&[(legacy, yaml)]);
+            assert!(find_configuration_file(tmp.path()).is_none());
+
+            let err = load(tmp.path(), None).unwrap_err();
+            let ConfigError::LegacyYaml(path) = &err else {
+                panic!("expected LegacyYaml, got {err:?}");
+            };
+            assert!(path.ends_with(format!("config/{legacy}")));
+            let message = err.to_string();
+            assert!(message.contains(legacy), "message must name the file");
+            assert!(
+                message.contains("naner.json"),
+                "message must say what to convert to"
+            );
+        }
+    }
+
+    /// The YAML hint must not shadow the plain missing-config case.
+    #[test]
+    fn an_empty_config_dir_still_reports_not_found() {
+        let tmp = fixture_root(&[]);
         assert!(matches!(load(tmp.path(), None), Err(ConfigError::NotFound)));
     }
 

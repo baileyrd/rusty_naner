@@ -28,6 +28,12 @@ pub const LEGACY_VENDORS_CONFIG_FILE_NAME: &str = "vendors.json";
 /// merging: the first that exists wins).
 pub const CONFIG_FILE_NAMES: [&str; 1] = ["naner.json"];
 
+/// The YAML configuration files naner read before v0.7.0. No longer loaded --
+/// kept so the loader can recognise one sitting where a config should be and
+/// say "convert this" instead of a bare "not found" while a perfectly
+/// good-looking file sits right there.
+pub const LEGACY_YAML_CONFIG_FILE_NAMES: [&str; 2] = ["naner.yaml", "naner.yml"];
+
 pub mod github {
     pub const OWNER: &str = "baileyrd";
     pub const REPO: &str = "rusty_naner";

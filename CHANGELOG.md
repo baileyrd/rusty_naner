@@ -1,5 +1,10 @@
 ## [Unreleased]
 ### Fixed
+- A tree whose only configuration is a pre-v0.7.0 `naner.yaml`/`naner.yml`
+  is now told exactly that, by file name, with the fix — convert it to
+  `config/naner.json` — instead of a generic "no configuration file found"
+  while a good-looking config sits right there. New `ConfigError::LegacyYaml`
+  variant in the loader; the first-run report gains the same hint.
 - README's install instructions no longer claim PowerShell waits for
   `naner-init.exe` — it does not (no shell waits for a GUI-subsystem
   process), and the #81 keystroke race reproduces there too, observed live
