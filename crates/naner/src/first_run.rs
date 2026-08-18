@@ -160,10 +160,8 @@ mod tests {
         let info = get_first_run_info_at(tmp.path());
         assert!(info.is_first_run);
         assert!(
-            info.messages.contains(
-                &"No configuration file found (supported: naner.json, naner.yaml, naner.yml)"
-                    .to_string()
-            )
+            info.messages
+                .contains(&"No configuration file found (supported: naner.json)".to_string())
         );
     }
 }

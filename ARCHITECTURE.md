@@ -63,7 +63,7 @@ control. Each has exactly one component responsible for translating across it
 | Vendor tree placement | `installer::swap_into_place` / `merge_over` | — | Swap is atomic via rename, and restores the previous tree if placement fails; the Windows Terminal merge cannot be atomic (it must preserve `settings/`), so a part-way failure leaves a mixed tree and is reported as a failed install |
 | Artifact integrity | `core::checksum` + resolver-supplied digests | `ChecksumInfo` | An upstream digest mismatch blocks installation; a missing digest logs and proceeds |
 | Environment pinning | `core::lockfile::NanerLockfile` | `naner.lock` | Unreadable, malformed or future-versioned lock reads as unlocked, with the reason reported; a failed write warns but does not fail the install |
-| Config file | `core::config::loader` | JSON / YAML providers | `ConfigError`; validation errors block the load, warnings are logged |
+| Config file | `core::config::loader` | JSON provider | `ConfigError`; validation errors block the load, warnings are logged |
 | Filesystem layout | `core::paths` | — | `RootNotFound` carries the full search diagnostic |
 | Process spawn | `naner::launcher` | `TerminalKind` | Non-zero exit with a message; spawn is fire-and-forget once it succeeds |
 | Console attach | `core::console` | `cfg(windows)` | No-op off Windows |
@@ -92,7 +92,7 @@ args → console decision → command router ─── matched? ──→ run co
                                                      │
                           find NANER_ROOT (env var, else walk up for bin/ vendor/ config/)
                                                      │
-                          load config (naner.json → naner.yaml → naner.yml, first wins)
+                          load config (naner.json)
                                                      │
                           apply env overrides → expand %NANER_ROOT% / %VAR% / $env:VAR
                                                      │

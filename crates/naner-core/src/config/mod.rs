@@ -14,14 +14,12 @@ mod json;
 mod loader;
 mod merge;
 mod validator;
-mod yaml;
 
 pub use env_overrides::{apply_env_overrides, apply_env_overrides_from};
 pub use json::{load_json, strip_json_comments};
 pub use loader::{ConfigError, find_configuration_file, load, load_verbatim};
 pub use merge::{NanerConfigMergeOutcome, merge_shipped_naner_defaults};
 pub use validator::{ValidationReport, validate};
-pub use yaml::load_yaml;
 
 // Re-exported so binaries don't need a second direct dependency.
 pub use crate::collections::OrderedMap;

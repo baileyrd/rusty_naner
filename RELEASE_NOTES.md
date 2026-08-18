@@ -9,6 +9,40 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Two things in `config/` were describing systems that do not exist, and both
+are gone.
+
+The plugin surface was dead twice over. `plugin-schema.json`, the
+`PLUGINS` constant, and the `ALL` directory array had exactly zero readers
+between them — `ALL` was never referenced at all, which is also what kept
+`LOGS` and `VENDOR_BIN` alive. The C# plugin loader it descended from was an
+`AssemblyLoadContext` over `plugins/*.dll` that the shipping entry point never
+enabled, and MIGRATION_ANALYSIS marked it "do not port" for that reason. But
+the schema did not describe that loader either: it described a manifest
+bundling vendors, environment variables and PATH entries, with `.ps1` hooks —
+a grouping layer over what `vendors.json` and `naner.json` already do, whose
+vendor record was a strict subset of a real vendors entry. Two unbuilt designs
+sharing one word, sitting next to the real thing. That is why reading the
+config directory raised the question of whether plugins and vendors were
+duplicating each other; they were not, because only one of them was ever real.
+
+YAML went the same way, for the drift it had already produced. `naner.yaml`
+was a field-for-field twin of `naner.json` — except it had stopped being one,
+missing the `Naner` vendor path that points at naner's own executable. The
+loader takes the first file that exists and never merges across formats, so
+the two could disagree forever while only one was ever read, and which one
+depended on a file's presence rather than anyone's intent. Keeping them in
+sync was a chore with no upside: nothing needed two formats. So the twin, the
+parser, the `naner.yaml`/`naner.yml` search entries, the merge path's YAML
+branch, and the `serde_yaml_ng` dependency all went. One config format, one
+shipped file, drift structurally impossible.
+
+That last part is a real breaking change, and a quiet one by nature: a tree
+whose only config is `naner.yaml` now finds no configuration at all rather
+than loading it. The error names `naner.json` explicitly — it is built from
+`CONFIG_FILE_NAMES`, so it corrected itself when the constant did — and a test
+pins the behavior so a YAML-only tree fails loudly instead of half-working.
+
 `config/vendors.json` was 499 lines describing 22 vendors, and the last two
 vendor bugs both came from working in it: four vendors added in one batch all
 shipped `installerArgs` without `%TARGETDIR%`, and a connection-reset fix

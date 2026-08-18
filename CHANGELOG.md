@@ -68,6 +68,26 @@
   from being added. `vendors-schema.json` and `naner schema vendors` describe
   a single-vendor file. Vendor listing order is now sorted by file name.
 
+### Removed
+- The plugin surface: `dist-assets/config/plugin-schema.json` and the
+  `directory_names::PLUGINS`/`ALL` constants. Nothing read any of it — `ALL`
+  had zero call sites, and the C# plugin loader it descended from was marked
+  "do not port" (MIGRATION_ANALYSIS §202) because the shipping entry point
+  never enabled it. The schema described a *different* unbuilt design again —
+  a manifest bundling vendors, env vars and PATH entries, with `.ps1` hooks —
+  whose vendor record was a strict subset of a `vendors.json` entry. Two dead
+  designs for one word is the reason reading the config directory was
+  confusing.
+- **Breaking:** YAML configuration. `config/naner.yaml` had silently drifted
+  out of sync with `naner.json` (it was missing the `Naner` vendor path), and
+  since the loader takes the first file that exists and never merges, the two
+  could disagree indefinitely with only one of them ever read. Gone with it:
+  `config/yaml.rs`, `load_yaml`, the `naner.yaml`/`naner.yml` entries in
+  `CONFIG_FILE_NAMES`, the YAML branch of `merge_shipped_naner_defaults`, and
+  the `serde_yaml_ng` dependency. A tree whose only config is `naner.yaml` now
+  reports no configuration found rather than loading a format nothing else
+  supports.
+
 ### Added
 - README now has real "Installation" and "Usage" sections — how to get
   `naner-init.exe`, what it does on first run, and the common `naner`
