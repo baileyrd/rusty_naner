@@ -33,6 +33,16 @@
   `.naner-managed-*.json` marker technique `wt_config.rs` already uses for
   Windows Terminal profiles, so an entry the user deliberately removed is
   never silently added back.
+- `dist-assets/naner.bat`, the shim that ships at the root of every bundle,
+  set `NANER_ROOT` from `%~dp0` verbatim — which always ends in a backslash,
+  so the exported value escaped the closing quote of any `"%NANER_ROOT%"` a
+  child process built into a command line. It now strips the separator and
+  joins paths explicitly. The same file still advertised a PowerShell
+  fallback at `src\powershell\Invoke-Naner.ps1` and a `src\csharp` build
+  tree, neither of which exists in this repo, so its not-found path printed
+  instructions that could not work; it now names `naner-init.exe` and the
+  releases page instead. Added a regression test that reads the real shipped
+  file, since nothing else in the workspace does.
 
 ### Added
 - README now has real "Installation" and "Usage" sections — how to get

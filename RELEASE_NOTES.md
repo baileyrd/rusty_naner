@@ -9,6 +9,39 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+`naner.bat` — the little shim that sits at the root of every bundle and is
+the thing a lot of people actually type — had been carried over from the C#
+repo untouched and had drifted out of sync with the tree it ships in. Two
+problems. It set `NANER_ROOT` to `%~dp0` as-is, and `%~dp0` always ends with
+a backslash; a value ending in `\` escapes the closing quote of any
+`"%NANER_ROOT%"` a child process builds into a command line, which is the
+classic way a perfectly correct-looking path turns into a parse error
+somewhere far away. `naner.exe` itself was unaffected — `find_naner_root`
+trims trailing separators, and re-exports the cleaned root — so the damage
+was confined to anything reading the variable *before* naner.exe fixed it,
+which is exactly the kind of bug that only shows up in someone else's
+script. The shim now round-trips through a trailing dot to drop the
+separator (leaving a drive root like `C:\` intact) and joins the exe path
+with an explicit separator.
+
+Second, its fallback branch still described a world that no longer exists:
+if `naner.exe` was missing it announced a "PowerShell fallback", tried to
+run `src\powershell\Invoke-Naner.ps1`, and told the user to build the C#
+version with `cd src\csharp && .\build.ps1`. None of those paths are in this
+repo — the PowerShell and C# implementations were left behind at the
+migration. So the one moment the shim had something useful to say, it said
+something that could not work. It now prints where it looked and points at
+`naner-init.exe` and the releases page, which is how you actually get
+`naner.exe`.
+
+Both bugs were invisible to the test suite for the same reason: nothing in
+the workspace reads `naner.bat`; it is consumed only by `cmd.exe` on a
+user's machine. Added `shipped_bat_is_current.rs`, which reads the real
+shipped file the way `wt_template_is_portable.rs` reads the real Windows
+Terminal template — including a byte-level check that it still has CRLF
+endings, since `.gitattributes` pins `*.bat` to CRLF precisely because
+`cmd.exe` mis-parses an LF-only batch file.
+
 Anaconda (~1 GB — by far the biggest thing naner ever downloads) failed
 partway through with "response body closed before all bytes were read"
 at 60%, no retry, install just failed. `Http::download` had no retry at
