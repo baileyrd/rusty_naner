@@ -1,6 +1,15 @@
 ## [Unreleased]
-
-Nothing merged since v0.8.0.
+### Fixed
+- The #81 keystroke race is closed in code instead of documentation. Neither
+  `cmd.exe` nor PowerShell waits for a GUI-subsystem process, so an
+  interactive prompt read from the parent shell's console competed with the
+  shell's own next prompt for keystrokes — bootstrap and `update` looked
+  hung when run bare from a shell. Interactive flows now detect the attached
+  state, relaunch themselves in a console of their own (where nothing
+  competes), wait, and mirror the exit code; the child pauses before its
+  window closes so the outcome is readable. Piped/redirected stdio never
+  re-execs, so scripts and CI are unaffected. The `Start-Process -Wait` /
+  `start /wait` wrappers still work but are no longer required.
 
 ## [0.8.0] - 2026-08-18
 ### Changed

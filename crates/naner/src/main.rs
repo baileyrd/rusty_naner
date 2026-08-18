@@ -63,6 +63,9 @@ fn main() {
         let updater = naner_core::updater::NanerUpdater::new(&naner_root, &github);
         if !updater.is_initialized() {
             commands::bootstrap::ensure_console(&mut console_state);
+            if let Some(code) = commands::bootstrap::reexec_in_own_console_if_racy(console_state) {
+                std::process::exit(code);
+            }
             std::process::exit(commands::bootstrap::run_bootstrap(
                 &updater,
                 &naner_root,

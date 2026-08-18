@@ -27,6 +27,9 @@ pub fn root_or_cwd() -> PathBuf {
 
 /// `naner init`.
 pub fn execute_init(state: ConsoleState) -> i32 {
+    if let Some(code) = reexec_in_own_console_if_racy(state) {
+        return code;
+    }
     let naner_root = root_or_cwd();
     let github = GitHubReleasesClient::new(constants::github::OWNER, constants::github::REPO);
     let updater = NanerUpdater::new(&naner_root, &github);
@@ -88,7 +91,10 @@ pub fn run_bootstrap(updater: &NanerUpdater, naner_root: &Path, state: ConsoleSt
 
 /// `naner update` (and `naner self-update`, its alias): update every copy of
 /// the binary to the latest published release.
-pub fn execute_update() -> i32 {
+pub fn execute_update(state: ConsoleState) -> i32 {
+    if let Some(code) = reexec_in_own_console_if_racy(state) {
+        return code;
+    }
     let naner_root = root_or_cwd();
     let github = GitHubReleasesClient::new(constants::github::OWNER, constants::github::REPO);
     let updater = NanerUpdater::new(&naner_root, &github);
@@ -130,11 +136,15 @@ pub fn execute_update() -> i32 {
         logger::failure("Could not determine this executable's own path");
         return 1;
     };
-    if updater.update_from_release(&release, &self_path) {
+    let code = if updater.update_from_release(&release, &self_path) {
         0
     } else {
         1
-    }
+    };
+    // In a console of our own the window closes with the process; hold it
+    // open so the outcome is readable.
+    wait_for_key_before_exit(state);
+    code
 }
 
 /// `naner check-update`.
@@ -220,10 +230,52 @@ fn prompt_yes(question: &str) -> bool {
     normalized.is_empty() || normalized == "y" || normalized == "yes"
 }
 
-/// Only when we allocated a fresh console (the double-click case) — never
-/// when attached to a parent shell.
+/// Marker the re-exec sets so the child knows its console window is its own
+/// -- it should pause before exit exactly as if it had allocated one, and it
+/// must never re-exec again.
+const OWN_CONSOLE_ENV: &str = "NANER_OWN_CONSOLE";
+
+/// The #81 keystroke race, closed in code instead of documentation: neither
+/// `cmd.exe` nor PowerShell waits for a GUI-subsystem process, so a prompt
+/// read from the parent shell's console competes with the shell's own next
+/// prompt for keystrokes — the flow looks hung, or worse, half the input
+/// lands in each reader. `ConsoleState::Attached` is exactly that situation.
+/// Interactive flows call this first: when attached, relaunch the same
+/// command in a console of its own — where nothing competes — wait, and
+/// mirror the exit code. Piped/redirected stdio (`Redirected`) never
+/// re-execs, so scripted and CI use is unaffected.
+#[cfg(windows)]
+pub fn reexec_in_own_console_if_racy(state: ConsoleState) -> Option<i32> {
+    if state != ConsoleState::Attached || std::env::var_os(OWN_CONSOLE_ENV).is_some() {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+
+    use std::os::windows::process::CommandExt;
+    const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
+    logger::info("Opening a console of naner's own for the prompts...");
+    match std::process::Command::new(exe)
+        .args(std::env::args_os().skip(1))
+        .env(OWN_CONSOLE_ENV, "1")
+        .creation_flags(CREATE_NEW_CONSOLE)
+        .status()
+    {
+        Ok(status) => Some(status.code().unwrap_or(1)),
+        // Could not spawn: fall through and run inline -- racy beats broken.
+        Err(_) => None,
+    }
+}
+
+#[cfg(not(windows))]
+pub fn reexec_in_own_console_if_racy(_state: ConsoleState) -> Option<i32> {
+    None
+}
+
+/// Only when the console window is naner's own — freshly allocated
+/// (double-click) or opened by the re-exec above — never when attached to a
+/// parent shell that survives us.
 pub fn wait_for_key_before_exit(state: ConsoleState) {
-    if state.allocated() {
+    if state.allocated() || std::env::var_os(OWN_CONSOLE_ENV).is_some() {
         logger::newline();
         println!("Press any key to exit...");
         let _ = std::io::stdin().lock().read_line(&mut String::new());

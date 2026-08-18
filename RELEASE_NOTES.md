@@ -9,7 +9,21 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.8.0.
+Third strike for the #81 keystroke race, and this time it dies in code. The
+sequence: documented for `cmd.exe` in 0.6.x; discovered to bite PowerShell
+identically during the v0.7.1 validation (the docs were corrected to demand
+waiting wrappers); then hit again on day one of 0.8.0 field testing, because
+nobody remembers a wrapper incantation while testing an installer. The root
+cause is structural — a GUI-subsystem binary reading a prompt from a console
+its parent shell is also reading loses keystrokes to the shell — and
+`ConsoleState::Attached` identifies it precisely. Interactive flows
+(bootstrap, `init`, `update`) now re-exec themselves into a console of their
+own when attached, wait on the child, and mirror its exit code; the child
+knows the window is its own and pauses before it closes. Redirected stdio
+never re-execs, so the CI test that runs the real binary with a closed stdin
+still exercises the inline path, and scripted use is untouched. If the
+re-exec spawn itself fails, the flow runs inline as before — racy beats
+broken.
 
 
 ## v0.8.0 — 2026-08-18
