@@ -24,5 +24,6 @@ pub mod logger;
 pub mod paths;
 pub mod regex_shim;
 pub mod timestamp;
+pub mod updater;
 pub mod vendors;
 pub mod version;

@@ -530,15 +530,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "naner-init"
-version = "0.7.1"
-dependencies = [
- "naner-core",
- "tempfile",
- "zip",
-]
-
-[[package]]
 name = "native-tls"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"

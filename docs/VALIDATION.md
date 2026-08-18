@@ -52,7 +52,7 @@ $root = "C:\naner-test"
 Copy-Item <repo>\dist-assets $root -Recurse
 New-Item -ItemType Directory -Force "$root\vendor\bin" | Out-Null
 Copy-Item <repo>\target\release\naner.exe      "$root\vendor\bin\"
-Copy-Item <repo>\target\release\naner-init.exe "$root\vendor\bin\"
+Copy-Item <repo>\target\release\naner.exe "$root\vendor\bin\naner-init.exe"  # legacy-name copy
 New-Item -ItemType File -Force "$root\.naner-initialized" | Out-Null
 ```
 
@@ -77,11 +77,12 @@ Run all four from `C:\naner-test`.
 | # | Mode | How | Expected |
 |---|------|-----|----------|
 | 1 | Attached | `.\vendor\bin\naner.exe --version` from pwsh and from cmd | Output in the *same* console, one leading blank line clearing the prompt, colours render (no raw `←[96m`), `$LASTEXITCODE` / `%ERRORLEVEL%` correct |
-| 2 | Allocated | Explorer double-click `naner-init.exe` in an **empty** folder | A *new* console window appears; on decline it stays open on "Press any key to exit..." |
+| 2 | Allocated | Explorer double-click `naner.exe` in an **empty** folder | A *new* console window appears; on decline it stays open on "Press any key to exit..." |
 | 3 | Piped | `.\vendor\bin\naner.exe --export-env --no-comments \| Invoke-Expression` then `$env:NANER_ROOT` | The variable is set. Nothing else in the pipe — no prose, no `[*]` chatter, no ANSI |
 | 4 | Redirected | See the trap below | File gets the output, no console flash, correct exit code |
 
-Run 1–4 for `naner.exe` and 1, 2, 4 for `naner-init.exe`.
+Run 1–4 for `naner.exe` (single binary since 0.8.0 — the bootstrap prompts
+now live in it).
 
 **Mode 3 is the load-bearing one.** `--export-env` writes a shell program to
 stdout, meant for `Invoke-Expression` or `eval`. Anything else on that stream is
@@ -268,7 +269,7 @@ The step no checklist substitutes for. Back up `vendor\bin\naner.exe` in your
 real tree, drop the new one in, and use it.
 
 ```powershell
-naner-init                      # Windows Terminal, Unified profile (pass-through launch)
+naner                           # Windows Terminal, Unified profile
 naner -p Bash                   # and -p CMD
 naner -d "C:\Some Path With Spaces"
 naner -d 'C:\has"quote'
@@ -296,12 +297,14 @@ for.
 Validated for real on v0.7.1 (fresh install + forced update, 2026-08-18); this
 records the procedure so every release after it re-proves the path.
 
-The update mechanics live in `naner-init update`: fetch the **latest** release,
-verify `naner.exe` *and* `naner-init.exe` against its `SHA256SUMS` before
-touching anything, swap naner-init itself first via rename-aside (the running
-exe moves to `naner-init.exe.old`; Windows allows renaming a running binary but
-not overwriting it), then install `naner.exe` and write `.naner-version`. The
-`.old` leftover is swept on the next launch.
+The update mechanics live in `naner update` (alias: `self-update`): fetch the
+**latest** release, verify the binary against its `SHA256SUMS` before touching
+anything, replace the *running* copy first via rename-aside (the live exe
+moves to `naner.exe.old`; Windows allows renaming a running binary but not
+overwriting it), then the canonical `vendor\bin\naner.exe`, then any
+pre-0.8.0 `naner-init.exe` leftovers — a stale one is a standing downgrade
+hazard — and finally write `.naner-version`. The `.old` leftover is swept on
+the next launch.
 
 **Forced-update variant** (no newer release needed — this is the everyday
 check):
@@ -309,15 +312,15 @@ check):
 ```powershell
 # In a current tree, pretend to be ancient:
 Set-Content vendor\bin\.naner-version -Value 'v0.0.1' -NoNewline
-Start-Process -Wait .\naner-init.exe -ArgumentList update
+Start-Process -Wait .\naner.exe -ArgumentList update
 ```
 
 Expect, in order: "Current version: v0.0.1", the real latest tag, a `(Y/n)`
-prompt, `Verified naner.exe`, `Verified naner-init.exe`, both installs, and
-the version file restored to the latest tag. Then:
+prompt, `Verified naner.exe`, an install line per refreshed copy, and the
+version file restored to the latest tag. Then:
 
-- `naner-init.exe.old` exists beside `naner-init.exe`
-- the next `naner-init` run deletes it silently
+- `naner.exe.old` exists beside the copy you ran
+- the next `naner` run deletes it silently
 - `naner --version` reports the latest version
 
 **Real-upgrade variant** (when a newer release actually exists): run the same

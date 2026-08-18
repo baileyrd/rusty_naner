@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/naner-core", "crates/naner", "crates/naner-init"]
+members = ["crates/naner-core", "crates/naner"]
 
 [workspace.package]
 # The release workflow enforces tag == this version (MIGRATION_ANALYSIS §4.2):

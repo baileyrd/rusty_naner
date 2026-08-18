@@ -4,6 +4,7 @@
 //! never escapes to the OS).
 
 pub mod bench;
+pub mod bootstrap;
 pub mod checksum;
 pub mod completions;
 pub mod diagnose;
@@ -17,7 +18,6 @@ pub mod profile;
 pub mod repair;
 pub mod root;
 pub mod schema;
-pub mod self_update;
 pub mod setup_shell;
 pub mod shell_integration;
 pub mod vendors;
@@ -49,8 +49,11 @@ pub mod names {
     pub const DEBUG: &str = "--debug";
     pub const ROOT: &str = "root";
     pub const LOCK: &str = "lock";
+    pub const INIT: &str = "init";
+    pub const UPDATE: &str = "update";
+    pub const CHECK_UPDATE: &str = "check-update";
 
-    pub const CONSOLE_COMMANDS: [&str; 25] = [
+    pub const CONSOLE_COMMANDS: [&str; 28] = [
         VERSION,
         VERSION_SHORT,
         HELP,
@@ -76,6 +79,9 @@ pub mod names {
         DEBUG,
         ROOT,
         LOCK,
+        INIT,
+        UPDATE,
+        CHECK_UPDATE,
     ];
 }
 
@@ -106,6 +112,9 @@ pub enum Verb {
     Install,
     Root,
     Lock,
+    Init,
+    Update,
+    CheckUpdate,
 }
 
 impl Verb {
@@ -133,11 +142,14 @@ impl Verb {
             names::INSTALL => Self::Install,
             names::ROOT => Self::Root,
             names::LOCK => Self::Lock,
+            names::INIT => Self::Init,
+            names::UPDATE => Self::Update,
+            names::CHECK_UPDATE => Self::CheckUpdate,
             _ => return None,
         })
     }
 
-    fn run(self, rest: &[String]) -> i32 {
+    fn run(self, rest: &[String], state: naner_core::console::ConsoleState) -> i32 {
         match self {
             Self::Version => version::execute(),
             Self::Help => help::execute(),
@@ -154,20 +166,25 @@ impl Verb {
             Self::Bench => bench::execute(rest),
             Self::Migrate => migrate::execute(rest),
             Self::Pack => pack::execute(rest),
-            Self::SelfUpdate => self_update::execute(rest),
+            // `self-update` predates the single binary; kept as an alias so
+            // muscle memory and old docs keep working.
+            Self::SelfUpdate => bootstrap::execute_update(),
             Self::UpdateVendors => vendors::execute_update(rest),
             Self::Install => vendors::execute_install(rest),
             Self::Root => root::execute(),
             Self::Lock => lock::execute(rest),
+            Self::Init => bootstrap::execute_init(state),
+            Self::Update => bootstrap::execute_update(),
+            Self::CheckUpdate => bootstrap::execute_check_update(),
         }
     }
 }
 
 /// Route `args` to a command. `Some(exit_code)` when a command ran; `None`
 /// when the launcher should proceed.
-pub fn route(args: &[String]) -> Option<i32> {
+pub fn route(args: &[String], state: naner_core::console::ConsoleState) -> Option<i32> {
     let first = args.first()?;
-    Verb::parse(first).map(|verb| verb.run(&args[1..]))
+    Verb::parse(first).map(|verb| verb.run(&args[1..], state))
 }
 
 #[cfg(test)]
@@ -259,7 +276,10 @@ mod tests {
 
     #[test]
     fn no_arguments_means_no_command() {
-        assert_eq!(route(&[]), None);
+        assert_eq!(
+            route(&[], naner_core::console::ConsoleState::Inherited),
+            None
+        );
     }
 
     /// Every verb must be reachable by at least one name, or it is dead code

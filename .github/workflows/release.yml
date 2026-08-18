@@ -57,9 +57,15 @@ jobs:
           # Static bundle content vendored from baileyrd/naner.
           Copy-Item dist-assets/* dist/bundle/ -Recurse
           Copy-Item target/release/naner.exe dist/
-          Copy-Item target/release/naner-init.exe dist/
+          # Single binary since 0.8.0: the naner-init.exe asset and bundle
+          # copy are byte-copies of naner.exe, kept under the old name
+          # because every deployed 0.6.x-0.7.x updater expects the asset to
+          # exist (0.7.x refuses to install a release missing it), and a
+          # stale-named copy of the NEW binary behaves correctly wherever it
+          # lands.
+          Copy-Item target/release/naner.exe dist/naner-init.exe
           Copy-Item target/release/naner.exe dist/bundle/vendor/bin/
-          Copy-Item target/release/naner-init.exe dist/bundle/vendor/bin/
+          Copy-Item target/release/naner.exe dist/bundle/vendor/bin/naner-init.exe
           # Written in tag form; comparisons must normalize the leading 'v'
           # (MIGRATION_ANALYSIS bug B6 - tag form is the canonical choice).
           # Named parameters required: positional Set-Content binds the value

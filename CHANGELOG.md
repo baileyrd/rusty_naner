@@ -1,4 +1,22 @@
 ## [Unreleased]
+### Changed
+- **Breaking (packaging): naner is one binary.** `naner-init.exe` is retired;
+  `naner.exe` is launcher, installer, and updater in one. A bare launch on an
+  uninitialized tree runs the interactive bootstrap the init binary used to
+  own (prompt, bundle-by-embedded-tag, essentials, optional launch); new
+  `init`, `update`, and `check-update` subcommands carry the explicit
+  commands, and `self-update` stays as an alias of `update`. `naner update`
+  installs the latest release into every copy of the binary the tree carries
+  — the running one first, via the field-proven rename-aside swap — and
+  refreshes pre-0.8.0 `naner-init.exe` leftovers, since a stale one is a
+  standing downgrade hazard. Releases still publish a `naner-init.exe` asset
+  (a byte-copy of `naner.exe`): deployed 0.6.x–0.7.x updaters require the
+  asset to exist, and the new binary behaves correctly under the old name.
+- Interactive prompts treat EOF as *no*. Previously a closed stdin read as an
+  empty line, which counted as yes — so any non-interactive spawn of the bare
+  binary in an empty directory silently consented to downloading and
+  installing a full tree. Caught by CI the first time it could happen.
+
 ### Fixed
 - A tree whose only configuration is a pre-v0.7.0 `naner.yaml`/`naner.yml`
   is now told exactly that, by file name, with the fix — convert it to

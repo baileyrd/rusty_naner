@@ -1,0 +1,240 @@
+//! Commands: `naner init`, `naner update`, `naner check-update` — and the
+//! interactive first-run flow the bare launcher enters on an uninitialized
+//! tree. Absorbed from the retired `naner-init.exe`; the flows are its
+//! `InitializeNanerAsync` / `UpdateNanerAsync` / `CheckForUpdatesAsync` and
+//! `RunDefaultFlowAsync`'s first-run half, with "run naner-init" messaging
+//! replaced by the binary they now live in.
+
+use std::io::{BufRead, Write};
+use std::path::{Path, PathBuf};
+
+use naner_core::console::{self, ConsoleState};
+use naner_core::github::GitHubReleasesClient;
+use naner_core::http::UreqHttp;
+use naner_core::updater::NanerUpdater;
+use naner_core::vendors::{UnifiedVendorInstaller, essential_vendor_definitions};
+use naner_core::{constants, logger, paths, version};
+
+/// Root discovery with the bootstrap-specific fallback: the current
+/// directory. A fresh binary double-clicked in an empty folder is the
+/// install-here case — the launcher's loud root-discovery failure is the
+/// wrong answer for the one flow whose whole point is that no root exists
+/// yet.
+pub fn root_or_cwd() -> PathBuf {
+    paths::find_naner_root(None, constants::MAX_NANER_ROOT_SEARCH_DEPTH)
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+}
+
+/// `naner init`.
+pub fn execute_init(state: ConsoleState) -> i32 {
+    let naner_root = root_or_cwd();
+    let github = GitHubReleasesClient::new(constants::github::OWNER, constants::github::REPO);
+    let updater = NanerUpdater::new(&naner_root, &github);
+
+    if updater.is_initialized() {
+        logger::warning("Naner is already initialized.");
+        logger::info(&format!(
+            "Current version: {}",
+            updater.installed_version().unwrap_or_default()
+        ));
+        logger::info("Use 'naner update' to update to the latest version.");
+        return 0;
+    }
+
+    run_bootstrap(&updater, &naner_root, state)
+}
+
+/// The interactive first-run flow: prompt, bundle download by embedded tag,
+/// essentials bootstrap, optional launch. Shared by `naner init` and the
+/// bare launcher's uninitialized path.
+pub fn run_bootstrap(updater: &NanerUpdater, naner_root: &Path, state: ConsoleState) -> i32 {
+    logger::header("Naner Initializer");
+    logger::newline();
+    logger::info("Naner is not initialized yet.");
+    logger::info(&format!(
+        "This will download Naner v{} from GitHub into {}.",
+        updater.target_version(),
+        naner_root.display()
+    ));
+    logger::newline();
+
+    if !prompt_yes("Initialize Naner now? (Y/n): ") {
+        logger::info("Initialization cancelled.");
+        wait_for_key_before_exit(state);
+        return 0;
+    }
+
+    if !updater.initialize() {
+        wait_for_key_before_exit(state);
+        return 1;
+    }
+
+    download_essentials(naner_root);
+
+    logger::newline();
+    logger::info("Additional development tools can be installed later.");
+    logger::info("Run 'naner update-vendors' to update vendor tools.");
+    logger::newline();
+    logger::success("Naner is ready!");
+    logger::newline();
+
+    if prompt_yes("Launch Naner now? (Y/n): ") {
+        return updater.launch_naner(&[]);
+    }
+    logger::info("Run 'naner' to launch Naner later.");
+    wait_for_key_before_exit(state);
+    0
+}
+
+/// `naner update` (and `naner self-update`, its alias): update every copy of
+/// the binary to the latest published release.
+pub fn execute_update() -> i32 {
+    let naner_root = root_or_cwd();
+    let github = GitHubReleasesClient::new(constants::github::OWNER, constants::github::REPO);
+    let updater = NanerUpdater::new(&naner_root, &github);
+
+    if !updater.is_initialized() {
+        logger::failure("Naner is not initialized yet.");
+        logger::info("Run 'naner init' to initialize first.");
+        return 1;
+    }
+
+    let installed = updater.installed_version().unwrap_or_default();
+    logger::info(&format!("Current version: {installed}"));
+
+    logger::status("Checking the latest release...");
+    let Some(release) = updater.fetch_latest() else {
+        return 1;
+    };
+    let latest = release.tag_name.clone().unwrap_or_default();
+
+    // Up to date means the tree AND this binary both match the latest
+    // release: a stale binary next to a current version file still needs
+    // the update.
+    let current = version::canonical(&latest) == version::canonical(&installed)
+        && version::canonical(&latest) == version::canonical(updater.target_version());
+    if current {
+        logger::success("Naner is already up to date!");
+        return 0;
+    }
+
+    logger::info(&format!("Latest version: {latest}"));
+    logger::newline();
+
+    if !prompt_yes("Update now? (Y/n): ") {
+        logger::info("Update cancelled.");
+        return 0;
+    }
+
+    let Ok(self_path) = std::env::current_exe() else {
+        logger::failure("Could not determine this executable's own path");
+        return 1;
+    };
+    if updater.update_from_release(&release, &self_path) {
+        0
+    } else {
+        1
+    }
+}
+
+/// `naner check-update`.
+pub fn execute_check_update() -> i32 {
+    let naner_root = root_or_cwd();
+    let github = GitHubReleasesClient::new(constants::github::OWNER, constants::github::REPO);
+    let updater = NanerUpdater::new(&naner_root, &github);
+
+    if !updater.is_initialized() {
+        logger::failure("Naner is not initialized yet.");
+        return 1;
+    }
+
+    let installed = updater.installed_version().unwrap_or_default();
+    logger::info(&format!("Current version: {installed}"));
+
+    let Some(release) = updater.fetch_latest() else {
+        return 1;
+    };
+    let latest = release.tag_name.unwrap_or_default();
+
+    if version::canonical(&latest) != version::canonical(&installed)
+        || version::canonical(&latest) != version::canonical(updater.target_version())
+    {
+        logger::warning(&format!("Update available: {latest}"));
+        logger::info("Run 'naner update' to update");
+        return 0;
+    }
+
+    logger::success("Naner is up to date!");
+    0
+}
+
+/// The fixed bootstrap order — 7-Zip first (it unblocks the other
+/// extractions).
+fn download_essentials(naner_root: &Path) {
+    logger::newline();
+    logger::info("Setting up essential dependencies...");
+    logger::newline();
+
+    logger::info("Downloading essential vendors...");
+    logger::newline();
+
+    let http = UreqHttp::new();
+    let installer = UnifiedVendorInstaller::new(naner_root, essential_vendor_definitions(), &http);
+
+    let mut success = true;
+    for name in [
+        constants::vendor_names::SEVEN_ZIP,
+        constants::vendor_names::POWERSHELL,
+        constants::vendor_names::WINDOWS_TERMINAL,
+        constants::vendor_names::GIT_FOR_WINDOWS,
+    ] {
+        success &= installer.install_vendor(name);
+        logger::newline();
+    }
+    installer.cleanup_downloads();
+
+    if success {
+        logger::success("All essential vendors installed successfully!");
+    } else {
+        logger::warning("Some vendors failed to install, but Naner may still function");
+    }
+}
+
+/// Interactive prompts accept a bare Enter/`y`/`yes` (trimmed,
+/// case-insensitive) as yes.
+///
+/// EOF is NO. A bare Enter arrives as `"\n"` — one byte — where a closed
+/// stdin reads zero bytes. Treating those the same made any non-interactive
+/// spawn of the bare binary in an empty directory silently *consent* to
+/// downloading and installing a full naner tree, which is how a CI test
+/// first caught this.
+fn prompt_yes(question: &str) -> bool {
+    print!("{question}");
+    let _ = std::io::stdout().flush();
+    let mut response = String::new();
+    match std::io::stdin().lock().read_line(&mut response) {
+        Ok(0) | Err(_) => return false,
+        Ok(_) => {}
+    }
+    let normalized = response.trim().to_lowercase();
+    normalized.is_empty() || normalized == "y" || normalized == "yes"
+}
+
+/// Only when we allocated a fresh console (the double-click case) — never
+/// when attached to a parent shell.
+pub fn wait_for_key_before_exit(state: ConsoleState) {
+    if state.allocated() {
+        logger::newline();
+        println!("Press any key to exit...");
+        let _ = std::io::stdin().lock().read_line(&mut String::new());
+    }
+}
+
+/// Attach or allocate a console mid-flow (the update notification on a
+/// double-clicked launch) — only attempts console work when none was done
+/// yet.
+pub fn ensure_console(state: &mut ConsoleState) {
+    if *state == ConsoleState::Inherited {
+        *state = console::setup(true);
+    }
+}

@@ -20,6 +20,16 @@ use naner_core::{config, console, constants, env_export, logger, paths};
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    // A self-update renames the running binary aside rather than deleting it
+    // (Windows will rename a running exe but not remove it). Sweep that
+    // leftover now, when this process is the new binary and the old file is
+    // no longer running. Best effort: a locked or absent file is fine.
+    if let Ok(me) = std::env::current_exe() {
+        let mut old = me.file_name().unwrap_or_default().to_os_string();
+        old.push(".old");
+        let _ = std::fs::remove_file(me.with_file_name(old));
+    }
+
     let machine_readable = is_machine_readable(&args);
 
     // Console decision, exactly as Program.Main: router console commands OR
@@ -28,15 +38,37 @@ fn main() {
         || first_run::is_first_run()
         || args.iter().any(|a| a.to_lowercase() == "--debug")
         || machine_readable;
-    let _console = console::setup(needs_console);
+    let mut console_state = console::setup(needs_console);
 
     // Layer 1: router verbs.
-    if let Some(code) = commands::route(&args) {
+    if let Some(code) = commands::route(&args, console_state) {
         std::process::exit(code);
     }
 
-    // First-run gate.
+    // First-run gate. Machine-readable invocations keep the terse notice --
+    // an eval'd `--export-env` must never block on a prompt -- and a tree
+    // that is damaged rather than absent (marker present, essentials
+    // missing) keeps the diagnostic notice too. A genuinely uninitialized
+    // tree gets the interactive bootstrap the retired naner-init.exe used
+    // to own: this binary in an empty folder IS the installer.
     if first_run::is_first_run() {
+        if machine_readable {
+            std::process::exit(handle_first_run(machine_readable));
+        }
+        let naner_root = commands::bootstrap::root_or_cwd();
+        let github = naner_core::github::GitHubReleasesClient::new(
+            constants::github::OWNER,
+            constants::github::REPO,
+        );
+        let updater = naner_core::updater::NanerUpdater::new(&naner_root, &github);
+        if !updater.is_initialized() {
+            commands::bootstrap::ensure_console(&mut console_state);
+            std::process::exit(commands::bootstrap::run_bootstrap(
+                &updater,
+                &naner_root,
+                console_state,
+            ));
+        }
         std::process::exit(handle_first_run(machine_readable));
     }
 
@@ -53,10 +85,10 @@ fn main() {
         }
     };
 
-    std::process::exit(run_launcher(&opts));
+    std::process::exit(run_launcher(&opts, &mut console_state));
 }
 
-fn run_launcher(opts: &cli::LaunchOptions) -> i32 {
+fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleState) -> i32 {
     if opts.version {
         commands::version::show_short();
         return 0;
@@ -84,6 +116,28 @@ fn run_launcher(opts: &cli::LaunchOptions) -> i32 {
     };
     if !quiet {
         logger::success(&format!("Naner Root: {}", naner_root.display()));
+    }
+
+    // Update notice, absorbed from the retired naner-init.exe: a purely
+    // local comparison (version file vs this binary's embedded version), so
+    // launches stay offline. Skipped for --export-env: its stdout is an
+    // eval-able script and this is the one launcher path a pipeline reads.
+    if !opts.export_env {
+        let github = naner_core::github::GitHubReleasesClient::new(
+            constants::github::OWNER,
+            constants::github::REPO,
+        );
+        let updater = naner_core::updater::NanerUpdater::new(&naner_root, &github);
+        let (update_available, latest) = updater.check_for_update();
+        if update_available && latest.is_some() {
+            commands::bootstrap::ensure_console(console_state);
+            logger::warning(&format!(
+                "A new version of Naner is available: {}",
+                latest.as_deref().unwrap_or_default()
+            ));
+            logger::info("Run 'naner update' to update");
+            logger::newline();
+        }
     }
 
     // 2. Load configuration.

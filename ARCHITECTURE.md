@@ -20,23 +20,23 @@ Rust projects in [ECOSYSTEM.md](./ECOSYSTEM.md).
 
 | Crate | Kind | Responsibility |
 | --- | --- | --- |
-| `naner-core` | library | All logic: config, paths, vendors, archives, HTTP, digests, logging |
-| `naner` | binary | The launcher — CLI dispatch, environment assembly, terminal spawn |
-| `naner-init` | binary | Bootstrapper/updater — first install and self-update from GitHub releases |
+| `naner-core` | library | All logic: config, paths, vendors, archives, HTTP, digests, updater, logging |
+| `naner` | binary | The single binary — launcher, installer, and self-updater in one |
 
-Both binaries depend on `naner-core`; neither depends on the other. Dependencies
-point in one direction only, and the binaries consume `naner-core` through its
-public module surface rather than reaching into implementation detail
-(`ATLAS-LAYER-0001`). Because `naner-core` is shared by two binaries, its boundaries
-are documented rather than left implicit (`ATLAS-MOD-0010`).
+The binary depends on `naner-core` through its public module surface rather
+than reaching into implementation detail (`ATLAS-LAYER-0001`); `naner-core`'s
+boundaries are documented rather than left implicit (`ATLAS-MOD-0010`).
 
 The modular-monolith default is the standing one for this codebase
 (`ATLAS-001` Ch. 23): splitting a component out requires a concrete forcing
 function — independent scaling, a team or language boundary, or hard fault
-isolation — not speculative future need. Nothing here has crossed that line. The
-`naner` / `naner-init` split is not a service boundary; it exists because the two
-have genuinely different lifecycles — `naner-init` must be able to replace
-`naner.exe` on disk, which it cannot do while running as the same process.
+isolation — not speculative future need. Nothing here has crossed that line.
+There used to be a second binary, `naner-init.exe`, on the theory that a
+process cannot replace its own executable; 0.8.0 collapsed the split once the
+rename-aside swap (Windows renames a running exe, it just won't overwrite
+one) was proven in the field. Releases still publish a `naner-init.exe` asset
+— a byte-copy of `naner.exe` — because deployed 0.6.x–0.7.x updaters require
+it to exist and will happily run the new binary under the old name.
 
 > **Standards note.** `ATLAS-100` (Architecture) and `ATLAS-300` (Rust Workspace
 > and Cargo) are both `Seed` status — no requirements published — so no specific
@@ -125,12 +125,15 @@ resolution finds nothing and when the primary download fails. Fallback use is
 logged loudly — a silently pinned old version is how the original bug went
 unnoticed for years.
 
-**Bootstrap / update** (`naner-init.exe`): fetch the GitHub release whose tag matches
-this binary's own compile-time version → download asset → verify against the
-release's `SHA256SUMS` → swap. This is sync-to-embedded-version, not
-install-latest: it will downgrade if the embedded version is older. The release
-workflow enforces tag == package version, because a deployed `naner-init` looks up
-the release matching its embedded version and strands if the two drift.
+**Bootstrap** (`naner init`, or a bare launch in an empty folder): fetch the
+GitHub release whose tag matches this binary's own compile-time version →
+download the bundle → verify against the release's `SHA256SUMS` → extract.
+Sync-to-embedded on purpose: a fresh install can never strand, because the
+release a binary bootstraps from always exists — the release workflow
+enforces tag == package version. **Update** (`naner update`): fetch the
+*latest* release, verify, then install into every copy of the binary the
+tree carries — the running one first, via rename-aside — so an interrupted
+update can only offer the update again, never a downgrade.
 
 ## Key decisions
 
