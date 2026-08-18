@@ -9,7 +9,39 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.8.1.
+Nothing merged since v0.8.2.
+
+
+## v0.8.2 — 2026-08-18
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.8.1...v0.8.2).
+
+One feature: `naner add-to-path` (#105) closes the last gap in calling
+naner — nothing ever put `naner.exe` on the system PATH, so outside the
+launched environment the bare name never resolved. The new command
+appends `<NANER_ROOT>\vendor\bin` to the per-user PATH so `naner` works
+from any newly opened shell, without importing the whole environment the
+way `setup-shell` does; `--remove` undoes it, `--dry-run` previews the
+exact value it would write.
+
+The `HKCU\Environment` value is edited directly rather than through
+`setx`, which silently truncates the stored PATH at 1024 characters. The
+value's registry type and every other entry are preserved byte-for-byte,
+a `WM_SETTINGCHANGE` broadcast makes newly started shells see the
+change, and matching is case-insensitive and tolerant of trailing-slash
+and quoted variants so re-running is a no-op. User hive only: no
+elevation, and nothing outlives deleting the folder plus one `--remove`.
+
+Also ships the post-0.8.1 documentation truth-up (#104): the README now
+leads with bare invocation, since the #81 console fix — field-validated
+on v0.8.1 — made the `Start-Process -Wait` / `start /wait` wrappers
+unnecessary.
+
+### Known limitations for this release
+
+- `add-to-path` is untested on a real Windows box until this release's
+  field check runs: `naner add-to-path`, open a new PowerShell window,
+  `naner --version` from anywhere, then `--remove` to undo.
 
 
 ## v0.8.1 — 2026-08-18
