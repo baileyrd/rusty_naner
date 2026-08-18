@@ -1,0 +1,35 @@
+{
+  "MSYS2": {
+    "name": "MSYS2",
+    "description": "Collection of tools and libraries for Windows",
+    "extractDir": "msys64",
+    "enabled": false,
+    "required": false,
+    "dependencies": [
+      "SevenZip"
+    ],
+    "releaseSource": {
+      "type": "web-scrape",
+      "url": "https://repo.msys2.org/distrib/x86_64/",
+      "pattern": "href=\"(msys2-base-x86_64-(\\d{8})\\.tar\\.xz)\"",
+      "fallback": {
+        "version": "20240727",
+        "url": "https://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20240727.tar.xz",
+        "fileName": "msys2-base-x86_64-20240727.tar.xz",
+        "size": "~400"
+      }
+    },
+    "postInstallFunction": "MSYS2.PostInstall",
+    "packages": [
+      "git",
+      "make",
+      "mingw-w64-x86_64-gcc",
+      "mingw-w64-x86_64-make",
+      "diffutils",
+      "patch",
+      "tar",
+      "zip",
+      "unzip"
+    ]
+  }
+}

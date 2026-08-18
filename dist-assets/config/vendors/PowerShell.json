@@ -1,0 +1,24 @@
+{
+  "PowerShell": {
+    "name": "PowerShell",
+    "description": "Cross-platform automation and configuration tool",
+    "extractDir": "powershell",
+    "enabled": true,
+    "required": true,
+    "dependencies": [
+      "SevenZip"
+    ],
+    "releaseSource": {
+      "type": "github",
+      "repo": "PowerShell/PowerShell",
+      "assetPattern": "*win-x64.zip",
+      "fallback": {
+        "version": "7.4.6",
+        "url": "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.zip",
+        "fileName": "PowerShell-7.4.6-win-x64.zip",
+        "size": "~100"
+      }
+    },
+    "postInstallFunction": "PowerShell.PostInstall"
+  }
+}

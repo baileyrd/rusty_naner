@@ -1,0 +1,27 @@
+{
+  "ImageGlass": {
+    "name": "ImageGlass",
+    "description": "Fast, lightweight and versatile image viewer",
+    "extractDir": "imageglass",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "d2phap/ImageGlass",
+      "assetPattern": "ImageGlass_*_x64.msi",
+      "fallback": {
+        "version": "9.6.1.807",
+        "url": "https://github.com/d2phap/ImageGlass/releases/download/9.6.1.807/ImageGlass_9.6.1.807_x64.msi",
+        "fileName": "ImageGlass_9.6.1.807_x64.msi",
+        "size": "~136"
+      }
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "1f08209adb9456860ac2a71a74395456ccdf1bd9fc640f43d44b3b34788ddc0a",
+      "required": true
+    },
+    "postInstallFunction": "ImageGlass.PostInstall"
+  }
+}

@@ -9,6 +9,50 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+`config/vendors.json` was 499 lines describing 22 vendors, and the last two
+vendor bugs both came from working in it: four vendors added in one batch all
+shipped `installerArgs` without `%TARGETDIR%`, and a connection-reset fix
+needed a change nowhere near the entry it affected. Each vendor now gets its
+own file under `config/vendors/`, named after the key it declares.
+
+The constraint that shaped the design is that the catalog has to be *compiled
+into* the binary: `config_merge.rs` embeds it with `include_str!` so a bare
+`naner.exe` swap -- which has no bundle to read from -- can still add newly
+shipped vendors to an existing tree. `include_str!` takes exactly one file, so
+a build script assembles the 22 authored files into one generated catalog in
+`OUT_DIR` and the embed points there. Single source of truth, no generated
+file checked in, no new runtime dependency. The build script also enforces the
+authoring contract: one vendor per file, file name matching the declared key.
+
+Two things got better rather than merely different. `merge_shipped_vendor_defaults`
+used to parse the user's whole file, insert missing keys, and rewrite it; now
+it writes a file for each missing vendor and never opens the others, so "a
+vendor the user has customized is never overwritten" holds by construction
+instead of by a key-by-key check -- and a single malformed entry no longer
+blocks every other vendor from being added, because it is no longer in the
+same document as them. The loader gained the matching property: one unparseable
+file is reported and skipped, where a stray comma used to cost the user the
+entire catalog at once.
+
+The cutover is deliberate and hard: the pre-split file is not read at all. That
+is a real edge, because the failure is quiet -- no vendors directory means the
+loader falls back to four hardcoded essentials and the other eighteen simply
+vanish from `install --list`. So a tree that still has a `vendors.json` gets
+told exactly that, by name, instead of the generic "vendor configuration not
+found" it would otherwise print while a perfectly good-looking file sits right
+there.
+
+Vendor listing order is now sorted by file name rather than authored order.
+Installs were never affected -- those are dependency-driven by key, and
+`naner-init`'s essential bootstrap runs off a hardcoded list -- but
+`install --list` output changes once, and one test that indexed the loaded set
+positionally now looks vendors up by key, which is what it meant anyway.
+
+Dropped in passing: the file's inert `version`/`description`/`metadata` block.
+Nothing read it, the schema already said most of it, and one of its notes
+pointed at `Setup-NanerVendor.ps1` -- a PowerShell script this repo does not
+have, the same species of stale reference as the `naner.bat` fallback.
+
 Following on from the `naner.bat` fixes below: the branch that used to
 advertise a dead PowerShell fallback now does something useful instead of
 just failing politely. If `vendor\bin\naner.exe` is missing, the shim hands

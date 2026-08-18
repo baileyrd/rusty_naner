@@ -38,6 +38,14 @@ rusty_regx = { git = "https://github.com/baileyrd/rusty_regx", rev = "1538e6633c
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true
 
+[build-dependencies]
+# The build script assembles dist-assets/config/vendors/*.json into the single
+# catalog config_merge.rs embeds. `preserve_order` for the same reason the
+# runtime dependency sets it: the generated catalog is inserted verbatim into a
+# user's vendors file, and alphabetizing every field of every vendor on the way
+# through is gratuitous churn in a file people read.
+serde_json = { version = "1", features = ["preserve_order"] }
+
 [dev-dependencies]
 tempfile = "3"
 # Retired runtime dep, kept dev-only to differential-test regex_shim against.

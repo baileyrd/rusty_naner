@@ -1,0 +1,22 @@
+{
+  "SevenZip": {
+    "name": "7-Zip",
+    "description": "File archiver with high compression ratio",
+    "extractDir": "7zip",
+    "enabled": true,
+    "required": true,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "ip7z/7zip",
+      "assetPattern": "7z*-x64.msi",
+      "fallback": {
+        "version": "24.08",
+        "url": "https://www.7-zip.org/a/7z2408-x64.msi",
+        "fileName": "7z2408-x64.msi",
+        "size": "~2"
+      }
+    },
+    "postInstallFunction": "SevenZip.PostInstall"
+  }
+}

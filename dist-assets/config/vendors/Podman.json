@@ -1,0 +1,27 @@
+{
+  "Podman": {
+    "name": "Podman",
+    "description": "Daemonless engine for developing, managing and running OCI containers",
+    "extractDir": "podman",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "containers/podman",
+      "assetPattern": "podman-installer-windows-amd64.msi",
+      "fallback": {
+        "version": "v6.1.0",
+        "url": "https://github.com/containers/podman/releases/download/v6.1.0/podman-installer-windows-amd64.msi",
+        "fileName": "podman-installer-windows-amd64.msi",
+        "size": "~27"
+      }
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "1958aac22abb3a9cf7b52626c71ba1a26015c323f0b5fa74671e303b22b043d3",
+      "required": true
+    },
+    "postInstallFunction": "Podman.PostInstall"
+  }
+}

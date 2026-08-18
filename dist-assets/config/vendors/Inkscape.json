@@ -1,0 +1,23 @@
+{
+  "Inkscape": {
+    "name": "Inkscape",
+    "description": "Professional vector graphics editor",
+    "extractDir": "inkscape",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://media.inkscape.org/dl/resources/file/inkscape-1.4.4_2026-05-05_dcaf3e7-x64.signed.msi",
+      "version": "1.4.4",
+      "fileName": "inkscape-1.4.4_2026-05-05_dcaf3e7-x64.signed.msi",
+      "size": "~132"
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "25c67a2e4b8d83deade457b1291801921d3cf78c05bc0232521d52ab9a8b37ef",
+      "required": true
+    },
+    "postInstallFunction": "Inkscape.PostInstall"
+  }
+}

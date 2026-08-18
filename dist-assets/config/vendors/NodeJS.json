@@ -1,0 +1,22 @@
+{
+  "NodeJS": {
+    "name": "Node.js",
+    "description": "JavaScript runtime built on Chrome's V8 engine",
+    "extractDir": "nodejs",
+    "enabled": false,
+    "required": false,
+    "dependencies": [
+      "SevenZip"
+    ],
+    "releaseSource": {
+      "type": "nodejs-api",
+      "fallback": {
+        "version": "v20.11.0",
+        "url": "https://nodejs.org/dist/v20.11.0/node-v20.11.0-win-x64.zip",
+        "fileName": "node-v20.11.0-win-x64.zip",
+        "size": "~30"
+      }
+    },
+    "postInstallFunction": "NodeJS.PostInstall"
+  }
+}

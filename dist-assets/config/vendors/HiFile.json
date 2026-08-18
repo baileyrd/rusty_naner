@@ -1,0 +1,24 @@
+{
+  "HiFile": {
+    "name": "HiFile",
+    "description": "Free, modern cross-platform file manager for Windows, macOS and Linux",
+    "extractDir": "hifile",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://www.hifile.app/files/HiFile-0.9.16.0.exe",
+      "version": "0.9.16.0",
+      "fileName": "HiFile-0.9.16.0.exe",
+      "size": "~17"
+    },
+    "installType": "installer",
+    "installerArgs": [
+      "/VERYSILENT",
+      "/NORESTART",
+      "/DIR=%TARGETDIR%"
+    ],
+    "postInstallFunction": "HiFile.PostInstall"
+  }
+}

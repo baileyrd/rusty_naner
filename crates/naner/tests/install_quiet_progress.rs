@@ -29,23 +29,26 @@ fn init_tree(root: &Path) {
     // self-extracting archive (no installer elevation prompt), unlike an
     // MSI-based vendor, which would fail outside an elevated shell for a
     // reason unrelated to what this test checks.
+    let vendors = root.join("config").join("vendors");
+    std::fs::create_dir_all(&vendors).unwrap();
     std::fs::write(
-        root.join("config").join("vendors.json"),
+        vendors.join("GitForWindows.json"),
         r#"{
-            "vendors": {
-                "GitForWindows": {
-                    "name": "Git for Windows",
-                    "description": "test",
-                    "extractDir": "git",
-                    "enabled": true,
-                    "required": true,
-                    "releaseSource": {
-                        "type": "github",
-                        "repo": "git-for-windows/git",
-                        "assetPattern": "PortableGit-*-64-bit.7z.exe"
-                    },
-                    "installerArgs": ["-y", "-o%TARGETDIR%"]
-                }
+            "GitForWindows": {
+                "name": "Git for Windows",
+                "description": "test",
+                "extractDir": "git",
+                "enabled": true,
+                "required": true,
+                "releaseSource": {
+                    "type": "github",
+                    "repo": "git-for-windows/git",
+                    "assetPattern": "PortableGit-*-64-bit.7z.exe"
+                },
+                "installerArgs": [
+                    "-y",
+                    "-o%TARGETDIR%"
+                ]
             }
         }"#,
     )

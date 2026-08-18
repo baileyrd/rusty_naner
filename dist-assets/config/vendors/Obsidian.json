@@ -1,0 +1,32 @@
+{
+  "Obsidian": {
+    "name": "Obsidian",
+    "description": "Privacy-first knowledge base and note-taking app built on local Markdown files",
+    "extractDir": "obsidian",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "obsidianmd/obsidian-releases",
+      "assetPattern": "Obsidian-*.exe",
+      "fallback": {
+        "version": "v1.13.7",
+        "url": "https://github.com/obsidianmd/obsidian-releases/releases/download/v1.13.7/Obsidian-1.13.7.exe",
+        "fileName": "Obsidian-1.13.7.exe",
+        "size": "~316"
+      }
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "f233dc24896b3f2d5f9e4b01111181a561d0760b2105f0a474024c5f3143a9bc",
+      "required": true
+    },
+    "installType": "installer",
+    "installerArgs": [
+      "/S",
+      "/D=%TARGETDIR%"
+    ],
+    "postInstallFunction": "Obsidian.PostInstall"
+  }
+}
