@@ -91,7 +91,7 @@ that cross-publish has been removed. Phases 0–5 done:
 - **Phase 1**: `constants`, `version` (exact `VersionComparer` semantics),
   `paths` (root discovery, .NET-faithful `%VAR%`/`$env:VAR` expansion, unified
   PATH assembly), `config` (serde models with C# defaults and inert fields,
-  comment/trailing-comma-tolerant JSON, YAML fallback, env-var overrides,
+  comment/trailing-comma-tolerant JSON, env-var overrides,
   validator, search-order loader), `logger` (exact prefix/stream contract),
   and `env_export` (powershell/bash/cmd formats) — 50 unit tests, all
   pure-logic and green on Linux and the Windows cross-check.

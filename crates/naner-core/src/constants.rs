@@ -26,7 +26,7 @@ pub const LEGACY_VENDORS_CONFIG_FILE_NAME: &str = "vendors.json";
 
 /// Supported configuration file names in priority order (no cross-file
 /// merging: the first that exists wins).
-pub const CONFIG_FILE_NAMES: [&str; 3] = ["naner.json", "naner.yaml", "naner.yml"];
+pub const CONFIG_FILE_NAMES: [&str; 1] = ["naner.json"];
 
 pub mod github {
     pub const OWNER: &str = "baileyrd";
@@ -43,7 +43,6 @@ pub mod directory_names {
     pub const VENDOR_BIN: &str = "vendor/bin";
     pub const CONFIG: &str = "config";
     pub const HOME: &str = "home";
-    pub const PLUGINS: &str = "plugins";
     pub const LOGS: &str = "logs";
     pub const DOWNLOADS: &str = ".downloads";
 
@@ -51,8 +50,6 @@ pub mod directory_names {
     /// *discovery* markers are only bin+vendor+config. The asymmetry is
     /// intentional behavior (MIGRATION_ANALYSIS §1.5).
     pub const ESSENTIAL: [&str; 4] = [BIN, VENDOR, CONFIG, HOME];
-
-    pub const ALL: [&str; 7] = [BIN, VENDOR, VENDOR_BIN, CONFIG, HOME, PLUGINS, LOGS];
 }
 
 pub mod executables {

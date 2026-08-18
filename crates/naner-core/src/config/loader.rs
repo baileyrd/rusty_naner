@@ -1,8 +1,12 @@
 //! Port of `ConfigurationProviderService` + `ConfigurationManager.Load`:
-//! find exactly one config file (search order `naner.json` → `naner.yaml` →
-//! `naner.yml`, no cross-file merging), parse it by extension, apply env-var
-//! overrides, expand `%NANER_ROOT%`/env placeholders through the whole
-//! config, then validate (warnings logged, errors fail).
+//! find the config file (`naner.json`), parse it, apply env-var overrides,
+//! expand `%NANER_ROOT%`/env placeholders through the whole config, then
+//! validate (warnings logged, errors fail).
+//!
+//! JSON is the only supported format. The YAML alternative was dropped along
+//! with the shipped `naner.yaml` twin, which had silently drifted out of sync
+//! with `naner.json` -- two files describing the same thing, only ever one of
+//! them loaded.
 
 use std::path::{Path, PathBuf};
 
@@ -16,7 +20,7 @@ pub enum ConfigError {
     /// No file in the search order exists.
     NotFound,
 
-    /// An explicit path was given but no provider handles its extension.
+    /// An explicit path was given but its extension is not `.json`.
     UnsupportedFormat(String),
 
     FileNotFound(String),
@@ -33,11 +37,11 @@ impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConfigError::NotFound => f.write_str(
-                "No configuration file found. Please create naner.json or naner.yaml in the config directory.",
+                "No configuration file found. Please create naner.json in the config directory.",
             ),
             ConfigError::UnsupportedFormat(path) => write!(
                 f,
-                "No configuration provider found for: {path}. Supported formats: JSON, YAML"
+                "No configuration provider found for: {path}. Supported formats: JSON"
             ),
             ConfigError::FileNotFound(path) => write!(f, "Configuration file not found: {path}"),
             ConfigError::Parse(msg) | ConfigError::Invalid(msg) => f.write_str(msg),
@@ -117,21 +121,15 @@ fn load_file(path: &Path) -> Result<NanerConfig, ConfigError> {
         .map(|e| e.to_string_lossy().to_lowercase())
         .unwrap_or_default();
 
-    match ext.as_str() {
-        "json" | "yaml" | "yml" => {}
-        _ => return Err(ConfigError::UnsupportedFormat(path.display().to_string())),
+    if ext != "json" {
+        return Err(ConfigError::UnsupportedFormat(path.display().to_string()));
     }
 
     if !path.is_file() {
         return Err(ConfigError::FileNotFound(path.display().to_string()));
     }
     let content = std::fs::read_to_string(path)?;
-
-    match ext.as_str() {
-        "json" => super::load_json(&content).map_err(|e| ConfigError::Parse(e.to_string())),
-        _ => super::load_yaml(&content)
-            .map_err(|e| ConfigError::Parse(format!("Invalid YAML format: {e}"))),
-    }
+    super::load_json(&content).map_err(|e| ConfigError::Parse(e.to_string()))
 }
 
 /// `ConfigurationManager.ExpandConfigPaths`: vendor paths, PATH precedence,
@@ -181,7 +179,7 @@ mod tests {
     }"#;
 
     #[test]
-    fn json_wins_the_search_order() {
+    fn json_is_the_only_configuration_file() {
         let tmp = fixture_root(&[
             ("naner.json", MINIMAL_JSON),
             ("naner.yaml", "DefaultProfile: FromYaml\n"),
@@ -193,12 +191,15 @@ mod tests {
         assert_eq!(config.default_profile, "P");
     }
 
+    /// YAML support went away with the shipped `naner.yaml` twin. A tree whose
+    /// only config is YAML now reports no configuration at all -- deliberately,
+    /// and loudly, rather than half-loading a format nothing else supports.
     #[test]
-    fn yaml_is_the_fallback() {
+    fn a_yaml_only_tree_reports_no_configuration() {
         let yaml = "DefaultProfile: P\nProfiles:\n  P:\n    Name: P\n";
         let tmp = fixture_root(&[("naner.yaml", yaml)]);
-        let config = load(tmp.path(), None).unwrap();
-        assert_eq!(config.default_profile, "P");
+        assert!(find_configuration_file(tmp.path()).is_none());
+        assert!(matches!(load(tmp.path(), None), Err(ConfigError::NotFound)));
     }
 
     #[test]
@@ -207,7 +208,7 @@ mod tests {
         let err = load(tmp.path(), None).unwrap_err();
         assert_eq!(
             err.to_string(),
-            "No configuration file found. Please create naner.json or naner.yaml in the config directory."
+            "No configuration file found. Please create naner.json in the config directory."
         );
     }
 

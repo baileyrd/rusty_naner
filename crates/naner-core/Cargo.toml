@@ -14,9 +14,6 @@ serde = { version = "1", features = ["derive"] }
 # touched -- comes back alphabetized instead of in the order the user left
 # them.
 serde_json = { version = "1", features = ["preserve_order"] }
-# serde_yaml is archived; the _ng fork is the maintained continuation
-# (MIGRATION_ANALYSIS §2.3). YAML is a fallback format behind JSON.
-serde_yaml_ng = "0.10"
 # Blocking HTTP without an async runtime (MIGRATION_ANALYSIS §2.2: the C#
 # async is incidental; everything blocks). native-tls = schannel on Windows
 # (system cert store + proxy behavior closest to .NET, §2.3) and OpenSSL on

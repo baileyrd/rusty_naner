@@ -43,13 +43,8 @@ use serde_json::Value;
 use crate::config::strip_json_comments;
 use crate::fs_atomic::{back_up, write_atomic};
 
-/// `naner.json`/`naner.yaml` as shipped with this binary. Field-for-field
-/// identical content in both formats (verified by
-/// `an_already_current_tree_reports_up_to_date_and_writes_nothing` running
-/// against each), so `merge_shipped_naner_defaults` only has to pick the
-/// matching one for whichever format the user's file is in.
+/// `naner.json` as shipped with this binary.
 const SHIPPED_NANER_JSON: &str = include_str!("../../../../dist-assets/config/naner.json");
-const SHIPPED_NANER_YAML: &str = include_str!("../../../../dist-assets/config/naner.yaml");
 
 /// A field whose value naner itself sets, and what it used to be before a
 /// specific, named migration -- not a general "diff against last shipped"
@@ -124,25 +119,13 @@ pub fn merge_shipped_naner_defaults(
         return Ok(NanerConfigMergeOutcome::NoConfig);
     }
 
-    let is_yaml = config_path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("yaml") || e.eq_ignore_ascii_case("yml"));
-
     let existing_text = std::fs::read_to_string(config_path)?;
-    let Ok(mut existing) = parse_document(&existing_text, is_yaml) else {
+    let Ok(mut existing) = parse_document(&existing_text) else {
         return Ok(NanerConfigMergeOutcome::LeftUnparsed);
     };
 
-    // `naner.yaml` mirrors `naner.json` field-for-field (same keys, same
-    // shape), so the merge logic below operates on `serde_json::Value`
-    // either way -- only parsing/serializing differ by format.
-    let shipped_source = if is_yaml {
-        SHIPPED_NANER_YAML
-    } else {
-        SHIPPED_NANER_JSON
-    };
-    let shipped = parse_document(shipped_source, is_yaml)
-        .expect("the config this binary ships is always valid");
+    let shipped =
+        parse_document(SHIPPED_NANER_JSON).expect("the config this binary ships is always valid");
 
     let mut added = Vec::new();
     let mut refreshed = Vec::new();
@@ -185,7 +168,7 @@ pub fn merge_shipped_naner_defaults(
     if let Some(path) = back_up(config_path)? {
         crate::logger::info(&format!("    Backup: {}", path.display()));
     }
-    let rendered = render_document(&existing, is_yaml)?;
+    let rendered = render_document(&existing)?;
     write_atomic(config_path, &rendered)?;
 
     Ok(NanerConfigMergeOutcome::Merged {
@@ -285,27 +268,16 @@ fn merge_path_precedence(
 }
 
 /// Parse a config document as JSON (comments/trailing commas tolerated, same
-/// as every other JSON reader in this crate) or YAML, into a
-/// `serde_json::Value` either way so the merge logic never needs to care
-/// which format it started as.
-fn parse_document(text: &str, is_yaml: bool) -> Result<Value, ()> {
-    if is_yaml {
-        serde_yaml_ng::from_str(text).map_err(|_| ())
-    } else {
-        let stripped = strip_json_comments(text);
-        serde_json::from_str(&stripped).map_err(|_| ())
-    }
+/// as every other JSON reader in this crate).
+fn parse_document(text: &str) -> Result<Value, ()> {
+    let stripped = strip_json_comments(text);
+    serde_json::from_str(&stripped).map_err(|_| ())
 }
 
-fn render_document(value: &Value, is_yaml: bool) -> std::io::Result<String> {
-    if is_yaml {
-        serde_yaml_ng::to_string(value)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-    } else {
-        let pretty = serde_json::to_string_pretty(value)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(format!("{pretty}\n"))
-    }
+fn render_document(value: &Value) -> std::io::Result<String> {
+    let pretty = serde_json::to_string_pretty(value)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    Ok(format!("{pretty}\n"))
 }
 
 /// Insert any key present in `shipped.pointer(object_pointer)` but absent
@@ -607,45 +579,5 @@ mod tests {
             NanerConfigMergeOutcome::UpToDate
         );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
-    }
-
-    #[test]
-    fn a_naner_yaml_tree_gets_the_same_bash_provider_migration() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = write(
-            dir.path(),
-            "naner.yaml",
-            "VendorPaths:\n  GitBash: \"%NANER_ROOT%\\\\vendor\\\\msys64\\\\usr\\\\bin\\\\bash.exe\"\n\
-             Profiles:\n  Bash:\n    Name: Bash\n    Description: MSYS2 Bash environment\n",
-        );
-
-        let outcome = merge_shipped_naner_defaults(&path).unwrap();
-        let NanerConfigMergeOutcome::Merged { refreshed, .. } = outcome else {
-            panic!("expected a merge, got {outcome:?}");
-        };
-        assert!(refreshed.contains(&"/VendorPaths/GitBash".to_string()));
-        assert!(refreshed.contains(&"/Profiles/Bash/Description".to_string()));
-
-        let updated: Value =
-            serde_yaml_ng::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-        assert_eq!(
-            updated["VendorPaths"]["GitBash"],
-            "%NANER_ROOT%\\vendor\\git\\bin\\bash.exe"
-        );
-        assert_eq!(
-            updated["Profiles"]["Bash"]["Description"],
-            "Git Bash environment"
-        );
-    }
-
-    #[test]
-    fn an_already_current_yaml_tree_reports_up_to_date() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = write(dir.path(), "naner.yaml", SHIPPED_NANER_YAML);
-
-        assert_eq!(
-            merge_shipped_naner_defaults(&path).unwrap(),
-            NanerConfigMergeOutcome::UpToDate
-        );
     }
 }
