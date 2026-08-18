@@ -9,6 +9,16 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+The last sharp edge of the v0.7.0 upgrade is filed down. Dropping YAML left
+one genuinely unkind failure: a tree whose only config is `naner.yaml` got
+"no configuration file found" — technically true, and a lie to anyone
+looking at their config directory. The loader now checks for the pre-v0.7.0
+files by name when nothing loadable exists and says the real thing: this
+file is YAML, naner stopped reading it in v0.7.0, convert it to
+`config/naner.json` and remove it. The first-run report gives the same
+hint, so both the launcher path and the init path tell the truth. The plain
+missing-config case is unchanged, and a test pins each behavior.
+
 The v0.7.1 validation on a real Windows box confirmed the self-update
 mechanics end to end — fresh install with the split config layout, then a
 forced `naner-init update` that verified both binaries, swapped the running

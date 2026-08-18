@@ -99,6 +99,18 @@ pub fn get_first_run_info_at(naner_root: &Path) -> FirstRunInfo {
             "No configuration file found (supported: {})",
             constants::CONFIG_FILE_NAMES.join(", ")
         ));
+        // A pre-v0.7.0 tree has a YAML config sitting right where the JSON
+        // should be; "no configuration" alone would read as a lie to its
+        // owner. Name the file and the fix.
+        for name in constants::LEGACY_YAML_CONFIG_FILE_NAMES {
+            if config_dir.join(name).is_file() {
+                info.messages.push(format!(
+                    "config/{name} found, but YAML is no longer read (since v0.7.0) \
+                     -- convert it to config/naner.json"
+                ));
+                break;
+            }
+        }
     }
 
     info.is_first_run = !info.messages.is_empty();
@@ -162,6 +174,25 @@ mod tests {
         assert!(
             info.messages
                 .contains(&"No configuration file found (supported: naner.json)".to_string())
+        );
+    }
+
+    /// A pre-v0.7.0 tree has a naner.yaml where the JSON should be; the
+    /// first-run report must name it and say to convert, not just claim no
+    /// configuration exists while the owner is looking at one.
+    #[test]
+    fn a_legacy_yaml_config_gets_a_convert_hint() {
+        let tmp = full_tree();
+        std::fs::remove_file(tmp.path().join("config/naner.json")).unwrap();
+        std::fs::write(tmp.path().join("config/naner.yaml"), "DefaultProfile: P\n").unwrap();
+
+        let info = get_first_run_info_at(tmp.path());
+        assert!(
+            info.messages
+                .iter()
+                .any(|m| m.contains("naner.yaml") && m.contains("convert")),
+            "expected a convert hint naming the YAML file, got {:?}",
+            info.messages
         );
     }
 }

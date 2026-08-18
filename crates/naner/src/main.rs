@@ -104,6 +104,10 @@ fn run_launcher(opts: &cli::LaunchOptions) -> i32 {
             ));
             return 1;
         }
+        Err(err @ config::ConfigError::LegacyYaml(_)) => {
+            logger::failure(&err.to_string());
+            return 1;
+        }
         Err(err) => {
             logger::failure(&format!("Fatal error: {err}"));
             return 1;
