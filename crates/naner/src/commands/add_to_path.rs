@@ -13,10 +13,7 @@ use naner_core::{constants, logger, paths};
 pub fn execute(args: &[String]) -> i32 {
     let remove = args.iter().any(|a| a == "--remove");
     let dry_run = args.iter().any(|a| a == "--dry-run");
-    if let Some(unknown) = args
-        .iter()
-        .find(|a| *a != "--remove" && *a != "--dry-run")
-    {
+    if let Some(unknown) = args.iter().find(|a| *a != "--remove" && *a != "--dry-run") {
         eprintln!("Unknown argument '{unknown}'. Usage: naner add-to-path [--remove] [--dry-run]");
         return 1;
     }
@@ -102,7 +99,9 @@ fn run(naner_root: &Path, remove: bool, dry_run: bool) -> i32 {
 
 #[cfg(not(windows))]
 fn run(naner_root: &Path, _remove: bool, _dry_run: bool) -> i32 {
-    logger::failure("add-to-path manages the per-user Windows PATH and is only available on Windows.");
+    logger::failure(
+        "add-to-path manages the per-user Windows PATH and is only available on Windows.",
+    );
     logger::info(&format!(
         "On this platform, add {} to PATH in your shell profile instead.",
         path_entry(naner_root)

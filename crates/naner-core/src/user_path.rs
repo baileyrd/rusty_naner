@@ -81,7 +81,10 @@ pub mod registry {
     const VALUE_NAME: &str = "Path";
 
     fn wide(s: &str) -> Vec<u16> {
-        OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+        OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
     }
 
     struct Key(HKEY);
@@ -152,7 +155,11 @@ pub mod registry {
     /// [`read_user_path`] reported; anything that is not plain `REG_SZ` is
     /// written as `REG_EXPAND_SZ` so `%VAR%` entries keep expanding.
     pub fn write_user_path(value: &str, kind: u32) -> io::Result<()> {
-        let kind = if kind == REG_SZ { REG_SZ } else { REG_EXPAND_SZ };
+        let kind = if kind == REG_SZ {
+            REG_SZ
+        } else {
+            REG_EXPAND_SZ
+        };
         let key = open_environment(KEY_SET_VALUE)?;
         let name = wide(VALUE_NAME);
         let data = wide(value);
@@ -215,7 +222,10 @@ mod tests {
 
     #[test]
     fn a_prefix_is_not_a_match() {
-        assert!(!contains("C:\\naner\\vendor;C:\\naner\\vendor\\bin2", ENTRY));
+        assert!(!contains(
+            "C:\\naner\\vendor;C:\\naner\\vendor\\bin2",
+            ENTRY
+        ));
         assert!(!contains("", ENTRY));
     }
 
