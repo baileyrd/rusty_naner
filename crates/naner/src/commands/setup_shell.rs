@@ -78,8 +78,8 @@ pub fn execute(args: &[String]) -> i32 {
     };
 
     // `vendor/bin`, not `bin`. That is where the release workflow stages
-    // naner.exe, where `naner-init` installs and updates it, and what
-    // `naner.bat` calls. `bin/` is the user's own directory and ships empty.
+    // naner.exe and where `naner-init` installs and updates it. `bin/` is the
+    // user's own directory and ships empty.
     // The generated block guards on `Test-Path`/`-f`, so pointing at the wrong
     // path does not fail loudly -- the integration just silently never runs.
     let naner_exe = naner_exe_path(&naner_root);
@@ -161,8 +161,8 @@ mod tests {
     /// `--dry-run`, and silently never runs. That is how `bin/naner.exe`
     /// survived: nothing fails when it is wrong.
     ///
-    /// `vendor/bin` is the location the release workflow stages to, that
-    /// `naner-init` installs and updates, and that `naner.bat` calls.
+    /// `vendor/bin` is the location the release workflow stages to and that
+    /// `naner-init` installs and updates.
     #[test]
     fn the_integration_block_points_at_where_naner_exe_actually_is() {
         let exe = naner_exe_path(Path::new("C:/naner"));

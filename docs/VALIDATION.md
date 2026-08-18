@@ -157,7 +157,7 @@ Expand-Archive naner-bundle.zip -DestinationPath zipcheck -Force
 Get-ChildItem zipcheck -Recurse -File
 ```
 
-Expect `bin/`, `config/`, `home/`, `icons/` and `naner.bat`, and **no `.bak` or
+Expect `bin/`, `config/`, `home/` and `icons/`, and **no `.bak` or
 `.tmp`** — you have a `.bak` in `config\` from the migrate step, so this is a
 live test of the exclusion.
 
@@ -268,7 +268,7 @@ The step no checklist substitutes for. Back up `vendor\bin\naner.exe` in your
 real tree, drop the new one in, and use it.
 
 ```powershell
-naner.bat                       # Windows Terminal, Unified profile
+naner-init                      # Windows Terminal, Unified profile (pass-through launch)
 naner -p Bash                   # and -p CMD
 naner -d "C:\Some Path With Spaces"
 naner -d 'C:\has"quote'

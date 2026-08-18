@@ -129,7 +129,7 @@ that cross-publish has been removed. Phases 0–5 done:
 - **Phase 5 (cutover, done)**: the release workflow publishes Rust-built
   `naner.exe` / `naner-init.exe` / `naner-bundle.zip` to `baileyrd/naner`
   with identical tags and asset names (§4.2). The static bundle content
-  (`bin/`, `config/`, `home/`, `icons/`, `naner.bat`) is vendored from the
+  (`bin/`, `config/`, `home/`, `icons/`) is vendored from the
   C# repo in `dist-assets/`. All validation gates
   ([docs/VALIDATION.md](docs/VALIDATION.md)) passed and `v0.5.0` shipped as
   a full (non-prerelease) release, including the post-parity bug-fix wave
@@ -151,7 +151,7 @@ that cross-publish has been removed. Phases 0–5 done:
 - **`naner diff [profile]`**: Compares host environment variables against target profile environment definitions.
 - **`naner bench [profile]`**: Startup latency profiler measuring execution timings for root discovery, config loading, profile resolution, and PATH assembly in milliseconds.
 - **`naner migrate [--dry-run]`**: Rewrites the configuration file in canonical JSON form. Keeps a timestamped backup, preserves top-level keys the model does not own (`$schema` among them), and writes via a temp file so an interrupted run cannot truncate the config. Comments cannot survive the round-trip and it says so before proceeding.
-- **`naner pack [dir] --out bundle.zip`**: Bundles a naner installation (`bin/`, `config/`, `home/`, `icons/`, `naner.bat`) into a portable zip, skipping transient files. Defaults to the discovered root; `[dir]` overrides it.
+- **`naner pack [dir] --out bundle.zip`**: Bundles a naner installation (`bin/`, `config/`, `home/`, `icons/`) into a portable zip, skipping transient files. Defaults to the discovered root; `[dir]` overrides it.
 - **`naner self-update`**: Hands over to `naner-init`, which performs the update. It is a separate executable because `naner.exe` cannot replace itself while running.
 - **`naner lock [--refresh [vendor...]] [--porcelain]`**: Inspects `naner.lock`, the pin of exactly which vendor artifacts this environment installs, and drops pins so the next install re-resolves.
 

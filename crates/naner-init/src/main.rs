@@ -14,7 +14,7 @@ use naner_core::console::{self, ConsoleState};
 use naner_core::github::GitHubReleasesClient;
 use naner_core::http::UreqHttp;
 use naner_core::vendors::{UnifiedVendorInstaller, essential_vendor_definitions};
-use naner_core::{constants, logger, paths};
+use naner_core::{constants, logger, paths, version};
 use updater::NanerUpdater;
 
 /// `InitCommandNames.ConsoleCommands`.
@@ -30,6 +30,16 @@ const CONSOLE_COMMANDS: [&str; 7] = [
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+
+    // A self-update renames the running binary aside rather than deleting it
+    // (Windows will rename a running exe but not remove it). Sweep that
+    // leftover now, when this process is the new binary and the old file is
+    // no longer running. Best effort: a locked or absent file is fine.
+    if let Ok(me) = std::env::current_exe() {
+        let mut old = me.file_name().unwrap_or_default().to_os_string();
+        old.push(".old");
+        let _ = std::fs::remove_file(me.with_file_name(old));
+    }
 
     let mut state = console::setup(console::arg_needs_console(&args, &CONSOLE_COMMANDS));
 
@@ -174,21 +184,27 @@ fn update_naner(naner_root: &std::path::Path, github: &GitHubReleasesClient) -> 
         return 1;
     }
 
-    logger::info(&format!(
-        "Current version: {}",
-        updater.installed_version().unwrap_or_default()
-    ));
+    let installed = updater.installed_version().unwrap_or_default();
+    logger::info(&format!("Current version: {installed}"));
 
-    let (update_available, latest_version) = updater.check_for_update();
-    if !update_available {
+    logger::status("Checking the latest release...");
+    let Some(release) = updater.fetch_latest() else {
+        return 1;
+    };
+    let latest = release.tag_name.clone().unwrap_or_default();
+
+    // Up to date means BOTH binaries match the latest release: naner.exe via
+    // the version file, naner-init via its embedded version. A stale init
+    // next to a current naner.exe still needs the update, or its offline
+    // sync check keeps offering to drag naner.exe back down.
+    let current = version::canonical(&latest) == version::canonical(&installed)
+        && version::canonical(&latest) == version::canonical(updater.target_version());
+    if current {
         logger::success("Naner is already up to date!");
         return 0;
     }
 
-    logger::info(&format!(
-        "Latest version: {}",
-        latest_version.as_deref().unwrap_or_default()
-    ));
+    logger::info(&format!("Latest version: {latest}"));
     logger::newline();
 
     if !prompt_yes("Update now? (Y/n): ") {
@@ -196,7 +212,15 @@ fn update_naner(naner_root: &std::path::Path, github: &GitHubReleasesClient) -> 
         return 0;
     }
 
-    if updater.update_naner_exe() { 0 } else { 1 }
+    let Ok(self_path) = std::env::current_exe() else {
+        logger::failure("Could not determine this executable's own path");
+        return 1;
+    };
+    if updater.update_from_release(&release, &self_path) {
+        0
+    } else {
+        1
+    }
 }
 
 /// `CheckForUpdatesAsync` (`naner-init check-update`).
@@ -208,17 +232,18 @@ fn check_for_updates(naner_root: &std::path::Path, github: &GitHubReleasesClient
         return 1;
     }
 
-    logger::info(&format!(
-        "Current version: {}",
-        updater.installed_version().unwrap_or_default()
-    ));
+    let installed = updater.installed_version().unwrap_or_default();
+    logger::info(&format!("Current version: {installed}"));
 
-    let (update_available, latest_version) = updater.check_for_update();
-    if update_available && latest_version.is_some() {
-        logger::warning(&format!(
-            "Update available: {}",
-            latest_version.as_deref().unwrap_or_default()
-        ));
+    let Some(release) = updater.fetch_latest() else {
+        return 1;
+    };
+    let latest = release.tag_name.unwrap_or_default();
+
+    if version::canonical(&latest) != version::canonical(&installed)
+        || version::canonical(&latest) != version::canonical(updater.target_version())
+    {
+        logger::warning(&format!("Update available: {latest}"));
         logger::info("Run 'naner-init update' to update");
         return 0;
     }
