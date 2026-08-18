@@ -168,13 +168,13 @@ impl Verb {
             Self::Pack => pack::execute(rest),
             // `self-update` predates the single binary; kept as an alias so
             // muscle memory and old docs keep working.
-            Self::SelfUpdate => bootstrap::execute_update(),
+            Self::SelfUpdate => bootstrap::execute_update(state),
             Self::UpdateVendors => vendors::execute_update(rest),
             Self::Install => vendors::execute_install(rest),
             Self::Root => root::execute(),
             Self::Lock => lock::execute(rest),
             Self::Init => bootstrap::execute_init(state),
-            Self::Update => bootstrap::execute_update(),
+            Self::Update => bootstrap::execute_update(state),
             Self::CheckUpdate => bootstrap::execute_check_update(),
         }
     }
