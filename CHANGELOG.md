@@ -1,6 +1,13 @@
 ## [Unreleased]
-
-Nothing merged since v0.8.1.
+### Added
+- `naner add-to-path [--remove] [--dry-run]`: puts `<NANER_ROOT>\vendor\bin`
+  on the per-user PATH (`HKCU\Environment`, no admin) so `naner` resolves
+  from any shell without importing the whole environment the way
+  `setup-shell` does. The registry value is edited directly rather than via
+  `setx` (which truncates at 1024 characters), its type and other entries
+  are preserved, and a `WM_SETTINGCHANGE` broadcast makes new shells pick
+  the change up. `--remove` undoes it; matching is case-insensitive and
+  tolerant of trailing-slash/quoted variants.
 
 ## [0.8.1] - 2026-08-18
 ### Fixed
