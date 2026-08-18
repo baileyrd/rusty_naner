@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.8.0.
+
+## [0.8.0] - 2026-08-18
 ### Changed
 - **Breaking (packaging): naner is one binary.** `naner-init.exe` is retired;
   `naner.exe` is launcher, installer, and updater in one. A bare launch on an
