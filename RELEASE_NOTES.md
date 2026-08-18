@@ -9,7 +9,19 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.7.1.
+The v0.7.1 validation on a real Windows box confirmed the self-update
+mechanics end to end — fresh install with the split config layout, then a
+forced `naner-init update` that verified both binaries, swapped the running
+init aside as `.old`, and swept it on the next launch. It also caught two
+documentation lies, both now fixed. The README claimed PowerShell waits for
+`naner-init.exe`; it does not — no shell waits for a GUI-subsystem process,
+so the #81 keystroke race reproduces in PowerShell exactly as in `cmd.exe`,
+and the install instructions now give both shells a waiting wrapper. And
+nothing warned that SmartScreen silently blocks a freshly downloaded
+unsigned exe — the "nothing happens at all" symptom — so `Unblock-File` is
+now step one. `docs/VALIDATION.md` gains Step 6, recording the self-update
+procedure that was actually used, so future releases re-prove the path
+instead of trusting it.
 
 
 ## v0.7.1 — 2026-08-18

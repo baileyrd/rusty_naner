@@ -291,6 +291,44 @@ Then live in it. Every structured step above was designed against a known
 behaviour; the bugs that matter most are the ones nobody thought to write a step
 for.
 
+## Step 6 — Self-update
+
+Validated for real on v0.7.1 (fresh install + forced update, 2026-08-18); this
+records the procedure so every release after it re-proves the path.
+
+The update mechanics live in `naner-init update`: fetch the **latest** release,
+verify `naner.exe` *and* `naner-init.exe` against its `SHA256SUMS` before
+touching anything, swap naner-init itself first via rename-aside (the running
+exe moves to `naner-init.exe.old`; Windows allows renaming a running binary but
+not overwriting it), then install `naner.exe` and write `.naner-version`. The
+`.old` leftover is swept on the next launch.
+
+**Forced-update variant** (no newer release needed — this is the everyday
+check):
+
+```powershell
+# In a current tree, pretend to be ancient:
+Set-Content vendor\bin\.naner-version -Value 'v0.0.1' -NoNewline
+Start-Process -Wait .\naner-init.exe -ArgumentList update
+```
+
+Expect, in order: "Current version: v0.0.1", the real latest tag, a `(Y/n)`
+prompt, `Verified naner.exe`, `Verified naner-init.exe`, both installs, and
+the version file restored to the latest tag. Then:
+
+- `naner-init.exe.old` exists beside `naner-init.exe`
+- the next `naner-init` run deletes it silently
+- `naner --version` reports the latest version
+
+**Real-upgrade variant** (when a newer release actually exists): run the same
+`update` in a tree on the older version — no version-file edit needed. On a
+pre-0.7.0 tree, additionally expect the two config-migration warnings
+(`vendors.json` no longer read; vendor paths appended pending the
+`%VENDOR_PATHS%` marker).
+
+**Fail-closed spot-check**: disconnect the network and run `update` — it must
+fail without modifying either binary or the version file.
+
 ## Recording what you find
 
 - Diverged and should not have: file it, fix before tagging.
