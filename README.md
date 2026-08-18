@@ -14,21 +14,41 @@ separate installer.
    naner owns (its own config, vendor tools, and binary) lives under it, so
    the whole install is self-contained and can be removed by deleting the
    folder.
-3. Run `naner-init.exe` — double-clicking it in Explorer or running it from
-   an existing PowerShell or Windows Terminal window both work. It's a
-   console-less GUI-subsystem binary, so on first run it opens its own
-   console window if you double-clicked it, or attaches to the one you're
-   already in if you ran it from a shell; either way you'll see the same
-   prompts. (Double-clicked, it also pauses with "press any key to exit"
-   at the end so the window doesn't disappear before you can read it.)
+3. **Unblock the download first.** Windows stamps files fetched by a browser
+   with the Mark of the Web, and SmartScreen then blocks an unsigned exe with
+   an unfamiliar hash — silently, since a GUI-subsystem binary has no console
+   to print an error into. "Nothing happens" on a freshly downloaded
+   `naner-init.exe` is almost always this. In PowerShell:
 
-   **From `cmd.exe` specifically**, run it as `start /wait naner-init.exe`
-   rather than typing its name directly — `cmd.exe` does not wait for a
-   GUI-subsystem process the way PowerShell does, so its own next-command
-   prompt races `naner-init.exe`'s `(Y/n)` prompt for your keystrokes, and
-   the plain-`naner-init.exe` form can silently fail to initialize
-   ([#81](https://github.com/baileyrd/rusty_naner/issues/81)). `start /wait`
-   makes `cmd.exe` actually wait, which avoids the race.
+   ```powershell
+   Unblock-File .\naner-init.exe
+   ```
+
+   (or right-click → Properties → tick **Unblock**.)
+
+4. Run `naner-init.exe` — double-clicking it in Explorer works and opens its
+   own console window. (Double-clicked, it also pauses with "press any key
+   to exit" at the end so the window doesn't disappear before you can read
+   it.)
+
+   **From a shell — PowerShell and `cmd.exe` alike — launch it with a
+   waiting wrapper**, not by typing its name directly:
+
+   ```powershell
+   Start-Process -Wait .\naner-init.exe      # PowerShell
+   ```
+   ```bat
+   start /wait naner-init.exe                :: cmd.exe
+   ```
+
+   Neither shell waits for a GUI-subsystem process, so run bare, the
+   shell's own next prompt and `naner-init.exe`'s `(Y/n)` prompt race for
+   your keystrokes and initialization can silently fail
+   ([#81](https://github.com/baileyrd/rusty_naner/issues/81) — observed in
+   `cmd.exe` originally and reproduced in PowerShell since; an earlier
+   version of this note wrongly claimed PowerShell waits). The wrappers
+   make the shell actually wait, and give naner-init its own console where
+   nothing competes for input.
 
    On first run it:
    - downloads `naner-bundle.zip` matching its own version and verifies it

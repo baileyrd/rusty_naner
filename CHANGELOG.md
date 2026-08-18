@@ -1,6 +1,18 @@
 ## [Unreleased]
+### Fixed
+- README's install instructions no longer claim PowerShell waits for
+  `naner-init.exe` — it does not (no shell waits for a GUI-subsystem
+  process), and the #81 keystroke race reproduces there too, observed live
+  during the v0.7.1 validation. Both shells now get a waiting-wrapper
+  command (`Start-Process -Wait` / `start /wait`). Also added the
+  `Unblock-File` step: SmartScreen blocks a freshly downloaded unsigned exe
+  silently, which presents as "nothing happens".
 
-Nothing merged since v0.7.1.
+### Added
+- `docs/VALIDATION.md` Step 6 — the self-update validation procedure
+  (forced-update variant via a doctored `.naner-version`, real-upgrade
+  variant, and the offline fail-closed spot-check), as validated for real
+  on v0.7.1.
 
 ## [0.7.1] - 2026-08-18
 ### Changed
