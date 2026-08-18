@@ -9,6 +9,27 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.7.1.
+
+
+## v0.7.1 — 2026-08-18
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.7.0...v0.7.1).
+
+The self-update release. This is the first release whose `naner-init.exe`
+can carry an installation forward on its own: install THIS release's
+`naner-init.exe` by hand — the last manual step — and every release after
+it is one `naner-init update` away.
+
+### Known limitations for this release
+
+- The rename-aside self-swap has not yet run against a genuinely executing
+  binary — the tests stage a stand-in file. The first real `naner-init
+  update` from this version is the validation, deliberately.
+- A tree on v0.7.0 or earlier still updates the old way one last time:
+  its installed init predates this code, so download this release's
+  `naner-init.exe` manually.
+
 The self-update mechanism worked; the discovery didn't. `naner-init`'s
 "update" was sync-to-embedded — it installed the release matching its own
 compiled-in version, and its update check compared two local values, so no

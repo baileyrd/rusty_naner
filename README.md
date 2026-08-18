@@ -76,7 +76,7 @@ also in [Core CLI Subcommands](#core-cli-subcommands) below.
 
 ## Status
 
-Migration complete: `v0.7.0` is the Latest release on this repo
+Migration complete: `v0.7.1` is the Latest release on this repo
 ([baileyrd/rusty_naner](https://github.com/baileyrd/rusty_naner)), published
 through the Phase 5 release workflow. Releases through `v0.6.4` were
 published to [baileyrd/naner](https://github.com/baileyrd/naner) instead;
