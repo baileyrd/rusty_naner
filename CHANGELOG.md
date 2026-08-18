@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.7.0.
+
+## [0.7.0] - 2026-08-18
 ### Fixed
 - `Http::download` now retries up to 3 times on a dropped connection
   instead of failing the install outright — observed for real on Anaconda
