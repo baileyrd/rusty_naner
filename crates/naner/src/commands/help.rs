@@ -18,6 +18,9 @@ pub fn execute() -> i32 {
     println!("    install --list           List available vendors and status");
     println!("    install --all            Install all optional vendors");
     println!("    install <vendor> [...]   Install specific vendor(s)");
+    println!("  init                       Initialize Naner in this folder (download from GitHub)");
+    println!("  update                     Update Naner itself to the latest release");
+    println!("  check-update               Check whether a newer release exists");
     println!("  update-vendors             Update all vendor dependencies to latest versions");
     println!("  root                       Print the Naner root directory and exit");
     println!();
@@ -62,7 +65,8 @@ pub fn execute() -> i32 {
     println!("  eval \"$(naner.exe --export-env -f bash)\"");
     println!();
     println!("INITIALIZATION:");
-    println!("  Use 'naner-init' to initialize or update Naner.");
+    println!("  naner is a single binary: run it in an empty folder to install,");
+    println!("  'naner update' to update itself, 'naner update-vendors' for tools.");
     println!();
 
     println!("REQUIREMENTS:");

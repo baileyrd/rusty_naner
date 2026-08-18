@@ -1,13 +1,17 @@
-//! Port of `NanerUpdater` (Naner.Init). The update model is
-//! sync-to-embedded-version, NOT install-latest: this binary fetches the
-//! GitHub release whose tag matches its own compile-time version and makes
-//! the installed `naner.exe`/`.naner-version` match it — a string-inequality
-//! check that will happily "downgrade" (MIGRATION_ANALYSIS §1.3).
+//! Bootstrap and self-update for the single naner binary.
+//!
+//! Descended from `NanerUpdater` (Naner.Init), which lived in the separate
+//! `naner-init.exe`. Two models met here and one survived:
+//! `initialize` is still sync-to-embedded — the bundle a binary bootstraps
+//! from is always the release matching its own compiled-in version, so a
+//! fresh install can never strand — while `update_from_release` installs the
+//! *latest* release, into every copy of the binary the tree is known to
+//! carry, replacing the running one via rename-aside.
 
 use std::path::{Path, PathBuf};
 
-use naner_core::github::{GitHubRelease, ReleasesApi};
-use naner_core::{archives, checksum, constants, logger, version};
+use crate::github::{GitHubRelease, ReleasesApi};
+use crate::{archives, checksum, constants, logger, version};
 
 const NANER_BUNDLE_NAME: &str = "naner-bundle.zip";
 
@@ -157,15 +161,19 @@ impl<'a> NanerUpdater<'a> {
         release
     }
 
-    /// Install `release`'s `naner.exe` and `naner-init.exe`, replacing this
-    /// running binary at `self_path`.
+    /// Install `release`'s single binary into every copy the tree is known
+    /// to carry, replacing the running one at `self_path` via rename-aside
+    /// (Windows renames a running exe but will not overwrite one).
     ///
-    /// Both downloads are verified against the release's `SHA256SUMS` before
-    /// either file is touched, and naner-init is swapped *first*. The order is
-    /// the crash-safety: if the second swap fails, the tree holds a new init
-    /// and an old naner.exe, and the next run offers the update again. The
-    /// other order leaves a new naner.exe under an old init — whose sync check
-    /// would then offer to "update" it back down.
+    /// One download, verified against the release's `SHA256SUMS` before any
+    /// file is touched, then installed to: `self_path` first — if a later
+    /// step fails, a new binary over an old tree offers the update again,
+    /// where the other order leaves a stale binary that could offer a
+    /// downgrade — then the canonical `vendor/bin/naner.exe`, then any
+    /// pre-single-binary `naner-init.exe` leftovers (vendor/bin and the
+    /// root). Refreshing the leftovers is not politeness: an old naner-init
+    /// syncs the tree to its own embedded version, so one stale copy is a
+    /// standing downgrade hazard.
     pub fn update_from_release(&self, release: &GitHubRelease, self_path: &Path) -> bool {
         logger::header("Updating Naner");
         logger::newline();
@@ -174,54 +182,60 @@ impl<'a> NanerUpdater<'a> {
         logger::info(&format!("Target version: {tag}"));
         logger::newline();
 
-        let naner_path = self.vendor_bin_dir.join(constants::executables::NANER);
-        let naner_tmp = self
+        let staged = self
             .vendor_bin_dir
-            .join(format!("{}.tmp", constants::executables::NANER));
-        let init_tmp = with_appended_extension(self_path, "new");
-
-        // Download and verify everything before replacing anything.
-        if !self.fetch_and_verify(release, constants::executables::NANER, &naner_tmp) {
-            let _ = std::fs::remove_file(&naner_tmp);
-            return false;
-        }
-        if !self.fetch_and_verify(release, constants::executables::NANER_INIT, &init_tmp) {
-            let _ = std::fs::remove_file(&naner_tmp);
-            let _ = std::fs::remove_file(&init_tmp);
+            .join(format!("{}.staged", constants::executables::NANER));
+        if !self.fetch_and_verify(release, constants::executables::NANER, &staged) {
+            let _ = std::fs::remove_file(&staged);
             return false;
         }
 
-        // Swap this binary. Windows will not overwrite a running exe but will
-        // happily rename it, so the old file moves aside and the new one takes
-        // its name; the leftover `.old` is cleaned up on the next launch.
+        // 1. The running binary, by rename-aside. The `.old` leftover is
+        // swept on the next launch.
         let old_self = with_appended_extension(self_path, "old");
         let _ = std::fs::remove_file(&old_self);
         if let Err(e) = std::fs::rename(self_path, &old_self) {
-            logger::failure(&format!("Could not move the running naner-init aside: {e}"));
-            let _ = std::fs::remove_file(&naner_tmp);
-            let _ = std::fs::remove_file(&init_tmp);
+            logger::failure(&format!("Could not move the running binary aside: {e}"));
+            let _ = std::fs::remove_file(&staged);
             return false;
         }
-        if let Err(e) = std::fs::rename(&init_tmp, self_path) {
-            logger::failure(&format!("Could not install the new naner-init: {e}"));
+        if let Err(e) = std::fs::copy(&staged, self_path) {
+            logger::failure(&format!("Could not install the new binary: {e}"));
             // Put the working binary back under its own name.
             let _ = std::fs::rename(&old_self, self_path);
-            let _ = std::fs::remove_file(&naner_tmp);
+            let _ = std::fs::remove_file(&staged);
             return false;
         }
-        logger::success(&format!("Installed {}", constants::executables::NANER_INIT));
+        logger::success(&format!("Installed {}", self_path.display()));
 
-        if naner_path.is_file()
-            && let Err(e) = std::fs::remove_file(&naner_path)
-        {
-            logger::warning(&format!("Could not delete old naner.exe: {e}"));
-            logger::info("Will attempt to overwrite...");
+        // 2. The canonical launcher location, when the running copy is
+        // somewhere else (e.g. the root).
+        let canonical = self.vendor_bin_dir.join(constants::executables::NANER);
+        if !same_path(&canonical, self_path) {
+            if !install_copy(&staged, &canonical) {
+                let _ = std::fs::remove_file(&staged);
+                return false;
+            }
+            logger::success(&format!("Installed {}", canonical.display()));
         }
-        if let Err(e) = std::fs::rename(&naner_tmp, &naner_path) {
-            logger::failure(&format!("Update failed: {e}"));
-            return false;
+
+        // 3. Pre-single-binary leftovers. Best effort: a locked copy fails
+        // its own refresh, not the update -- but say exactly what it means.
+        for legacy in [
+            self.vendor_bin_dir.join(constants::executables::NANER_INIT),
+            self.naner_root.join(constants::executables::NANER_INIT),
+        ] {
+            if legacy.is_file() && !same_path(&legacy, self_path) && !install_copy(&staged, &legacy)
+            {
+                logger::warning(&format!(
+                    "Could not refresh {} -- it is now an OUTDATED updater whose \
+                     own update would downgrade this installation. Delete it.",
+                    legacy.display()
+                ));
+            }
         }
-        logger::success(&format!("Installed {}", constants::executables::NANER));
+
+        let _ = std::fs::remove_file(&staged);
 
         if let Err(e) = std::fs::write(self.vendor_bin_dir.join(constants::VERSION_FILE), &tag) {
             logger::failure(&format!("Update failed: {e}"));
@@ -346,7 +360,7 @@ impl<'a> NanerUpdater<'a> {
 
         let marker = format!(
             "# Naner Initialization Marker\n# Created: {}\n# Version: {tag}\n",
-            naner_core::timestamp::now_local()
+            crate::timestamp::now_local()
         );
         if std::fs::write(
             self.naner_root.join(constants::INITIALIZATION_MARKER_FILE),
@@ -368,7 +382,7 @@ impl<'a> NanerUpdater<'a> {
         let naner_path = self.vendor_bin_dir.join(constants::executables::NANER);
         if !naner_path.is_file() {
             logger::failure(&format!("Naner not found at: {}", naner_path.display()));
-            logger::info("Run 'naner-init' to install Naner first");
+            logger::info("Run 'naner init' to install Naner first");
             return 1;
         }
 
@@ -408,6 +422,38 @@ fn sha256_for(sums: &str, asset_name: &str) -> Option<String> {
     })
 }
 
+/// Whether two paths name the same file, tolerant of `.`/`..`/case noise on
+/// Windows: canonicalized when possible, raw comparison otherwise.
+fn same_path(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(ca), Ok(cb)) => ca == cb,
+        _ => a == b,
+    }
+}
+
+/// Replace `target` with a copy of `staged`, atomically enough for an exe
+/// swap: copy to a sibling temp file, remove the old target, rename into
+/// place. The target must not be the running binary.
+fn install_copy(staged: &Path, target: &Path) -> bool {
+    let tmp = with_appended_extension(target, "tmp");
+    if let Err(e) = std::fs::copy(staged, &tmp) {
+        logger::failure(&format!("Could not stage {}: {e}", target.display()));
+        let _ = std::fs::remove_file(&tmp);
+        return false;
+    }
+    if target.is_file()
+        && let Err(e) = std::fs::remove_file(target)
+    {
+        logger::warning(&format!("Could not delete old {}: {e}", target.display()));
+    }
+    if let Err(e) = std::fs::rename(&tmp, target) {
+        logger::failure(&format!("Could not install {}: {e}", target.display()));
+        let _ = std::fs::remove_file(&tmp);
+        return false;
+    }
+    true
+}
+
 /// `path` with `.{ext}` appended to its full file name — `naner-init.exe`
 /// becomes `naner-init.exe.old`, not `naner-init.old`.
 fn with_appended_extension(path: &Path, ext: &str) -> std::path::PathBuf {
@@ -420,7 +466,7 @@ fn with_appended_extension(path: &Path, ext: &str) -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use naner_core::github::{GitHubAsset, GitHubRelease};
+    use crate::github::{GitHubAsset, GitHubRelease};
     use std::io::Write;
 
     struct StubApi {
@@ -463,7 +509,7 @@ mod tests {
     fn sums_for(name: &str, bytes: &[u8]) -> String {
         let tmp = tempfile::NamedTempFile::new().unwrap();
         std::fs::write(tmp.path(), bytes).unwrap();
-        let hash = naner_core::checksum::compute(tmp.path(), "SHA256").unwrap();
+        let hash = crate::checksum::compute(tmp.path(), "SHA256").unwrap();
         format!("{}  {name}\n", hash.to_lowercase())
     }
 
@@ -574,7 +620,7 @@ mod tests {
         let api = StubApi {
             release: Some(exe_release()),
             asset_bytes: Some(b"new exe".to_vec()),
-            sums: Some(sums_for_both(b"new exe")),
+            sums: Some(sums_for(constants::executables::NANER, b"new exe")),
         };
         let updater = NanerUpdater::new(root.path(), &api);
 
@@ -583,27 +629,74 @@ mod tests {
         assert!(update_needed);
         assert_eq!(target.as_deref(), Some(constants::VERSION));
 
+        // The tree a real upgrade meets: the running copy at the root, the
+        // canonical launcher in vendor/bin, and a pre-single-binary
+        // naner-init.exe leftover in each place.
         let self_path = staged_self(root.path());
+        for legacy in [
+            vendor_bin.join(constants::executables::NANER_INIT),
+            root.path().join(constants::executables::NANER_INIT),
+        ] {
+            std::fs::write(legacy, b"stale init").unwrap();
+        }
+
         assert!(updater.update_from_release(&exe_release(), &self_path));
-        assert_eq!(
-            std::fs::read_to_string(vendor_bin.join("naner.exe")).unwrap(),
-            "new exe"
-        );
+
+        // Every copy now carries the new bytes -- the leftovers included,
+        // because a stale naner-init is a standing downgrade hazard.
+        assert_eq!(std::fs::read(&self_path).unwrap(), b"new exe");
+        for refreshed in [
+            vendor_bin.join(constants::executables::NANER),
+            vendor_bin.join(constants::executables::NANER_INIT),
+            root.path().join(constants::executables::NANER_INIT),
+        ] {
+            assert_eq!(
+                std::fs::read(&refreshed).unwrap(),
+                b"new exe",
+                "{} was not refreshed",
+                refreshed.display()
+            );
+        }
         assert_eq!(
             std::fs::read_to_string(vendor_bin.join(".naner-version")).unwrap(),
             format!("v{}", constants::VERSION)
         );
-        assert!(!vendor_bin.join("naner.exe.tmp").exists());
 
-        // The running init was swapped too: new bytes under its own name, the
-        // displaced binary parked beside it as `.old` for the next launch to
-        // sweep, and no `.new` staging file left behind.
+        // The displaced running binary parks as `.old` for the next launch
+        // to sweep; no staging files survive.
+        assert_eq!(
+            std::fs::read(root.path().join("naner.exe.old")).unwrap(),
+            b"old self"
+        );
+        assert!(!vendor_bin.join("naner.exe.staged").exists());
+        assert!(!vendor_bin.join("naner.exe.tmp").exists());
+    }
+
+    /// The common steady-state: the running binary IS vendor/bin/naner.exe.
+    /// The self swap and the canonical install are the same file; nothing
+    /// may be double-handled or left behind.
+    #[test]
+    fn updating_the_canonical_copy_in_place_parks_old_beside_it() {
+        let root = tempfile::tempdir().unwrap();
+        let vendor_bin = root.path().join("vendor/bin");
+        std::fs::create_dir_all(&vendor_bin).unwrap();
+        let self_path = vendor_bin.join(constants::executables::NANER);
+        std::fs::write(&self_path, b"old self").unwrap();
+
+        let api = StubApi {
+            release: Some(exe_release()),
+            asset_bytes: Some(b"new exe".to_vec()),
+            sums: Some(sums_for(constants::executables::NANER, b"new exe")),
+        };
+        let updater = NanerUpdater::new(root.path(), &api);
+        assert!(updater.update_from_release(&exe_release(), &self_path));
+
         assert_eq!(std::fs::read(&self_path).unwrap(), b"new exe");
         assert_eq!(
-            std::fs::read(root.path().join("naner-init.exe.old")).unwrap(),
-            b"old init"
+            std::fs::read(vendor_bin.join("naner.exe.old")).unwrap(),
+            b"old self"
         );
-        assert!(!root.path().join("naner-init.exe.new").exists());
+        assert!(!vendor_bin.join("naner.exe.staged").exists());
     }
 
     fn exe_release() -> GitHubRelease {
@@ -612,28 +705,15 @@ mod tests {
                 "naner.exe",
                 "https://api.github.com/repos/x/y/releases/assets/2",
             ),
-            (
-                "naner-init.exe",
-                "https://api.github.com/repos/x/y/releases/assets/3",
-            ),
             sums_asset(),
         ])
     }
 
-    /// A manifest attesting `bytes` under both binary names — the stub serves
-    /// the same bytes for every asset, so one digest covers both.
-    fn sums_for_both(bytes: &[u8]) -> String {
-        format!(
-            "{}{}",
-            sums_for(constants::executables::NANER, bytes),
-            sums_for(constants::executables::NANER_INIT, bytes)
-        )
-    }
-
-    /// A fake running naner-init on disk, standing in for current_exe().
+    /// A fake running binary on disk at the root, standing in for
+    /// current_exe() -- the single binary a user downloaded and ran.
     fn staged_self(root: &Path) -> std::path::PathBuf {
-        let path = root.join(constants::executables::NANER_INIT);
-        std::fs::write(&path, b"old init").unwrap();
+        let path = root.join(constants::executables::NANER);
+        std::fs::write(&path, b"old self").unwrap();
         path
     }
 
@@ -654,7 +734,7 @@ mod tests {
             release: Some(exe_release()),
             // Served bytes differ from what the manifest attests.
             asset_bytes: Some(b"trojan".to_vec()),
-            sums: Some(sums_for_both(b"new exe")),
+            sums: Some(sums_for(constants::executables::NANER, b"new exe")),
         };
         let updater = NanerUpdater::new(root.path(), &api);
 
@@ -665,8 +745,8 @@ mod tests {
         );
         assert_eq!(
             std::fs::read(&self_path).unwrap(),
-            b"old init",
-            "the running init must survive a refused update"
+            b"old self",
+            "the running binary must survive a refused update"
         );
         let installed = root
             .path()
@@ -727,50 +807,6 @@ mod tests {
         };
         let updater = NanerUpdater::new(root.path(), &api);
         assert!(!updater.update_from_release(&exe_release(), &staged_self(root.path())));
-    }
-
-    /// The release must carry BOTH binaries. A verified naner.exe with no
-    /// verifiable naner-init must install neither: half an update leaves an
-    /// old init whose sync check would offer to downgrade the new naner.exe.
-    #[test]
-    fn a_release_missing_naner_init_installs_nothing() {
-        let root = root_with_installed_exe();
-        let api = StubApi {
-            // naner.exe + manifest, but no naner-init.exe asset.
-            release: Some(release_with(vec![
-                (
-                    "naner.exe",
-                    "https://api.github.com/repos/x/y/releases/assets/2",
-                ),
-                sums_asset(),
-            ])),
-            asset_bytes: Some(b"new exe".to_vec()),
-            sums: Some(sums_for_both(b"new exe")),
-        };
-        let updater = NanerUpdater::new(root.path(), &api);
-        let self_path = staged_self(root.path());
-
-        let release = release_with(vec![
-            (
-                "naner.exe",
-                "https://api.github.com/repos/x/y/releases/assets/2",
-            ),
-            sums_asset(),
-        ]);
-        assert!(!updater.update_from_release(&release, &self_path));
-
-        assert_eq!(
-            std::fs::read(
-                root.path()
-                    .join("vendor/bin")
-                    .join(constants::executables::NANER)
-            )
-            .unwrap(),
-            b"original exe",
-            "naner.exe must not be replaced when its companion cannot be"
-        );
-        assert_eq!(std::fs::read(&self_path).unwrap(), b"old init");
-        assert!(!root.path().join("vendor/bin/naner.exe.tmp").exists());
     }
 
     #[test]

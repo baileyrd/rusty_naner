@@ -9,6 +9,41 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+naner is one binary now. The `naner`/`naner-init` split existed for a single
+reason — a process cannot overwrite its own executable — and the v0.7.1
+self-update validation proved in the field that it never needed to: Windows
+will happily *rename* a running exe, and the rename-aside swap works against
+a genuinely executing binary. With the one forcing function gone, the split
+was pure overhead: two binaries to build, verify, ship, version-match, and
+explain, and a whole class of stale-sibling bugs (the sync-to-embedded
+downgrade trap) that only existed because two copies could disagree.
+
+`naner.exe` is now launcher, installer, and updater. Run it in an empty
+folder and it offers to install there — the same prompt, bundle-by-embedded-
+tag download, verification, and essentials bootstrap the init binary owned.
+`naner init`, `naner update`, and `naner check-update` carry the explicit
+commands; `self-update` remains as an alias. `naner update` installs the
+latest release into every copy of the binary the tree is known to carry: the
+running one first (rename-aside, `.old` swept on the next launch), then the
+canonical `vendor\bin\naner.exe`, then any pre-0.8.0 `naner-init.exe`
+leftovers — refreshed not out of politeness but because a stale naner-init
+would sync the tree back down to its own embedded version.
+
+Compatibility is carried by the release, not the code: every release still
+publishes a `naner-init.exe` asset, now a byte-copy of `naner.exe`. A 0.7.x
+install's `naner-init update` requires that asset to exist and verifies it
+against `SHA256SUMS`; what it installs is the new single binary, which
+behaves correctly under the old name and refreshes the rest of the tree on
+its first `update`. A 0.6.x install still updates the old way once (manual
+download), as before.
+
+One bug found by the merge itself: interactive prompts read EOF as an empty
+line, and an empty line means yes. Fine when a human presses Enter; not fine
+when the bare binary runs in an empty directory with a closed stdin — the
+first CI run of the new bootstrap path silently consented to downloading a
+full install. EOF is now a no, pinned by a test that runs the real binary
+with stdin closed and asserts nothing downloads.
+
 The last sharp edge of the v0.7.0 upgrade is filed down. Dropping YAML left
 one genuinely unkind failure: a tree whose only config is `naner.yaml` got
 "no configuration file found" — technically true, and a lie to anyone

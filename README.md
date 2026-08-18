@@ -8,8 +8,11 @@ environment launcher for Windows.
 `rusty_naner` ships as a single self-bootstrapping executable — there is no
 separate installer.
 
-1. Download `naner-init.exe` from the
+1. Download `naner.exe` from the
    [latest release](https://github.com/baileyrd/rusty_naner/releases/latest).
+   It is launcher, installer, and updater in one binary (the separate
+   `naner-init.exe` retired in 0.8.0; the release still carries an asset by
+   that name — a byte-copy — so older installs can update).
 2. Put it in an empty folder. That folder becomes `NANER_ROOT` — everything
    naner owns (its own config, vendor tools, and binary) lives under it, so
    the whole install is self-contained and can be removed by deleting the
@@ -18,15 +21,15 @@ separate installer.
    with the Mark of the Web, and SmartScreen then blocks an unsigned exe with
    an unfamiliar hash — silently, since a GUI-subsystem binary has no console
    to print an error into. "Nothing happens" on a freshly downloaded
-   `naner-init.exe` is almost always this. In PowerShell:
+   `naner.exe` is almost always this. In PowerShell:
 
    ```powershell
-   Unblock-File .\naner-init.exe
+   Unblock-File .\naner.exe
    ```
 
    (or right-click → Properties → tick **Unblock**.)
 
-4. Run `naner-init.exe` — double-clicking it in Explorer works and opens its
+4. Run `naner.exe` — double-clicking it in Explorer works and opens its
    own console window. (Double-clicked, it also pauses with "press any key
    to exit" at the end so the window doesn't disappear before you can read
    it.)
@@ -35,22 +38,22 @@ separate installer.
    waiting wrapper**, not by typing its name directly:
 
    ```powershell
-   Start-Process -Wait .\naner-init.exe      # PowerShell
+   Start-Process -Wait .\naner.exe           # PowerShell
    ```
    ```bat
-   start /wait naner-init.exe                :: cmd.exe
+   start /wait naner.exe                     :: cmd.exe
    ```
 
    Neither shell waits for a GUI-subsystem process, so run bare, the
-   shell's own next prompt and `naner-init.exe`'s `(Y/n)` prompt race for
+   shell's own next prompt and `naner.exe`'s `(Y/n)` prompt race for
    your keystrokes and initialization can silently fail
    ([#81](https://github.com/baileyrd/rusty_naner/issues/81) — observed in
    `cmd.exe` originally and reproduced in PowerShell since; an earlier
    version of this note wrongly claimed PowerShell waits). The wrappers
-   make the shell actually wait, and give naner-init its own console where
+   make the shell actually wait, and give naner its own console where
    nothing competes for input.
 
-   On first run it:
+   On first run (an uninitialized folder) it:
    - downloads `naner-bundle.zip` matching its own version and verifies it
      against the release's published `SHA256SUMS` manifest before touching
      disk — it refuses to install on a mismatch or a missing manifest;
@@ -63,8 +66,7 @@ No admin rights are required, and nothing is written outside `NANER_ROOT`.
 
 ## Usage
 
-Once initialized, `naner` (or `naner-init`, which passes unrecognized
-arguments straight through to it) launches your default terminal profile:
+Once initialized, `naner` launches your default terminal profile:
 
 ```sh
 naner                          # launch the default profile
@@ -86,8 +88,11 @@ naner install --all            # install everything
 naner update-vendors           # update installed tools to their latest versions
 ```
 
-Keep naner itself current with `naner self-update` (equivalent to running
-`naner-init update` directly).
+Keep naner itself current with `naner update` (`naner self-update` is the
+same command under its pre-0.8.0 name). It fetches the latest release,
+verifies it against the release's `SHA256SUMS`, and replaces every copy of
+the binary in the tree — including itself, by renaming the running exe
+aside.
 
 `naner --help` lists every subcommand — `doctor`, `schema`, `completions`,
 `setup-shell`, `repair`, `profile`, `diff`, `bench`, `migrate`, `pack`,
@@ -172,14 +177,14 @@ that cross-publish has been removed. Phases 0–5 done:
 - **`naner bench [profile]`**: Startup latency profiler measuring execution timings for root discovery, config loading, profile resolution, and PATH assembly in milliseconds.
 - **`naner migrate [--dry-run]`**: Rewrites the configuration file in canonical JSON form. Keeps a timestamped backup, preserves top-level keys the model does not own (`$schema` among them), and writes via a temp file so an interrupted run cannot truncate the config. Comments cannot survive the round-trip and it says so before proceeding.
 - **`naner pack [dir] --out bundle.zip`**: Bundles a naner installation (`bin/`, `config/`, `home/`, `icons/`) into a portable zip, skipping transient files. Defaults to the discovered root; `[dir]` overrides it.
-- **`naner self-update`**: Hands over to `naner-init`, which performs the update. It is a separate executable because `naner.exe` cannot replace itself while running.
+- **`naner update` / `naner self-update`**: Updates naner itself to the latest release in place. `naner.exe` cannot be *overwritten* while running, but Windows will rename a running exe — so the update renames the live binary aside, installs the new one under its name, and sweeps the `.old` leftover on the next launch.
 - **`naner lock [--refresh [vendor...]] [--porcelain]`**: Inspects `naner.lock`, the pin of exactly which vendor artifacts this environment installs, and drops pins so the next install re-resolves.
 
 ### Infrastructure & Subsystem Enhancements
 - **Download Integrity Verification**: every vendor download is checked against a digest published by the distributor itself where one exists — Go and Node.js (SHA-256), the .NET SDK (SHA-512, via the channel manifest that also supplies the authoritative URL), `rustup-init.exe` (`.sha256` sidecar) and Anaconda (repository listing). A vendor may also pin a digest via `checksum` in its own definition file, which takes precedence. A mismatch against an upstream digest blocks installation. Sources that publish no digest (MSYS2, GitHub release assets) install unverified unless pinned.
 - **Reproducible Environments (`naner.lock`)**: a successful install pins the vendor's exact version, URL and SHA-256. Later installs reproduce that artifact instead of re-resolving to upstream latest, and verify it — which is the only verification MSYS2 and the GitHub-sourced vendors get, since their distributors publish no digest. `update-vendors` deliberately ignores the pin and rewrites it. The first install of an unpinned vendor is still trust-on-first-use.
-- **Verified Self-Update**: `naner-init` verifies `naner.exe` and `naner-bundle.zip` against the `SHA256SUMS` manifest published with each release before replacing anything on disk, and refuses to install if the manifest is missing or does not match.
-- **Corporate Proxy & CA Support**: Auto-detects and respects `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy`, with `NO_PROXY=*` as a blanket opt-out. Applied to every outbound request — vendor downloads, `naner-init` bootstrap and update alike.
+- **Verified Self-Update**: every binary and bundle download is verified against the `SHA256SUMS` manifest published with each release before anything on disk is replaced; a missing or mismatched manifest refuses the install.
+- **Corporate Proxy & CA Support**: Auto-detects and respects `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy`, with `NO_PROXY=*` as a blanket opt-out. Applied to every outbound request — vendor downloads, bootstrap and self-update alike.
 - **Privacy Telemetry Opt-Out Enforcer**: Injects default telemetry opt-out variables (`DOTNET_CLI_TELEMETRY_OPTOUT=1`, `POWERSHELL_TELEMETRY_OPTOUT=1`, `AZURE_CORE_COLLECT_TELEMETRY=0`).
 - **Dynamic Architecture Resolution (`%{ARCH}`)**: Dynamically expands `%{ARCH}` into `arm64` or `x64` based on host target compilation.
 - **Atomic Staged Extraction**: Extracts archives to `vendor/.staging/<name>`, then swaps the tree into place with a single rename. The previous install is moved aside rather than deleted, so a failed placement restores it instead of leaving a half-populated directory. Windows Terminal is the exception — it merges over its existing install so `settings/` survives an update, which cannot be atomic.

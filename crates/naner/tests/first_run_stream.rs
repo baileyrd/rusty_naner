@@ -56,13 +56,30 @@ fn export_env_reports_failure_when_nothing_was_exported() {
 }
 
 #[test]
-fn an_interactive_first_run_still_exits_zero() {
-    // Deliberate C# parity (`Program.HandleFirstRun`), and the double-click
-    // case — a non-zero code there would be the regression.
+fn a_bare_first_run_offers_bootstrap_and_declines_cleanly_on_eof() {
+    // Since the single-binary merge, a bare launch on an uninitialized tree
+    // is the installer: it prompts. This spawn has a closed stdin, and EOF
+    // must read as NO -- the alternative was any non-interactive spawn
+    // silently consenting to a full download-and-install, which is exactly
+    // what an earlier version of this code did.
     let out = run_outside_a_naner_tree(&[]);
-    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a declined bootstrap is not an error"
+    );
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("First Run Detected"),
-        "the notice belongs on stderr in every invocation, not just the piped one"
+        stdout.contains("not initialized"),
+        "the bootstrap offer must be visible, got:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("Initialization cancelled"),
+        "EOF must decline the prompt, not accept it; got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("Downloading"),
+        "nothing may be downloaded without an explicit yes"
     );
 }
