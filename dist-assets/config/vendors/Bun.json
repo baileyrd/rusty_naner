@@ -17,6 +17,10 @@
         "size": "~40"
       }
     },
-    "postInstallFunction": "Bun.PostInstall"
+    "postInstallFunction": "Bun.PostInstall",
+    "pathPriority": 60,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\bun"
+    ]
   }
 }

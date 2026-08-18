@@ -184,6 +184,15 @@ fn vendors_schema_value() -> serde_json::Value {
                                         "value": { "type": "string" },
                                         "required": { "type": "boolean" }
                                     }
+                                },
+                                "pathPriority": { "type": "integer" },
+                                "pathPrecedence": {
+                                    "type": "array",
+                                    "items": { "type": "string" }
+                                },
+                                "environmentVariables": {
+                                    "type": "object",
+                                    "additionalProperties": { "type": "string" }
                                 }
                             }
                         }

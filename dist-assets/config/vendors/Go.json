@@ -16,6 +16,15 @@
         "size": "~140"
       }
     },
-    "postInstallFunction": "Go.PostInstall"
+    "postInstallFunction": "Go.PostInstall",
+    "pathPriority": 10,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\go\\bin"
+    ],
+    "environmentVariables": {
+      "GOROOT": "%NANER_ROOT%\\vendor\\go",
+      "GOPATH": "%NANER_ROOT%\\home\\go",
+      "GOCACHE": "%NANER_ROOT%\\home\\.cache\\go-build"
+    }
   }
 }

@@ -9,6 +9,59 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Splitting `vendors.json` into a file per vendor only did half the job, which
+became obvious the moment anyone opened one: a vendor file said how to
+download and unpack a tool and nothing about what it means once installed.
+`GOROOT` was not in `Go.json`. `vendor\\go\\bin` was not in `Go.json`. Both
+were in `naner.json`, in two global lists, along with everyone else's. The
+numbers were lopsided — 17 of the 26 PATH entries and 19 of the 22
+environment variables belonged to a specific vendor. Adding a vendor meant
+edits in three files, and "work on one at a time" was still not true.
+
+They live with their vendor now, as `pathPrecedence`, `environmentVariables`
+and `pathPriority`. `naner.json` keeps what is genuinely naner's: `bin`,
+`opt`, `vendor\\bin`, the `home\\` user-install trees, and `NANER_ROOT` /
+`HOME` / `SSH_HOME`.
+
+The interesting problem was ordering. Intra-vendor order is free — Git's
+`cmd`, `mingw64\\bin`, `usr\\bin` stay an ordered array inside `GitForWindows.json`.
+Inter-vendor order is not, and it decides real conflicts: Git for Windows and
+MSYS2 both ship a `bash.exe`, and whichever directory comes first is the one
+you get. Sorting by file name would have quietly reshuffled that. So order is
+explicit data — `pathPriority`, numbered in tens so a new vendor slots in
+without renumbering its neighbours, lower first, unranked vendors sorting
+after ranked ones by key so the order is always total.
+
+The vendor block also is not simply appended. It used to sit in the middle of
+`naner.json`'s list, with `%NANER_ROOT%\\opt` after it — deliberately last, so
+a user's own tools never shadow a vendor's. Appending would have inverted
+that. `naner.json` now carries a `%VENDOR_PATHS%` marker at the exact position
+the block belongs, and the merge substitutes it in place.
+
+The merge itself happens inside `config::load` rather than at the call sites.
+Six places read `config.environment` — the launcher, three in `main`, `diff`,
+`bench` — and every one of them wants the merged view, so making it the only
+view is what stops them drifting apart. `load_verbatim` deliberately skips it:
+tooling that rewrites the user's config must not bake vendor entries into it.
+
+One thing this deliberately does *not* change: a disabled vendor still
+contributes. Eight of the eleven vendors carrying PATH entries ship
+`enabled: false`, and all 26 entries used to sit in `naner.json`
+unconditionally — what actually keeps an uninstalled vendor off PATH is
+`build_unified_path` dropping directories that do not exist. Filtering on
+`enabled` here is defensible and might even be better, but it is a behavior
+change and this is a move. A test pins the current behavior and says why.
+The load-bearing test asserts the assembled PATH is identical, entry for
+entry, to the list `naner.json` used to carry — a priority typo fails it.
+
+Fixed along the way: `vendors-schema.json` had been carrying a `$ref` to a
+`definitions` block that the per-vendor split removed, so the schema resolved
+to nothing and happily validated anything. Nothing in the workspace reads it —
+it exists for editors — so only a person would ever have hit it. Restored,
+extended with the new fields, and now guarded by a test for dangling `$ref`s
+and another asserting every field the real vendor files use is actually
+described.
+
 Two things in `config/` were describing systems that do not exist, and both
 are gone.
 

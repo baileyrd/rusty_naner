@@ -88,6 +88,14 @@ pub fn load(naner_root: &Path, config_path: Option<&Path>) -> Result<NanerConfig
     // Env-var overrides are the highest-priority provider.
     apply_env_overrides(&mut config);
 
+    // Fold in what each vendor contributes to the environment. Done here,
+    // inside `load`, rather than at each call site: six places read
+    // `config.environment` and every one of them wants the merged view, so
+    // making it the only view is what keeps them from drifting apart.
+    // `load_verbatim` deliberately skips this -- tooling that writes the
+    // user's file back must not bake vendor entries into it.
+    merge_vendor_environment(&mut config, naner_root);
+
     // Expand placeholders everywhere the C# ExpandConfigPaths does.
     let root = naner_root.to_string_lossy();
     expand_config_paths(&mut config, &root);
@@ -130,6 +138,79 @@ fn load_file(path: &Path) -> Result<NanerConfig, ConfigError> {
     }
     let content = std::fs::read_to_string(path)?;
     super::load_json(&content).map_err(|e| ConfigError::Parse(e.to_string()))
+}
+
+/// The marker in `PathPrecedence` that the vendors' own entries replace.
+/// A literal element rather than an append, because the entries around it
+/// matter: `%NANER_ROOT%\opt` sits *after* the vendors and is meant to stay
+/// there, lowest precedence of all.
+pub const VENDOR_PATHS_MARKER: &str = "%VENDOR_PATHS%";
+
+/// Merge each enabled vendor's `pathPrecedence` and `environmentVariables`
+/// into the config.
+///
+/// Vendors are ordered by `pathPriority` (lower first, so it wins conflicts --
+/// Git for Windows and MSYS2 both ship `bash.exe`), and vendors without one
+/// sort after those with one, by key, so the order is total and stable rather
+/// than dependent on directory listing order.
+///
+/// A variable the user set in `naner.json` always wins over a vendor's: the
+/// vendor value is a default, the config file is an instruction.
+fn merge_vendor_environment(config: &mut NanerConfig, naner_root: &Path) {
+    // `load_all_vendors`, not `load_vendors`: every one of these entries used
+    // to sit unconditionally in `naner.json`, disabled vendors included, with
+    // `build_unified_path` dropping the directories that do not exist. Gating
+    // on `enabled` here would be a defensible behavior change -- disabling a
+    // vendor arguably should strip it from PATH -- but it is a change, and
+    // this is a move. It stays a separate decision.
+    let mut vendors = crate::vendors::VendorConfigurationLoader::new(naner_root).load_all_vendors();
+    vendors.sort_by(|a, b| match (a.path_priority, b.path_priority) {
+        (Some(x), Some(y)) => x.cmp(&y).then_with(|| a.key.cmp(&b.key)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.key.cmp(&b.key),
+    });
+
+    let vendor_paths: Vec<String> = vendors
+        .iter()
+        .flat_map(|v| v.path_precedence.iter().cloned())
+        .collect();
+
+    match config
+        .environment
+        .path_precedence
+        .iter()
+        .position(|e| e.eq_ignore_ascii_case(VENDOR_PATHS_MARKER))
+    {
+        Some(at) => {
+            config
+                .environment
+                .path_precedence
+                .splice(at..=at, vendor_paths);
+        }
+        None if !vendor_paths.is_empty() => {
+            // An older config file predating the marker. Appending is the only
+            // defensible guess, and it is a guess -- say so rather than
+            // silently giving vendor directories the lowest precedence.
+            logger::warning(&format!(
+                "Environment.PathPrecedence has no {VENDOR_PATHS_MARKER} entry; \
+                 appending vendor paths at the end"
+            ));
+            config.environment.path_precedence.extend(vendor_paths);
+        }
+        None => {}
+    }
+
+    for vendor in &vendors {
+        for (key, value) in &vendor.environment_variables {
+            if !config.environment.environment_variables.contains_key(key) {
+                config
+                    .environment
+                    .environment_variables
+                    .insert(key.clone(), value.clone());
+            }
+        }
+    }
 }
 
 /// `ConfigurationManager.ExpandConfigPaths`: vendor paths, PATH precedence,
@@ -248,5 +329,176 @@ mod tests {
         let err = load(tmp.path(), None).unwrap_err();
         assert!(err.to_string().contains("Configuration validation failed"));
         assert!(err.to_string().contains("Ghost"));
+    }
+}
+
+#[cfg(test)]
+mod vendor_merge_tests {
+    use super::*;
+
+    /// The whole safety claim of moving PATH entries into the vendor files:
+    /// the assembled list must be byte-identical to the single ordered list
+    /// that `naner.json` used to carry. Reads the real shipped config and the
+    /// real shipped vendor directory, so a priority typo fails here.
+    #[test]
+    fn the_shipped_config_reproduces_the_original_path_order() {
+        const EXPECTED: [&str; 26] = [
+            "bin",
+            "home/.npm-global",
+            "home/go/bin",
+            "home/.cargo/bin",
+            "home/.gem/bin",
+            "home/.local/bin",
+            "home/.local/Scripts",
+            "vendor/bin",
+            "vendor/go/bin",
+            "vendor/rust/cargo/bin",
+            "vendor/rust/rustc/bin",
+            "vendor/ruby/bin",
+            "vendor/anaconda",
+            "vendor/anaconda/Scripts",
+            "vendor/anaconda/Library/bin",
+            "vendor/nodejs",
+            "vendor/bun",
+            "vendor/git/cmd",
+            "vendor/git/mingw64/bin",
+            "vendor/git/usr/bin",
+            "vendor/msys64/mingw64/bin",
+            "vendor/msys64/usr/bin",
+            "vendor/powershell",
+            "vendor/7zip",
+            "vendor/dotnet-sdk",
+            "opt",
+        ];
+
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let config = tmp.path().join("config");
+        std::fs::create_dir_all(config.join("vendors")).unwrap();
+        std::fs::copy(
+            repo.join("dist-assets/config/naner.json"),
+            config.join("naner.json"),
+        )
+        .unwrap();
+        for entry in std::fs::read_dir(repo.join("dist-assets/config/vendors")).unwrap() {
+            let path = entry.unwrap().path();
+            std::fs::copy(
+                &path,
+                config.join("vendors").join(path.file_name().unwrap()),
+            )
+            .unwrap();
+        }
+
+        let mut cfg = load_file(&config.join("naner.json")).unwrap();
+        merge_vendor_environment(&mut cfg, tmp.path());
+
+        let actual: Vec<String> = cfg
+            .environment
+            .path_precedence
+            .iter()
+            .map(|e| e.replace("%NANER_ROOT%\\", "").replace('\\', "/"))
+            .collect();
+        assert_eq!(actual, EXPECTED, "assembled PATH order drifted");
+    }
+
+    /// A disabled vendor still contributes, deliberately. Every one of these
+    /// entries used to sit unconditionally in `naner.json` -- eight of the
+    /// eleven vendors carrying PATH entries ship `enabled: false` -- and
+    /// `build_unified_path` drops the directories that do not exist, which is
+    /// what actually keeps an uninstalled vendor off PATH. Filtering on
+    /// `enabled` here would quietly change what a tree resolves.
+    #[test]
+    fn a_disabled_vendor_still_contributes_as_it_did_before_the_split() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vendors = tmp.path().join("config/vendors");
+        std::fs::create_dir_all(&vendors).unwrap();
+        std::fs::write(
+            vendors.join("Off.json"),
+            r#"{"Off":{"name":"Off","extractDir":"off","enabled":false,
+                 "pathPriority":1,"pathPrecedence":["%NANER_ROOT%\\vendor\\off"],
+                 "environmentVariables":{"OFF_HOME":"x"}}}"#,
+        )
+        .unwrap();
+
+        let mut cfg = NanerConfig {
+            environment: crate::config::EnvironmentConfig {
+                path_precedence: vec![VENDOR_PATHS_MARKER.to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        merge_vendor_environment(&mut cfg, tmp.path());
+
+        assert_eq!(
+            cfg.environment.path_precedence,
+            vec!["%NANER_ROOT%\\vendor\\off"],
+            "a disabled vendor's PATH entry is still emitted; the directory not \
+             existing is what removes it later"
+        );
+        assert_eq!(cfg.environment.environment_variables["OFF_HOME"], "x");
+    }
+
+    /// A value in `naner.json` is an instruction; a vendor's is a default.
+    #[test]
+    fn a_user_set_variable_wins_over_a_vendors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vendors = tmp.path().join("config/vendors");
+        std::fs::create_dir_all(&vendors).unwrap();
+        std::fs::write(
+            vendors.join("Go.json"),
+            r#"{"Go":{"name":"Go","extractDir":"go",
+                 "environmentVariables":{"GOROOT":"vendor-default","GOPATH":"vendor-only"}}}"#,
+        )
+        .unwrap();
+
+        let mut cfg = NanerConfig::default();
+        cfg.environment
+            .environment_variables
+            .insert("GOROOT".into(), "user-set".into());
+        merge_vendor_environment(&mut cfg, tmp.path());
+
+        assert_eq!(cfg.environment.environment_variables["GOROOT"], "user-set");
+        assert_eq!(
+            cfg.environment.environment_variables["GOPATH"],
+            "vendor-only"
+        );
+    }
+
+    /// Lower `pathPriority` runs earlier, and that is what settles a real
+    /// conflict: Git for Windows and MSYS2 both ship `bash.exe`.
+    #[test]
+    fn priority_orders_vendors_and_missing_priority_sorts_last() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vendors = tmp.path().join("config/vendors");
+        std::fs::create_dir_all(&vendors).unwrap();
+        for (key, body) in [
+            ("Late", r#""pathPriority":90,"pathPrecedence":["late"]"#),
+            ("Early", r#""pathPriority":10,"pathPrecedence":["early"]"#),
+            ("Unranked", r#""pathPrecedence":["unranked"]"#),
+        ] {
+            std::fs::write(
+                vendors.join(format!("{key}.json")),
+                format!(r#"{{"{key}":{{"name":"{key}","extractDir":"{key}",{body}}}}}"#),
+            )
+            .unwrap();
+        }
+
+        let mut cfg = NanerConfig {
+            environment: crate::config::EnvironmentConfig {
+                path_precedence: vec![VENDOR_PATHS_MARKER.to_string(), "last".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        merge_vendor_environment(&mut cfg, tmp.path());
+
+        assert_eq!(
+            cfg.environment.path_precedence,
+            vec!["early", "late", "unranked", "last"],
+            "priority order, then unranked by key, and the marker's neighbours stay put"
+        );
     }
 }

@@ -18,6 +18,17 @@
       "url": "https://repo.anaconda.com/archive/",
       "pattern": "{FILE}</a></td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td[^>]*>[^<]*</td>[^<]*<td>([0-9a-f]{64})"
     },
-    "postInstallFunction": "Anaconda.PostInstall"
+    "postInstallFunction": "Anaconda.PostInstall",
+    "pathPriority": 40,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\anaconda",
+      "%NANER_ROOT%\\vendor\\anaconda\\Scripts",
+      "%NANER_ROOT%\\vendor\\anaconda\\Library\\bin"
+    ],
+    "environmentVariables": {
+      "CONDA_PKGS_DIRS": "%NANER_ROOT%\\home\\.conda\\pkgs",
+      "CONDA_ENVS_PATH": "%NANER_ROOT%\\home\\.conda\\envs",
+      "PYTHONUSERBASE": "%NANER_ROOT%\\home\\.local"
+    }
   }
 }

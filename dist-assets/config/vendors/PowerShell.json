@@ -19,6 +19,14 @@
         "size": "~100"
       }
     },
-    "postInstallFunction": "PowerShell.PostInstall"
+    "postInstallFunction": "PowerShell.PostInstall",
+    "pathPriority": 90,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\powershell"
+    ],
+    "environmentVariables": {
+      "PROFILE": "%NANER_ROOT%\\home\\.config\\powershell\\profile.ps1",
+      "PSModulePath": "%NANER_ROOT%\\home\\Documents\\PowerShell\\Modules;%PSModulePath%"
+    }
   }
 }

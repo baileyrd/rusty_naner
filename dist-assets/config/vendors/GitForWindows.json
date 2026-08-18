@@ -21,6 +21,16 @@
       "-y",
       "-o%TARGETDIR%"
     ],
-    "postInstallFunction": "GitForWindows.PostInstall"
+    "postInstallFunction": "GitForWindows.PostInstall",
+    "pathPriority": 70,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\git\\cmd",
+      "%NANER_ROOT%\\vendor\\git\\mingw64\\bin",
+      "%NANER_ROOT%\\vendor\\git\\usr\\bin"
+    ],
+    "environmentVariables": {
+      "GIT_CONFIG_GLOBAL": "%NANER_ROOT%\\home\\.gitconfig",
+      "GIT_CONFIG_SYSTEM": "%NANER_ROOT%\\home\\.gitconfig"
+    }
   }
 }

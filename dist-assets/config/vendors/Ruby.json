@@ -17,6 +17,14 @@
         "size": "~30"
       }
     },
-    "postInstallFunction": "Ruby.PostInstall"
+    "postInstallFunction": "Ruby.PostInstall",
+    "pathPriority": 30,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\ruby\\bin"
+    ],
+    "environmentVariables": {
+      "GEM_HOME": "%NANER_ROOT%\\home\\.gem",
+      "GEM_PATH": "%NANER_ROOT%\\home\\.gem"
+    }
   }
 }

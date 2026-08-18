@@ -88,6 +88,28 @@
   reports no configuration found rather than loading a format nothing else
   supports.
 
+- A vendor's PATH entries and environment variables now live in the vendor's
+  own file (`pathPrecedence`, `environmentVariables`, `pathPriority`) instead
+  of `naner.json`'s global `Environment` block — 17 of 26 PATH entries and 19
+  of 22 variables were vendor-owned, so adding a vendor took edits in three
+  places and no single file described one completely. `naner.json` keeps its
+  own 9 PATH entries and 3 variables, plus a `%VENDOR_PATHS%` marker saying
+  where the vendor block lands; the marker matters because `%NANER_ROOT%\opt`
+  sits after it and must stay lowest-precedence. Inter-vendor order comes from
+  `pathPriority` (lower first, so it wins conflicts — Git for Windows and
+  MSYS2 both ship a `bash.exe`), with unranked vendors sorting after ranked
+  ones by key. The merge happens inside `config::load`, so all six readers of
+  `config.environment` get the merged view and none can drift. A test asserts
+  the assembled PATH is identical, entry for entry, to the list `naner.json`
+  used to carry.
+
+### Fixed
+- `vendors-schema.json` had a `$ref` pointing at a `definitions` block that
+  the per-vendor split removed, so the schema resolved to nothing and
+  validated anything. Restored, extended with the three new fields, and
+  guarded by tests for dangling `$ref`s and for every field the shipped
+  vendor files actually use.
+
 ### Added
 - README now has real "Installation" and "Usage" sections — how to get
   `naner-init.exe`, what it does on first run, and the common `naner`

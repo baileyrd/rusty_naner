@@ -26,6 +26,15 @@
       "--profile",
       "default",
       "--no-modify-path"
-    ]
+    ],
+    "pathPriority": 20,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\rust\\cargo\\bin",
+      "%NANER_ROOT%\\vendor\\rust\\rustc\\bin"
+    ],
+    "environmentVariables": {
+      "CARGO_HOME": "%NANER_ROOT%\\home\\.cargo",
+      "RUSTUP_HOME": "%NANER_ROOT%\\home\\.rustup"
+    }
   }
 }
