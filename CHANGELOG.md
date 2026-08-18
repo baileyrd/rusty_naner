@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.8.2.
+
+## [0.8.2] - 2026-08-18
 ### Added
 - `naner add-to-path [--remove] [--dry-run]`: puts `<NANER_ROOT>\vendor\bin`
   on the per-user PATH (`HKCU\Environment`, no admin) so `naner` resolves
