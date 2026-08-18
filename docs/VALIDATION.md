@@ -312,8 +312,15 @@ check):
 ```powershell
 # In a current tree, pretend to be ancient:
 Set-Content vendor\bin\.naner-version -Value 'v0.0.1' -NoNewline
-Start-Process -Wait .\naner.exe -ArgumentList update
+.\naner.exe update
 ```
+
+Run bare — no `Start-Process -Wait` wrapper. Part of what this validates is
+the 0.8.1 console fix for
+[#81](https://github.com/baileyrd/rusty_naner/issues/81): launched from a
+shared console, `update` must re-exec into its own console window, and the
+output below appears there (with a "press any key to exit" pause at the
+end). On 0.8.0 and older the wrapper is still required.
 
 Expect, in order: "Current version: v0.0.1", the real latest tag, a `(Y/n)`
 prompt, `Verified naner.exe`, an install line per refreshed copy, and the
