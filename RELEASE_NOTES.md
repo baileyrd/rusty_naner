@@ -9,6 +9,24 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.7.0.
+
+
+## v0.7.0 — 2026-08-18
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.6.5...v0.7.0).
+
+The configuration release. `config/` was carrying two dead designs and a
+monolith: a plugin schema nothing read, a YAML twin of `naner.json` that had
+silently drifted, and a 499-line `vendors.json` where the last two vendor bugs
+both originated. All three are gone, and a vendor now lives in exactly one
+file that says how to fetch it, where it unpacks, what it puts on PATH, at what
+precedence, and which variables it needs.
+
+Three breaking changes, which is why this is 0.7.0 rather than 0.6.6 — see the
+entries below for each, and the known-limitations note at the end of this
+section.
+
 Two follow-ups to moving vendor environment data into the vendor files, both
 closing gaps that move deliberately left open.
 
@@ -298,6 +316,24 @@ thing — someone landing on the repo had no path from "what is this" to
 verifies and bootstraps on first run) and Usage (the common `naner`
 commands, installing optional dev tools, self-update) sections right after
 the intro, ahead of the migration-status writeup.
+
+---
+
+### Known limitations for this release
+
+- A tree whose config is `naner.yaml` stops loading entirely and must be
+  converted to `naner.json`. No converter ships; the error names `naner.json`
+  but does not detect and call out an existing YAML file.
+- A tree whose `config/vendors.json` predates the split is not read. The
+  warning names the file and says to update the installation, but there is no
+  in-place migration — the vendor set falls back to the four hardcoded
+  essentials until a new bundle lands.
+- A `naner.json` predating the `%VENDOR_PATHS%` marker gets vendor paths
+  appended after `%NANER_ROOT%\\opt` rather than before it, with a warning.
+  `merge_shipped_naner_defaults` should add the marker on update.
+- `DOTNET_CLI_TELEMETRY_OPTOUT` is no longer set on a tree without the .NET
+  SDK enabled, having moved to that vendor and stopped being force-set in
+  code.
 
 ---
 
