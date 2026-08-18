@@ -123,3 +123,75 @@ fn no_vendor_key_is_declared_twice() {
         }
     }
 }
+
+/// `vendors-schema.json` shipped with a `$ref` pointing at a `definitions`
+/// block that a previous edit had removed, so the schema resolved to nothing
+/// and validated everything. Nothing in the workspace reads it -- it exists
+/// for editors -- so only a reader would ever have noticed.
+#[test]
+fn the_shipped_schema_has_no_dangling_refs() {
+    let schema_path = vendors_dir()
+        .parent()
+        .expect("config/vendors -> config")
+        .join("vendors-schema.json");
+    let text = std::fs::read_to_string(&schema_path).expect("vendors-schema.json exists");
+    let schema: serde_json::Value = serde_json::from_str(&text).expect("schema is valid JSON");
+
+    let definitions = schema
+        .get("definitions")
+        .and_then(|d| d.as_object())
+        .expect("schema has a definitions block");
+
+    let mut refs = Vec::new();
+    collect_refs(&schema, &mut refs);
+    assert!(!refs.is_empty(), "expected the schema to use $ref at all");
+    for name in refs {
+        assert!(
+            definitions.contains_key(&name),
+            "$ref points at #/definitions/{name}, which the schema does not define"
+        );
+    }
+}
+
+fn collect_refs(value: &serde_json::Value, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map {
+                if key == "$ref"
+                    && let Some(name) = child
+                        .as_str()
+                        .and_then(|r| r.strip_prefix("#/definitions/"))
+                {
+                    out.push(name.to_string());
+                }
+                collect_refs(child, out);
+            }
+        }
+        serde_json::Value::Array(items) => items.iter().for_each(|i| collect_refs(i, out)),
+        _ => {}
+    }
+}
+
+/// The three fields that moved out of `naner.json` have to be describable, or
+/// an editor flags every vendor file that uses them.
+#[test]
+fn the_schema_describes_the_fields_the_vendor_files_actually_use() {
+    let schema_path = vendors_dir().parent().unwrap().join("vendors-schema.json");
+    let schema: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&schema_path).unwrap()).unwrap();
+    let described = &schema["definitions"]["vendor"]["properties"];
+
+    let mut used = BTreeMap::new();
+    for (stem, document) in shipped() {
+        for field in document[&stem].as_object().unwrap().keys() {
+            used.insert(field.clone(), stem.clone());
+        }
+    }
+
+    for (field, vendor) in used {
+        assert!(
+            !described[&field].is_null(),
+            "{vendor}.json uses {field:?}, which vendors-schema.json does not describe"
+        );
+    }
+}

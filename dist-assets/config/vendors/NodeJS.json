@@ -17,6 +17,15 @@
         "size": "~30"
       }
     },
-    "postInstallFunction": "NodeJS.PostInstall"
+    "postInstallFunction": "NodeJS.PostInstall",
+    "pathPriority": 50,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\nodejs"
+    ],
+    "environmentVariables": {
+      "NPM_CONFIG_PREFIX": "%NANER_ROOT%\\home\\.npm-global",
+      "NPM_CONFIG_CACHE": "%NANER_ROOT%\\home\\.npm-cache",
+      "NODE_PATH": "%NANER_ROOT%\\home\\.npm-global\\lib\\node_modules"
+    }
   }
 }

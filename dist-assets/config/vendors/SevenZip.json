@@ -17,6 +17,10 @@
         "size": "~2"
       }
     },
-    "postInstallFunction": "SevenZip.PostInstall"
+    "postInstallFunction": "SevenZip.PostInstall",
+    "pathPriority": 100,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\7zip"
+    ]
   }
 }

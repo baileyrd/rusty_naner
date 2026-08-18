@@ -41,6 +41,12 @@ struct VendorJsonEntry {
     install_type: Option<String>,
     #[serde(rename = "installerArgs", alias = "installerargs")]
     installer_args: Option<Vec<String>>,
+    #[serde(rename = "pathPriority", alias = "pathpriority")]
+    path_priority: Option<i64>,
+    #[serde(rename = "pathPrecedence", alias = "pathprecedence")]
+    path_precedence: Option<Vec<String>>,
+    #[serde(rename = "environmentVariables", alias = "environmentvariables")]
+    environment_variables: Option<crate::collections::OrderedMap<String>>,
     checksum: Option<ChecksumJson>,
     #[serde(rename = "checksumSource", alias = "checksumsource")]
     checksum_source: Option<ChecksumSourceJson>,
@@ -58,6 +64,9 @@ impl Default for VendorJsonEntry {
             release_source: None,
             install_type: None,
             installer_args: None,
+            path_priority: None,
+            path_precedence: None,
+            environment_variables: None,
             checksum: None,
             checksum_source: None,
         }
@@ -298,6 +307,9 @@ fn convert(vendors: crate::collections::OrderedMap<VendorJsonEntry>) -> Vec<Vend
             dependencies: entry.dependencies.unwrap_or_default(),
             install_type: entry.install_type,
             installer_args: entry.installer_args,
+            path_priority: entry.path_priority,
+            path_precedence: entry.path_precedence.unwrap_or_default(),
+            environment_variables: entry.environment_variables.unwrap_or_default(),
             // B2 fixed: an optional checksum object flows to the verifier.
             checksum: entry.checksum.and_then(|c| {
                 let value = c.value.unwrap_or_default();

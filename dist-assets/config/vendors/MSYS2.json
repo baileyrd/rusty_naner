@@ -30,6 +30,11 @@
       "tar",
       "zip",
       "unzip"
+    ],
+    "pathPriority": 80,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\msys64\\mingw64\\bin",
+      "%NANER_ROOT%\\vendor\\msys64\\usr\\bin"
     ]
   }
 }

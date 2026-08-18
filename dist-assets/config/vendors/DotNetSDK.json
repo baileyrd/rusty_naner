@@ -15,6 +15,14 @@
         "size": "~290"
       }
     },
-    "postInstallFunction": "DotNetSDK.PostInstall"
+    "postInstallFunction": "DotNetSDK.PostInstall",
+    "pathPriority": 110,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\dotnet-sdk"
+    ],
+    "environmentVariables": {
+      "DOTNET_ROOT": "%NANER_ROOT%\\vendor\\dotnet-sdk",
+      "DOTNET_CLI_TELEMETRY_OPTOUT": "1"
+    }
   }
 }

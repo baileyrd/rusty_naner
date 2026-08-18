@@ -89,6 +89,24 @@ pub struct VendorDefinition {
     // Executable installers
     pub install_type: Option<String>,
     pub installer_args: Option<Vec<String>>,
+
+    // What this vendor means to the environment once it is installed.
+    //
+    // These used to live in `naner.json`'s global `Environment` block, which
+    // meant adding a vendor took edits in three places and no single file
+    // described a vendor completely.
+    /// Where this vendor's `path_precedence` entries sit relative to other
+    /// vendors'. Lower runs earlier, so it wins conflicts -- which matters
+    /// concretely: Git for Windows and MSYS2 both ship a `bash.exe`, and the
+    /// lower-priority one is the one you get. Vendors without a priority sort
+    /// after those with one, by key, so the order is always total.
+    pub path_priority: Option<i64>,
+    /// PATH entries this vendor contributes, in its own order (Git's
+    /// `cmd` before `mingw64\bin` before `usr\bin`).
+    pub path_precedence: Vec<String>,
+    /// Environment variables this vendor needs (`GOROOT`, `CARGO_HOME`).
+    /// A variable the user has set in `naner.json` wins over these.
+    pub environment_variables: crate::collections::OrderedMap<String>,
 }
 
 impl Default for VendorDefinition {
@@ -116,6 +134,9 @@ impl Default for VendorDefinition {
             checksum_source: None,
             install_type: None,
             installer_args: None,
+            path_priority: None,
+            path_precedence: Vec::new(),
+            environment_variables: crate::collections::OrderedMap::new(),
         }
     }
 }
