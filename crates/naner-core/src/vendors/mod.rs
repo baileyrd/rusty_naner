@@ -107,6 +107,10 @@ pub struct VendorDefinition {
     /// Environment variables this vendor needs (`GOROOT`, `CARGO_HOME`).
     /// A variable the user has set in `naner.json` wins over these.
     pub environment_variables: crate::collections::OrderedMap<String>,
+    /// Executable names this vendor puts on PATH (`node`, `npm`, `npx`),
+    /// for `naner suggest`'s command-not-found mapping. Optional: vendors
+    /// without one are still reachable through `naner.json`'s `VendorPaths`.
+    pub provides: Vec<String>,
 }
 
 impl Default for VendorDefinition {
@@ -137,6 +141,7 @@ impl Default for VendorDefinition {
             path_priority: None,
             path_precedence: Vec::new(),
             environment_variables: crate::collections::OrderedMap::new(),
+            provides: Vec::new(),
         }
     }
 }

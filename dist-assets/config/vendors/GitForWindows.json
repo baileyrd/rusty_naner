@@ -2,6 +2,10 @@
   "GitForWindows": {
     "name": "Git for Windows",
     "description": "Portable Git, Bash and core POSIX tools for Windows",
+    "provides": [
+      "git",
+      "bash"
+    ],
     "extractDir": "git",
     "enabled": true,
     "required": true,

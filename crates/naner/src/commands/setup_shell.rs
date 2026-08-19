@@ -61,6 +61,43 @@ fn naner_exe_path(naner_root: &Path) -> PathBuf {
         .join(constants::executables::NANER)
 }
 
+/// The marked block written into a shell's startup file: the environment
+/// export, plus a command-not-found hook that asks `naner suggest` whether a
+/// vendor provides the missing command. Both halves guard on the exe
+/// existing and swallow errors — the hook must never slow or break a shell
+/// where naner has moved or been deleted — and `suggest` itself is silent on
+/// no match, so the shell's own error always stands. `None` for shells with
+/// no startup file naner can safely edit (cmd).
+fn integration_block(shell: &str, naner_exe: &Path) -> Option<String> {
+    let exe = naner_exe.display();
+    match shell {
+        "pwsh" | "powershell" => Some(format!(
+            r#"{BEGIN}
+if (Test-Path "{exe}") {{ & "{exe}" --export-env -f powershell | Invoke-Expression }}
+if (Test-Path "{exe}") {{
+    $ExecutionContext.InvokeCommand.CommandNotFoundAction = {{
+        param($CommandName, $CommandLookupEventArgs)
+        if ($CommandLookupEventArgs.CommandOrigin -eq 'Runspace' -and $CommandName -notlike 'get-*') {{
+            try {{ & "{exe}" suggest $CommandName 2>$null | Write-Host }} catch {{ }}
+        }}
+    }}
+}}
+{END}"#
+        )),
+        "bash" => Some(format!(
+            r#"{BEGIN}
+if [ -f "{exe}" ]; then eval "$("{exe}" --export-env -f bash)"; fi
+command_not_found_handle() {{
+    if [ -f "{exe}" ]; then "{exe}" suggest "$1" 2>/dev/null; fi
+    printf '%s: command not found\n' "$1" >&2
+    return 127
+}}
+{END}"#
+        )),
+        _ => None,
+    }
+}
+
 pub fn execute(args: &[String]) -> i32 {
     let shell = args
         .first()
@@ -84,16 +121,9 @@ pub fn execute(args: &[String]) -> i32 {
     // path does not fail loudly -- the integration just silently never runs.
     let naner_exe = naner_exe_path(&naner_root);
 
-    let block = match shell.as_str() {
-        "pwsh" | "powershell" => format!(
-            "{BEGIN}\nif (Test-Path \"{exe}\") {{ & \"{exe}\" --export-env -f powershell | Invoke-Expression }}\n{END}",
-            exe = naner_exe.display()
-        ),
-        "bash" => format!(
-            "{BEGIN}\nif [ -f \"{exe}\" ]; then eval \"$(\"{exe}\" --export-env -f bash)\"; fi\n{END}",
-            exe = naner_exe.display()
-        ),
-        "cmd" => {
+    let block = match integration_block(&shell, &naner_exe) {
+        Some(block) => block,
+        None if shell == "cmd" => {
             // cmd has no per-user startup file naner can safely edit; the
             // AutoRun registry key is not something to write behind a user's
             // back. Print the line and say why.
@@ -106,8 +136,8 @@ pub fn execute(args: &[String]) -> i32 {
             );
             return 0;
         }
-        other => {
-            eprintln!("Unknown shell '{other}'. Supported: pwsh, bash, cmd");
+        None => {
+            eprintln!("Unknown shell '{shell}'. Supported: pwsh, bash, cmd");
             return 1;
         }
     };
@@ -176,6 +206,37 @@ mod tests {
             Path::new("C:/naner").join("bin").join("naner.exe"),
             "`bin/` is the user's own directory and ships empty"
         );
+    }
+
+    /// The block a hook lives in must stay inside the markers (so re-runs
+    /// replace it), guard on the exe existing, silence stderr, and leave the
+    /// shell's own command-not-found error in place.
+    #[test]
+    fn shell_blocks_carry_a_guarded_command_not_found_hook() {
+        let exe = Path::new("C:/naner/vendor/bin/naner.exe");
+
+        let pwsh = integration_block("pwsh", exe).expect("pwsh block");
+        assert!(pwsh.starts_with(BEGIN) && pwsh.ends_with(END), "{pwsh}");
+        assert!(pwsh.contains("--export-env -f powershell"), "{pwsh}");
+        assert!(pwsh.contains("CommandNotFoundAction"), "{pwsh}");
+        assert!(pwsh.contains("suggest $CommandName 2>$null"), "{pwsh}");
+        // Discovery lookups (Get-Command, the get- prefix retry) must not
+        // trigger a hint on every probe.
+        assert!(pwsh.contains("CommandOrigin -eq 'Runspace'"), "{pwsh}");
+        assert!(pwsh.contains("-notlike 'get-*'"), "{pwsh}");
+
+        let bash = integration_block("bash", exe).expect("bash block");
+        assert!(bash.starts_with(BEGIN) && bash.ends_with(END), "{bash}");
+        assert!(bash.contains("--export-env -f bash"), "{bash}");
+        assert!(bash.contains("command_not_found_handle()"), "{bash}");
+        assert!(bash.contains("suggest \"$1\" 2>/dev/null"), "{bash}");
+        // The handler replaces bash's built-in error, so it must re-emit one
+        // and preserve the canonical 127 exit code.
+        assert!(bash.contains("command not found"), "{bash}");
+        assert!(bash.contains("return 127"), "{bash}");
+
+        assert!(integration_block("cmd", exe).is_none());
+        assert!(integration_block("fish", exe).is_none());
     }
 
     #[test]

@@ -50,6 +50,7 @@ struct VendorJsonEntry {
     checksum: Option<ChecksumJson>,
     #[serde(rename = "checksumSource", alias = "checksumsource")]
     checksum_source: Option<ChecksumSourceJson>,
+    provides: Option<Vec<String>>,
 }
 
 impl Default for VendorJsonEntry {
@@ -69,6 +70,7 @@ impl Default for VendorJsonEntry {
             environment_variables: None,
             checksum: None,
             checksum_source: None,
+            provides: None,
         }
     }
 }
@@ -310,6 +312,7 @@ fn convert(vendors: crate::collections::OrderedMap<VendorJsonEntry>) -> Vec<Vend
             path_priority: entry.path_priority,
             path_precedence: entry.path_precedence.unwrap_or_default(),
             environment_variables: entry.environment_variables.unwrap_or_default(),
+            provides: entry.provides.unwrap_or_default(),
             // B2 fixed: an optional checksum object flows to the verifier.
             checksum: entry.checksum.and_then(|c| {
                 let value = c.value.unwrap_or_default();
@@ -548,6 +551,33 @@ mod enabled_tests {
         }
     }
 
+    /// `naner suggest` answers with the first vendor whose `provides` lists
+    /// the queried name, so two shipped vendors claiming the same executable
+    /// would make the answer depend on file-name sort order.
+    #[test]
+    fn shipped_provides_entries_are_unique_across_vendors() {
+        const SHIPPED: &str = include_str!(concat!(env!("OUT_DIR"), "/vendors_catalog.json"));
+        let (_tmp, loader) = loader_for(SHIPPED);
+        let mut seen: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        for vendor in loader.load_all_vendors() {
+            for name in &vendor.provides {
+                let normalized = name.to_lowercase();
+                assert!(
+                    !normalized.is_empty() && !normalized.contains('.'),
+                    "{}'s provides entry {name:?} must be a bare lowercase \
+                     executable name (no extension)",
+                    vendor.key
+                );
+                if let Some(previous) = seen.insert(normalized, vendor.key.clone()) {
+                    panic!(
+                        "{} and {previous} both claim to provide {name:?}",
+                        vendor.key
+                    );
+                }
+            }
+        }
+    }
+
     /// The other way this change could have gone catastrophically wrong: the
     /// hardcoded fallback set never sets `enabled`, so a derived `Default` of
     /// `false` would have made a missing vendors.json install nothing at all.
@@ -696,6 +726,21 @@ mod tests {
         } } }"#;
         let (_tmp, loader) = loader_with(Some(json));
         assert!(loader.load_vendors()[0].checksum.is_none());
+    }
+
+    #[test]
+    fn provides_is_wired_through_and_defaults_empty() {
+        let json = r#"{ "vendors": {
+            "Tool":  { "name": "Tool",  "extractDir": "tool",  "enabled": true, "required": false,
+                       "provides": ["tool", "toolctl"] },
+            "Other": { "name": "Other", "extractDir": "other", "enabled": true, "required": false }
+        } }"#;
+        let (_tmp, loader) = loader_with(Some(json));
+        let vendors = loader.load_vendors();
+        let tool = vendors.iter().find(|v| v.key == "Tool").unwrap();
+        assert_eq!(tool.provides, vec!["tool", "toolctl"]);
+        let other = vendors.iter().find(|v| v.key == "Other").unwrap();
+        assert!(other.provides.is_empty(), "omitted provides must mean none");
     }
 
     #[test]

@@ -2,6 +2,11 @@
   "Anaconda": {
     "name": "Anaconda",
     "description": "Full Python distribution with conda package manager and the Anaconda package set",
+    "provides": [
+      "python",
+      "conda",
+      "pip"
+    ],
     "extractDir": "anaconda",
     "enabled": false,
     "required": false,

@@ -2,6 +2,9 @@
   "SevenZip": {
     "name": "7-Zip",
     "description": "File archiver with high compression ratio",
+    "provides": [
+      "7z"
+    ],
     "extractDir": "7zip",
     "enabled": true,
     "required": true,

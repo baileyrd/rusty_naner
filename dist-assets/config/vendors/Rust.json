@@ -2,6 +2,11 @@
   "Rust": {
     "name": "Rust",
     "description": "Systems programming language via rustup",
+    "provides": [
+      "rustc",
+      "cargo",
+      "rustup"
+    ],
     "extractDir": "rust",
     "enabled": false,
     "required": false,

@@ -142,6 +142,11 @@ fn vendors_schema_value() -> serde_json::Value {
                                     "type": "array",
                                     "items": { "type": "string" }
                                 },
+                                "provides": {
+                                    "type": "array",
+                                    "items": { "type": "string" },
+                                    "description": "Executable names this vendor puts on PATH, for `naner suggest`"
+                                },
                                 "installType": { "type": "string" },
                                 "installerArgs": {
                                     "type": "array",

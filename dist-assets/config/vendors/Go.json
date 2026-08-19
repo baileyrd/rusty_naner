@@ -2,6 +2,10 @@
   "Go": {
     "name": "Go",
     "description": "Statically typed, compiled programming language",
+    "provides": [
+      "go",
+      "gofmt"
+    ],
     "extractDir": "go",
     "enabled": false,
     "required": false,

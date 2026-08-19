@@ -2,6 +2,9 @@
   "PowerShell": {
     "name": "PowerShell",
     "description": "Cross-platform automation and configuration tool",
+    "provides": [
+      "pwsh"
+    ],
     "extractDir": "powershell",
     "enabled": true,
     "required": true,

@@ -170,6 +170,25 @@ function prompt {
 }
 
 # ============================================================================
+# Command-not-found suggestions
+# ============================================================================
+
+# When a command isn't found, ask naner whether a vendor provides it and print
+# the hint above the shell's own error. Guarded on naner.exe existing, errors
+# swallowed, and `naner suggest` is silent on no match — a mistyped command
+# costs one fast offline lookup, nothing more.
+if (Test-Path "$env:NANER_ROOT\vendor\bin\naner.exe") {
+    $ExecutionContext.InvokeCommand.CommandNotFoundAction = {
+        param($CommandName, $CommandLookupEventArgs)
+        if ($CommandLookupEventArgs.CommandOrigin -eq 'Runspace' -and $CommandName -notlike 'get-*') {
+            try {
+                & "$env:NANER_ROOT\vendor\bin\naner.exe" suggest $CommandName 2>$null | Write-Host
+            } catch { }
+        }
+    }
+}
+
+# ============================================================================
 # User Customizations
 # ============================================================================
 
