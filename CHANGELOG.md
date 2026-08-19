@@ -1,4 +1,16 @@
 ## [Unreleased]
+### Fixed
+- The `Rust` vendor's `pathPrecedence`/`CARGO_HOME`/`RUSTUP_HOME` pointed at
+  `vendor/rust/cargo/bin` and `vendor/rust/rustc/bin` — folders `rustup-init`
+  never creates. rustup actually installs every proxy binary (`rustup`,
+  `cargo`, `rustc`, `rustfmt`, ...) into a single `$CARGO_HOME/bin`, and the
+  installer already points `CARGO_HOME`/`RUSTUP_HOME` at `vendor/rust/.cargo`
+  and `vendor/rust/.rustup` (the vendor's own dir, per the documented
+  install-time redirect) — the vendor config just never matched. `rustup`
+  was "installed" and reported "on PATH" by every diagnostic, yet not found
+  in any naner-launched shell. Fixed `Rust.json` and `naner.json`'s
+  `VendorPaths` to point at the real `.cargo/bin`.
+
 ### Changed
 - All optional vendors now ship `"enabled": true` by default — `naner
   install --all` installs the full vendor set out of the box. Anyone who
