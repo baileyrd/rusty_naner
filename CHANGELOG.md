@@ -14,6 +14,11 @@
   published digest). All disabled by default.
 
 ### Fixed
+- Dotfolders no longer leak into the real Windows profile for redirectable
+  tools: shipped environment gains `XDG_CONFIG_HOME`/`XDG_DATA_HOME`/
+  `XDG_CACHE_HOME` (under `%NANER_ROOT%\home`) and `CLAUDE_CONFIG_DIR`;
+  Bun's vendor file gains `BUN_INSTALL`. `USERPROFILE` deliberately stays
+  untouched; tools reading only it cannot be redirected by environment.
 - `version_from_file_name` picked the first digit run in a file name, so
   scrape-resolved installs recorded junk versions (`.vendor-version` = `"2"`
   for MSYS2, `"7"` for 7-Zip). It now picks the run with the most digits and

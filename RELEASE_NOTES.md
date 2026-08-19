@@ -35,6 +35,20 @@ PR until it is tagged. Terse per-category entries live in
   the same posture OneCommander already has). All seven ship disabled by
   default like every other optional vendor.
 
+- Dotfolder leakage into the real `C:\Users\<name>\` profile is closed for
+  the tools that can be redirected. naner has always pointed `HOME` into the
+  portable tree, but Windows tools mostly resolve home via
+  `USERPROFILE`/`os.homedir()` instead — so `.bun`, `.claude`, and every
+  XDG-aware CLI landed outside the tree. The shipped environment now sets
+  the XDG trio (`XDG_CONFIG_HOME`/`XDG_DATA_HOME`/`XDG_CACHE_HOME` under
+  `home\`), `CLAUDE_CONFIG_DIR` for the npm-installed Claude Code CLI, and
+  `BUN_INSTALL` in Bun's own vendor file. `USERPROFILE` itself stays
+  untouched on purpose: profiles start there, the prompt shortens against
+  it, and known-folder APIs depend on it. The honest limit is stated in the
+  config comment: a tool that reads only `USERPROFILE`, with no environment
+  override, cannot be redirected this way — each new stray dotfolder means
+  finding that tool's override and adding one line.
+
 - First real `refresh-pins` pass over the shipped pins, from a sandbox whose
   proxy blocks `api.github.com`: the four resolvable-from-here vendors were
   refreshed and their new URLs verified live — Go `go1.21.6` -> `go1.26.6`,

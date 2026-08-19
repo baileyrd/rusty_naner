@@ -44,7 +44,18 @@
     "EnvironmentVariables": {
       "NANER_ROOT": "%NANER_ROOT%",
       "HOME": "%NANER_ROOT%\\home",
-      "SSH_HOME": "%NANER_ROOT%\\home\\.ssh"
+      "SSH_HOME": "%NANER_ROOT%\\home\\.ssh",
+      // Windows tools mostly ignore HOME and resolve the profile via
+      // USERPROFILE/os.homedir(), which naner deliberately leaves alone
+      // (profiles start there; known-folder APIs depend on it). The XDG
+      // trio catches every XDG-aware CLI wholesale; tools with only a
+      // private override get one entry each (CLAUDE_CONFIG_DIR here,
+      // BUN_INSTALL in Bun's own vendor file). A tool reading ONLY
+      // USERPROFILE cannot be redirected by environment at all.
+      "XDG_CONFIG_HOME": "%NANER_ROOT%\\home\\.config",
+      "XDG_DATA_HOME": "%NANER_ROOT%\\home\\.local\\share",
+      "XDG_CACHE_HOME": "%NANER_ROOT%\\home\\.cache",
+      "CLAUDE_CONFIG_DIR": "%NANER_ROOT%\\home\\.claude"
     }
   },
   "DefaultProfile": "Unified",
