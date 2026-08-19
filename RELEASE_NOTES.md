@@ -9,7 +9,18 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.3.
+- Reported live right after v0.9.3 shipped: a fresh `naner init` dumped the
+  *entire* configuration-validation report — every `VendorPath` for a
+  vendor that hasn't been installed yet, every profile icon that doesn't
+  exist yet, every `PathPrecedence` entry with nothing there yet — three
+  times in a row, right in the middle of "Installing Windows Terminal...".
+  All expected warnings for a tree mid-bootstrap (nothing is installed yet,
+  of course those paths don't exist), but printed three times because of a
+  #83 regression: `WindowsTerminalConfigurator::create_settings` called
+  `config::load` — which validates `naner.json` and logs every warning on
+  every call — three separate times to write one `settings.json`. Loading
+  it once and threading the result through cuts the noise back to the one
+  copy it was always supposed to be.
 
 ## v0.9.3 — 2026-08-19
 

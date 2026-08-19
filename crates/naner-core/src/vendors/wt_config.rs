@@ -50,7 +50,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value};
 
-use crate::config::{self, strip_json_comments};
+use crate::config::{self, NanerConfig, strip_json_comments};
 use crate::fs_atomic::{back_up, write_atomic};
 use crate::logger;
 
@@ -191,9 +191,17 @@ impl<'a> WindowsTerminalConfigurator<'a> {
     /// `CreateSettings`: the generated skeleton, with Naner's profiles
     /// freshly built from `naner.json`. No existing file to reconcile
     /// against, so this always writes fresh.
+    ///
+    /// `naner.json` is loaded once here and threaded through -- it used to
+    /// be reloaded (and revalidated, and its warnings reprinted) three times
+    /// per call, which during first-run bootstrap meant the same wall of
+    /// "directory does not exist yet" warnings for every not-yet-installed
+    /// vendor printed three times over, right in the middle of installing
+    /// them.
     pub fn create_settings(&self, settings_path: &Path) -> std::io::Result<()> {
-        std::fs::write(settings_path, self.rendered_template()?)?;
-        let guids = self.template_naner_guids();
+        let config = config::load(self.naner_root, None).ok();
+        std::fs::write(settings_path, self.rendered_template(config.as_ref())?)?;
+        let guids = self.template_naner_guids(config.as_ref());
         self.write_managed_guids(settings_path, &guids)?;
         Ok(())
     }
@@ -212,7 +220,8 @@ impl<'a> WindowsTerminalConfigurator<'a> {
             return Ok(SettingsOutcome::LeftUnparsed);
         };
 
-        let template_profiles = self.template_naner_profiles();
+        let config = config::load(self.naner_root, None).ok();
+        let template_profiles = self.template_naner_profiles(config.as_ref());
         let marker_path = Self::managed_marker_path(settings_path);
         let had_marker = marker_path.is_file();
         let previously_managed = Self::read_managed_guids(&marker_path);
@@ -293,11 +302,11 @@ impl<'a> WindowsTerminalConfigurator<'a> {
     /// `naner.json` that fails to load leaves the skeleton's own single
     /// built-in fallback profile untouched, matching what a missing
     /// template used to do.
-    fn rendered_template(&self) -> std::io::Result<String> {
+    fn rendered_template(&self, config: Option<&NanerConfig>) -> std::io::Result<String> {
         let mut skeleton: Value = serde_json::from_str(DEFAULT_SETTINGS)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
-        let profiles = self.template_naner_profiles();
+        let profiles = self.template_naner_profiles(config);
         if !profiles.is_empty()
             && let Value::Object(root) = &mut skeleton
         {
@@ -305,7 +314,9 @@ impl<'a> WindowsTerminalConfigurator<'a> {
             if let Some(Value::Object(profiles_obj)) = root.get_mut("profiles") {
                 profiles_obj.insert("list".to_string(), Value::Array(list));
             }
-            if let Some(default_guid) = self.default_profile_guid() {
+            if let Some(default_guid) =
+                config.and_then(|c| fixed_guid(&c.default_profile).map(str::to_string))
+            {
                 root.insert("defaultProfile".to_string(), Value::String(default_guid));
             }
         }
@@ -314,19 +325,14 @@ impl<'a> WindowsTerminalConfigurator<'a> {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
-    fn default_profile_guid(&self) -> Option<String> {
-        let config = config::load(self.naner_root, None).ok()?;
-        fixed_guid(&config.default_profile).map(str::to_string)
-    }
-
     /// Naner's own profile objects, generated fresh from `naner.json`'s own
-    /// `Profiles` -- the single source of truth per #83 -- keyed by GUID. A
-    /// `naner.json` that cannot be loaded yields no profiles rather than
-    /// erroring the whole Windows Terminal install; the caller's fallback
-    /// (an empty list changes nothing) is the safe default, matching what a
-    /// missing template used to do.
-    fn template_naner_profiles(&self) -> Vec<(String, Value)> {
-        let Ok(config) = config::load(self.naner_root, None) else {
+    /// `Profiles` -- the single source of truth per #83 -- keyed by GUID. No
+    /// `config` (the caller's `naner.json` failed to load) yields no
+    /// profiles rather than erroring the whole Windows Terminal install;
+    /// the caller's fallback (an empty list changes nothing) is the safe
+    /// default, matching what a missing template used to do.
+    fn template_naner_profiles(&self, config: Option<&NanerConfig>) -> Vec<(String, Value)> {
+        let Some(config) = config else {
             return Vec::new();
         };
         let root = self.naner_root.to_string_lossy();
@@ -382,8 +388,8 @@ impl<'a> WindowsTerminalConfigurator<'a> {
             .collect()
     }
 
-    fn template_naner_guids(&self) -> Vec<String> {
-        self.template_naner_profiles()
+    fn template_naner_guids(&self, config: Option<&NanerConfig>) -> Vec<String> {
+        self.template_naner_profiles(config)
             .into_iter()
             .map(|(guid, _)| guid)
             .collect()

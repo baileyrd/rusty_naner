@@ -1,3 +1,15 @@
+## [Unreleased]
+### Fixed
+- Windows Terminal installation during first-run bootstrap printed the
+  entire configuration-validation warning report — every not-yet-installed
+  vendor's missing directory, every icon that doesn't exist yet, the whole
+  `naner.json` — three times in a row. A #83 regression:
+  `WindowsTerminalConfigurator::create_settings` called `config::load`
+  (which validates and logs on every call) three separate times for a
+  single settings.json write. `naner.json` is now loaded once per
+  `create_settings`/`update_settings` call and threaded through instead of
+  reloaded.
+
 ## [0.9.3] - 2026-08-19
 ### Fixed
 - `reexec_in_own_console_if_racy` (the #81 relaunch that dodges the
