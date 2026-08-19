@@ -14,9 +14,9 @@
       "repo": "ip7z/7zip",
       "assetPattern": "7z*-x64.msi",
       "fallback": {
-        "version": "24.08",
-        "url": "https://www.7-zip.org/a/7z2408-x64.msi",
-        "fileName": "7z2408-x64.msi",
+        "version": "26.02",
+        "url": "https://github.com/ip7z/7zip/releases/download/26.02/7z2602-x64.msi",
+        "fileName": "7z2602-x64.msi",
         "size": "~2"
       }
     },

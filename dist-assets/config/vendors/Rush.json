@@ -11,7 +11,7 @@
       "repo": "baileyrd/rush",
       "assetPattern": "*win-x64.zip",
       "fallback": {
-        "version": "0.1.1",
+        "version": "v0.1.1",
         "url": "https://github.com/baileyrd/rush/releases/download/v0.1.1/rush-0.1.1-win-x64.zip",
         "fileName": "rush-0.1.1-win-x64.zip",
         "size": "~5"

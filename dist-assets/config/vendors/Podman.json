@@ -12,7 +12,7 @@
       "assetPattern": "podman-installer-windows-amd64.msi",
       "fallback": {
         "version": "v6.1.0",
-        "url": "https://github.com/containers/podman/releases/download/v6.1.0/podman-installer-windows-amd64.msi",
+        "url": "https://github.com/podman-container-tools/podman/releases/download/v6.1.0/podman-installer-windows-amd64.msi",
         "fileName": "podman-installer-windows-amd64.msi",
         "size": "~27"
       }

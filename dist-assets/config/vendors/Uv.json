@@ -15,8 +15,8 @@
       "repo": "astral-sh/uv",
       "assetPattern": "uv-x86_64-pc-windows-msvc.zip",
       "fallback": {
-        "version": "0.8.4",
-        "url": "https://github.com/astral-sh/uv/releases/download/0.8.4/uv-x86_64-pc-windows-msvc.zip",
+        "version": "0.12.5",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.12.5/uv-x86_64-pc-windows-msvc.zip",
         "fileName": "uv-x86_64-pc-windows-msvc.zip",
         "size": "~15"
       }

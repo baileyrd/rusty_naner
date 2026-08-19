@@ -14,9 +14,9 @@
       "repo": "cli/cli",
       "assetPattern": "windows_amd64.zip",
       "fallback": {
-        "version": "v2.86.0",
-        "url": "https://github.com/cli/cli/releases/download/v2.86.0/gh_2.86.0_windows_amd64.zip",
-        "fileName": "gh_2.86.0_windows_amd64.zip",
+        "version": "v2.97.0",
+        "url": "https://github.com/cli/cli/releases/download/v2.97.0/gh_2.97.0_windows_amd64.zip",
+        "fileName": "gh_2.97.0_windows_amd64.zip",
         "size": "~10"
       }
     },
