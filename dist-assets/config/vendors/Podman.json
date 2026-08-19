@@ -3,7 +3,7 @@
     "name": "Podman",
     "description": "Daemonless engine for developing, managing and running OCI containers",
     "extractDir": "podman",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

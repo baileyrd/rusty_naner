@@ -9,7 +9,17 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.1.
+- Every optional vendor now defaults to `"enabled": true`. Until now, only
+  the four essential tools (Git for Windows, PowerShell, 7-Zip, Windows
+  Terminal) shipped enabled, and the other 26 — Rust, Go, NodeJS, Ruby,
+  Claude Code, Codex, uv, and the rest — needed a manual `"enabled": true`
+  edit in `vendors.json` before `naner install --all` would touch them.
+  That opt-in model made sense when the vendor list was small, but it meant
+  `install --all` quietly did less than its name implied as the list grew.
+  Flipping the default makes `naner install --all` actually install
+  everything shipped, matching what a first-time user expects from the
+  name; anyone who wants a smaller footprint disables individual vendors
+  the same way they always could.
 
 ## v0.9.1 — 2026-08-19
 

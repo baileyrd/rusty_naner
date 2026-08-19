@@ -1,6 +1,9 @@
 ## [Unreleased]
-
-Nothing merged since v0.9.1.
+### Changed
+- All optional vendors now ship `"enabled": true` by default — `naner
+  install --all` installs the full vendor set out of the box. Anyone who
+  wants a leaner tree can flip individual vendors back to `"enabled": false`
+  in `vendors.json`.
 
 ## [0.9.1] - 2026-08-19
 ### Fixed

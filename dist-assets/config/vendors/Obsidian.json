@@ -3,7 +3,7 @@
     "name": "Obsidian",
     "description": "Privacy-first knowledge base and note-taking app built on local Markdown files",
     "extractDir": "obsidian",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

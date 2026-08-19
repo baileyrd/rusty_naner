@@ -3,7 +3,7 @@
     "name": "HiFile",
     "description": "Free, modern cross-platform file manager for Windows, macOS and Linux",
     "extractDir": "hifile",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

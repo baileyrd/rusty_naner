@@ -3,7 +3,7 @@
     "name": "Rush",
     "description": "Experimental Rust-based shell",
     "extractDir": "rush",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

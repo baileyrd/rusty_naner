@@ -127,7 +127,8 @@
   },
   "CustomProfiles": {
     // Opt-in examples (comments are stripped by the loader — uncomment to
-    // enable). Both need their vendors enabled in vendors.json first.
+    // enable). Both need their vendors installed first (`naner install
+    // rustyterm` / `naner install rush`).
     // "RustyTerm": {
     //   "Name": "Rusty Term",
     //   "Description": "Experimental rusty_term terminal hosting PowerShell",

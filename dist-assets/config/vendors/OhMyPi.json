@@ -6,7 +6,7 @@
       "oh-my-pi"
     ],
     "extractDir": "oh-my-pi",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [
       "NodeJS"

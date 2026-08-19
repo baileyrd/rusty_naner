@@ -7,7 +7,7 @@
       "gofmt"
     ],
     "extractDir": "go",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {
