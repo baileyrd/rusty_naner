@@ -51,6 +51,8 @@ struct VendorJsonEntry {
     #[serde(rename = "checksumSource", alias = "checksumsource")]
     checksum_source: Option<ChecksumSourceJson>,
     provides: Option<Vec<String>>,
+    #[serde(rename = "binaryName", alias = "binaryname")]
+    binary_name: Option<String>,
 }
 
 impl Default for VendorJsonEntry {
@@ -71,6 +73,7 @@ impl Default for VendorJsonEntry {
             checksum: None,
             checksum_source: None,
             provides: None,
+            binary_name: None,
         }
     }
 }
@@ -116,6 +119,8 @@ struct ReleaseSourceJson {
     pattern: Option<String>,
     #[serde(rename = "fileName", alias = "filename")]
     file_name: Option<String>,
+    /// Package name, for `type: "npm"` and `type: "pip"`.
+    package: Option<String>,
     fallback: Option<FallbackJson>,
 }
 
@@ -334,6 +339,7 @@ fn convert(vendors: crate::collections::OrderedMap<VendorJsonEntry>) -> Vec<Vend
             path_precedence: entry.path_precedence.unwrap_or_default(),
             environment_variables: entry.environment_variables.unwrap_or_default(),
             provides: entry.provides.unwrap_or_default(),
+            binary_name: entry.binary_name,
             // B2 fixed: an optional checksum object flows to the verifier.
             checksum: entry.checksum.and_then(|c| {
                 let value = c.value.unwrap_or_default();
@@ -372,6 +378,9 @@ fn convert(vendors: crate::collections::OrderedMap<VendorJsonEntry>) -> Vec<Vend
                 VendorSourceType::StaticUrl => {
                     def.static_url = source.url.clone();
                     def.file_name = source.file_name.clone();
+                }
+                VendorSourceType::Npm | VendorSourceType::Pip => {
+                    def.package_name = source.package.clone();
                 }
                 // The three API types carry no extra config.
                 _ => {}
@@ -419,6 +428,8 @@ fn parse_source_type(source_type: &str) -> VendorSourceType {
         "golang-api" => VendorSourceType::GolangApi,
         "nodejs-api" => VendorSourceType::NodeJsApi,
         "dotnet-api" => VendorSourceType::DotNetApi,
+        "npm" => VendorSourceType::Npm,
+        "pip" => VendorSourceType::Pip,
         _ => VendorSourceType::StaticUrl,
     }
 }
@@ -747,6 +758,18 @@ mod tests {
         } } }"#;
         let (_tmp, loader) = loader_with(Some(json));
         assert!(loader.load_vendors()[0].checksum.is_none());
+    }
+
+    #[test]
+    fn npm_source_type_carries_its_package() {
+        let json = r#"{ "vendors": { "Tool": {
+            "name": "Tool", "extractDir": "tool", "enabled": true, "required": false,
+            "releaseSource": { "type": "npm", "package": "@scope/tool" }
+        } } }"#;
+        let (_tmp, loader) = loader_with(Some(json));
+        let tool = &loader.load_vendors()[0];
+        assert_eq!(tool.source_type, VendorSourceType::Npm);
+        assert_eq!(tool.package_name.as_deref(), Some("@scope/tool"));
     }
 
     #[test]

@@ -147,7 +147,8 @@ fn vendors_schema_value() -> serde_json::Value {
                                     "items": { "type": "string" },
                                     "description": "Executable names this vendor puts on PATH, for `naner suggest`"
                                 },
-                                "installType": { "type": "string" },
+                                "installType": { "type": "string", "enum": ["archive", "installer", "binary"] },
+                                "binaryName": { "type": "string" },
                                 "installerArgs": {
                                     "type": "array",
                                     "items": { "type": "string" }
@@ -173,11 +174,14 @@ fn vendors_schema_value() -> serde_json::Value {
                                                 "static",
                                                 "golang-api",
                                                 "nodejs-api",
-                                                "dotnet-api"
+                                                "dotnet-api",
+                                                "npm",
+                                                "pip"
                                             ]
                                         },
                                         "repo": { "type": "string" },
                                         "assetPattern": { "type": "string" },
+                                        "package": { "type": "string" },
                                         "url": { "type": "string" },
                                         "pattern": { "type": "string" }
                                     }

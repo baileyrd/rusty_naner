@@ -119,6 +119,18 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 info.version.as_deref().unwrap_or("Unknown")
             ));
         }
+
+        // npm-published vendors install through npm itself — it resolves the
+        // dependency tree and verifies tarball integrity — instead of the
+        // download/extract path below. `naner.lock` never pins these, so
+        // `pinned` cannot be `Some` here.
+        if matches!(
+            vendor.source_type,
+            VendorSourceType::Npm | VendorSourceType::Pip
+        ) {
+            return self.install_package_vendor(vendor, &info, &target_dir);
+        }
+
         logger::status(&format!("  Downloading {}...", info.file_name));
 
         if std::fs::create_dir_all(&self.download_dir).is_err() {
@@ -164,14 +176,28 @@ impl<'a> UnifiedVendorInstaller<'a> {
         let _ = std::fs::remove_dir_all(&staging_target);
         let _ = std::fs::create_dir_all(&staging_target);
 
-        let seven_zip = self.vendor_dir.join("7zip").join("7z.exe");
-        if !archives::extract_archive(
-            &download_path,
-            &staging_target,
-            &vendor.name,
-            Some(&seven_zip),
-            vendor.installer_args.as_deref(),
-        ) {
+        // `installType: "binary"`: the download IS the tool — a single
+        // verified executable placed as-is (no archive to extract, no
+        // installer to run; running it would launch the tool). `binaryName`
+        // names the file users will type; without it the download's own
+        // name is kept.
+        let staged = if vendor.install_type.as_deref() == Some("binary") {
+            let placed_name = vendor
+                .binary_name
+                .clone()
+                .unwrap_or_else(|| info.file_name.clone());
+            std::fs::copy(&download_path, staging_target.join(&placed_name)).is_ok()
+        } else {
+            let seven_zip = self.vendor_dir.join("7zip").join("7z.exe");
+            archives::extract_archive(
+                &download_path,
+                &staging_target,
+                &vendor.name,
+                Some(&seven_zip),
+                vendor.installer_args.as_deref(),
+            )
+        };
+        if !staged {
             logger::warning(&format!("Failed to install {}, skipping...", vendor.name));
             let _ = std::fs::remove_dir_all(&staging_target);
             return false;
@@ -210,6 +236,87 @@ impl<'a> UnifiedVendorInstaller<'a> {
 
         self.record_lock_entry(vendor, &info, &download_path, pinned.is_some());
 
+        logger::success(&format!("  Installed {}", vendor.name));
+        true
+    }
+
+    /// Install an `Npm`- or `Pip`-type vendor by running the corresponding
+    /// vendored package manager into the tree (`home\.npm-global` /
+    /// `home\.local`, both already on the exported PATH). The vendor
+    /// directory receives only a marker `.vendor-version`, which is what
+    /// keeps `is_vendor_installed`, `doctor`, and `outdated` truthful for
+    /// these vendors.
+    fn install_package_vendor(
+        &self,
+        vendor: &VendorDefinition,
+        info: &VendorDownloadInfo,
+        target_dir: &Path,
+    ) -> bool {
+        let Some(package) = vendor.package_name.as_deref() else {
+            logger::failure(&format!("{} has no package configured", vendor.name));
+            return false;
+        };
+        let (program, args, envs) = match vendor.source_type {
+            VendorSourceType::Npm => {
+                let npm = self.vendor_dir.join("nodejs").join("npm.cmd");
+                if !npm.is_file() {
+                    logger::failure(&format!(
+                        "  {} installs through npm, but {} does not exist - install the NodeJS vendor first",
+                        vendor.name,
+                        npm.display()
+                    ));
+                    return false;
+                }
+                npm_install_command(&npm, &self.naner_root, package, info.version.as_deref())
+            }
+            VendorSourceType::Pip => {
+                let python = self.vendor_dir.join("anaconda").join("python.exe");
+                if !python.is_file() {
+                    logger::failure(&format!(
+                        "  {} installs through pip, but {} does not exist - install the Anaconda vendor first",
+                        vendor.name,
+                        python.display()
+                    ));
+                    return false;
+                }
+                pip_install_command(&python, &self.naner_root, package, info.version.as_deref())
+            }
+            _ => {
+                logger::failure(&format!("{} is not a package-manager vendor", vendor.name));
+                return false;
+            }
+        };
+        logger::status(&format!("  Installing {package} via package manager..."));
+        let mut command = std::process::Command::new(&program);
+        command.args(&args);
+        for (key, value) in &envs {
+            command.env(key, value);
+        }
+        match command.status() {
+            Ok(status) if status.success() => {}
+            Ok(status) => {
+                logger::failure(&format!("  npm install failed with {status}"));
+                return false;
+            }
+            Err(e) => {
+                logger::failure(&format!("  Could not run npm: {e}"));
+                return false;
+            }
+        }
+
+        if std::fs::create_dir_all(target_dir).is_err() {
+            logger::failure(&format!(
+                "  Could not create marker directory {}",
+                target_dir.display()
+            ));
+            return false;
+        }
+        if let Some(version) = info.version.as_deref()
+            && !version.is_empty()
+            && std::fs::write(target_dir.join(VENDOR_VERSION_FILE), version).is_err()
+        {
+            logger::debug("Failed to save vendor version", false);
+        }
         logger::success(&format!("  Installed {}", vendor.name));
         true
     }
@@ -357,7 +464,81 @@ impl<'a> UnifiedVendorInstaller<'a> {
             VendorSourceType::NodeJsApi => self.fetch_nodejs(),
             VendorSourceType::GolangApi => self.fetch_golang(),
             VendorSourceType::DotNetApi => self.fetch_dotnet(),
+            VendorSourceType::Npm => self.fetch_npm(vendor),
+            VendorSourceType::Pip => self.fetch_pip(vendor),
         }
+    }
+
+    /// npm registry resolution for `source_type == Npm`: the `latest`
+    /// dist-tag, plus the tarball URL for the record — npm itself downloads
+    /// the tarball and verifies its integrity, so no checksum flows here.
+    fn fetch_npm(&self, vendor: &VendorDefinition) -> Result<Option<VendorDownloadInfo>, String> {
+        let Some(package) = &vendor.package_name else {
+            return Ok(None);
+        };
+        let url = format!("https://registry.npmjs.org/{package}");
+        let (status, body) = self.http.get_text(&url)?;
+        if !(200..300).contains(&status) {
+            return Ok(None);
+        }
+
+        #[derive(Deserialize)]
+        struct Registry {
+            #[serde(rename = "dist-tags")]
+            dist_tags: Option<DistTags>,
+        }
+        #[derive(Deserialize)]
+        struct DistTags {
+            latest: Option<String>,
+        }
+
+        let registry: Registry = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        let Some(version) = registry.dist_tags.and_then(|t| t.latest) else {
+            return Ok(None);
+        };
+        // Scoped packages publish their tarball under the bare name:
+        // `@scope/tool` -> `tool-<version>.tgz`.
+        let bare = package.rsplit('/').next().unwrap_or(package);
+        Ok(Some(VendorDownloadInfo {
+            url: format!("https://registry.npmjs.org/{package}/-/{bare}-{version}.tgz"),
+            file_name: format!("{bare}-{version}.tgz"),
+            version: Some(version),
+            checksum: None,
+        }))
+    }
+
+    /// PyPI resolution for `source_type == Pip` — the JSON API's
+    /// `info.version` is the latest release. pip downloads and verifies the
+    /// artifact itself, so the URL here is informational.
+    fn fetch_pip(&self, vendor: &VendorDefinition) -> Result<Option<VendorDownloadInfo>, String> {
+        let Some(package) = &vendor.package_name else {
+            return Ok(None);
+        };
+        let url = format!("https://pypi.org/pypi/{package}/json");
+        let (status, body) = self.http.get_text(&url)?;
+        if !(200..300).contains(&status) {
+            return Ok(None);
+        }
+
+        #[derive(Deserialize)]
+        struct PyPi {
+            info: Option<PyPiInfo>,
+        }
+        #[derive(Deserialize)]
+        struct PyPiInfo {
+            version: Option<String>,
+        }
+
+        let pypi: PyPi = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        let Some(version) = pypi.info.and_then(|i| i.version) else {
+            return Ok(None);
+        };
+        Ok(Some(VendorDownloadInfo {
+            url: format!("https://pypi.org/project/{package}/{version}/"),
+            file_name: format!("{package}=={version}"),
+            version: Some(version),
+            checksum: None,
+        }))
     }
 
     /// `FetchVendorDownloadInfoAsync`: per-source resolution, then the
@@ -1038,6 +1219,76 @@ fn with_v_prefix(version: &str) -> String {
 
 /// `ExtractVersionFromFileName`: first `(\d+\.?\d*\.?\d*\.?\d*)` match, else
 /// "latest".
+/// The exact npm invocation an `Npm`-type vendor installs with: a global
+/// install into the tree's `home\.npm-global` prefix with the cache in the
+/// tree too, pinned by explicit environment so the install stays portable
+/// even when `naner install` runs from a shell without the exported
+/// environment. A resolved version is pinned in the spec; without one the
+/// registry's `latest` is npm's own default.
+fn npm_install_command(
+    npm: &Path,
+    naner_root: &Path,
+    package: &str,
+    version: Option<&str>,
+) -> (PathBuf, Vec<String>, Vec<(String, String)>) {
+    let spec = match version {
+        Some(v) if !v.is_empty() => format!("{package}@{v}"),
+        _ => package.to_string(),
+    };
+    let home = naner_root.join("home");
+    (
+        npm.to_path_buf(),
+        vec!["install".into(), "-g".into(), spec],
+        vec![
+            (
+                "NPM_CONFIG_PREFIX".into(),
+                home.join(".npm-global").display().to_string(),
+            ),
+            (
+                "NPM_CONFIG_CACHE".into(),
+                home.join(".npm-cache").display().to_string(),
+            ),
+        ],
+    )
+}
+
+/// The pip twin of [`npm_install_command`]: a `--user` install through the
+/// vendored Anaconda's interpreter, with `PYTHONUSERBASE` pinned into the
+/// tree so console scripts land in `home\.local\Scripts` (already on the
+/// exported PATH) and the cache stays portable too.
+fn pip_install_command(
+    python: &Path,
+    naner_root: &Path,
+    package: &str,
+    version: Option<&str>,
+) -> (PathBuf, Vec<String>, Vec<(String, String)>) {
+    let spec = match version {
+        Some(v) if !v.is_empty() => format!("{package}=={v}"),
+        _ => package.to_string(),
+    };
+    let home = naner_root.join("home");
+    (
+        python.to_path_buf(),
+        vec![
+            "-m".into(),
+            "pip".into(),
+            "install".into(),
+            "--user".into(),
+            spec,
+        ],
+        vec![
+            (
+                "PYTHONUSERBASE".into(),
+                home.join(".local").display().to_string(),
+            ),
+            (
+                "PIP_CACHE_DIR".into(),
+                home.join(".cache").join("pip").display().to_string(),
+            ),
+        ],
+    )
+}
+
 /// Best version-looking run in a file name. The *first* match is usually
 /// wrong: `msys2-base-x86_64-20240727.tar.xz` starts with the `2` in "msys2"
 /// and `7z2408-x64.msi` with the `7` in "7z", so every MSYS2 install recorded
@@ -1482,6 +1733,122 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::io::Write;
+
+    #[test]
+    fn npm_and_pip_resolution_read_the_registry_latest() {
+        let mut http = StubHttp::default();
+        http.text.insert(
+            "https://registry.npmjs.org/@scope/tool".into(),
+            (200, r#"{"dist-tags":{"latest":"1.2.3"}}"#.into()),
+        );
+        http.text.insert(
+            "https://pypi.org/pypi/pytool/json".into(),
+            (200, r#"{"info":{"version":"0.8.1"}}"#.into()),
+        );
+        let tmp = tempfile::tempdir().unwrap();
+        let installer = UnifiedVendorInstaller::new(tmp.path(), Vec::new(), &http);
+
+        let npm_vendor = VendorDefinition {
+            source_type: VendorSourceType::Npm,
+            package_name: Some("@scope/tool".into()),
+            ..Default::default()
+        };
+        let info = installer.resolve_upstream(&npm_vendor).unwrap().unwrap();
+        assert_eq!(info.version.as_deref(), Some("1.2.3"));
+        // Scoped tarballs live under the bare name.
+        assert!(
+            info.url.ends_with("/@scope/tool/-/tool-1.2.3.tgz"),
+            "{}",
+            info.url
+        );
+
+        let pip_vendor = VendorDefinition {
+            source_type: VendorSourceType::Pip,
+            package_name: Some("pytool".into()),
+            ..Default::default()
+        };
+        let info = installer.resolve_upstream(&pip_vendor).unwrap().unwrap();
+        assert_eq!(info.version.as_deref(), Some("0.8.1"));
+
+        // No package configured resolves to nothing, not an error.
+        let bare = VendorDefinition {
+            source_type: VendorSourceType::Npm,
+            ..Default::default()
+        };
+        assert!(installer.resolve_upstream(&bare).unwrap().is_none());
+    }
+
+    /// Both package managers must be pinned into the tree by explicit
+    /// environment — an install run from a shell without naner's exported
+    /// environment would otherwise write into the real user profile, which
+    /// is the exact leak the redirection work exists to stop.
+    #[test]
+    fn package_manager_commands_stay_inside_the_tree() {
+        let root = Path::new("/naner");
+        let (program, args, envs) = npm_install_command(
+            Path::new("/naner/vendor/nodejs/npm.cmd"),
+            root,
+            "@scope/tool",
+            Some("1.2.3"),
+        );
+        assert!(program.ends_with("npm.cmd"));
+        assert_eq!(args, vec!["install", "-g", "@scope/tool@1.2.3"]);
+        assert!(
+            envs.iter()
+                .any(|(k, v)| k == "NPM_CONFIG_PREFIX" && v.contains(".npm-global"))
+        );
+        assert!(envs.iter().any(|(k, _)| k == "NPM_CONFIG_CACHE"));
+
+        let (program, args, envs) = pip_install_command(
+            Path::new("/naner/vendor/anaconda/python.exe"),
+            root,
+            "pytool",
+            None,
+        );
+        assert!(program.ends_with("python.exe"));
+        assert_eq!(args, vec!["-m", "pip", "install", "--user", "pytool"]);
+        assert!(
+            envs.iter()
+                .any(|(k, v)| k == "PYTHONUSERBASE" && v.contains(".local"))
+        );
+        assert!(envs.iter().any(|(k, _)| k == "PIP_CACHE_DIR"));
+    }
+
+    /// `installType: "binary"`: the verified download is placed as-is under
+    /// `binaryName` — running it or extracting it would both be wrong.
+    #[test]
+    fn a_binary_vendor_places_the_download_under_its_binary_name() {
+        let root = tempfile::tempdir().unwrap();
+        let payload = b"MZ fake exe".to_vec();
+        let mut http = StubHttp::default();
+        http.files.insert(
+            "https://example.com/tool-windows-amd64.exe".into(),
+            payload.clone(),
+        );
+
+        let vendor = VendorDefinition {
+            name: "Tool".into(),
+            key: "Tool".into(),
+            extract_dir: "tool".into(),
+            static_url: Some("https://example.com/tool-windows-amd64.exe".into()),
+            file_name: Some("tool-windows-amd64.exe".into()),
+            install_type: Some("binary".into()),
+            binary_name: Some("tool.exe".into()),
+            ..Default::default()
+        };
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
+        assert!(installer.install_vendor("Tool"));
+
+        let placed = root.path().join("vendor/tool/tool.exe");
+        assert_eq!(std::fs::read(&placed).unwrap(), payload, "placed verbatim");
+        assert!(
+            !root
+                .path()
+                .join("vendor/tool/tool-windows-amd64.exe")
+                .exists(),
+            "the upstream artifact name must not be what lands on PATH"
+        );
+    }
 
     /// The first digit run in a file name is usually part of the *name*
     /// (`msys2`, `7z`, `x86_64`), not the version — MSYS2 installs recorded

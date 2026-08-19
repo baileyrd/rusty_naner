@@ -1,0 +1,19 @@
+{
+  "Codex": {
+    "name": "Codex CLI",
+    "description": "OpenAI's agentic coding CLI",
+    "provides": [
+      "codex"
+    ],
+    "extractDir": "codex",
+    "enabled": false,
+    "required": false,
+    "dependencies": [
+      "NodeJS"
+    ],
+    "releaseSource": {
+      "type": "npm",
+      "package": "@openai/codex"
+    }
+  }
+}

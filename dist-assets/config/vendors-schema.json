@@ -67,9 +67,10 @@
           "type": "string",
           "enum": [
             "archive",
-            "installer"
+            "installer",
+            "binary"
           ],
-          "description": "Type of installation (archive extraction or installer execution)"
+          "description": "Type of installation: archive extraction, installer execution, or a single verified binary placed as-is (binary)"
         },
         "installerArgs": {
           "type": "array",
@@ -77,6 +78,10 @@
             "type": "string"
           },
           "description": "Arguments to pass to installer (if installType is 'installer')"
+        },
+        "binaryName": {
+          "type": "string",
+          "description": "installType 'binary' only: the file name the verified download is placed under in the vendor directory"
         },
         "checksum": {
           "type": "object",
@@ -179,7 +184,9 @@
             "static",
             "golang-api",
             "nodejs-api",
-            "dotnet-api"
+            "dotnet-api",
+            "npm",
+            "pip"
           ],
           "description": "Type of release source"
         },
@@ -190,6 +197,10 @@
         "assetPattern": {
           "type": "string",
           "description": "Pattern to match release assets for type: github"
+        },
+        "package": {
+          "type": "string",
+          "description": "Package name for type: npm (registry.npmjs.org) or type: pip (pypi.org)"
         },
         "url": {
           "type": "string",

@@ -1,4 +1,18 @@
 ## [Unreleased]
+### Added
+- Two new vendor `releaseSource.type`s: `npm` (registry.npmjs.org latest
+  dist-tag, installed via the vendored NodeJS's `npm install -g` into
+  `home\.npm-global`) and `pip` (pypi.org JSON API, installed via the
+  vendored Anaconda's `pip install --user` into `home\.local`). Neither is
+  pinned by `naner.lock`; both leave a `.vendor-version` marker only.
+- `installType: "binary"`: a verified download placed as-is under
+  `binaryName`, for vendors that ship a single executable with nothing to
+  extract.
+- Seven new vendors: `GitHubCli`, `ClaudeCode`, `OhMyPi`, `Codex` (npm),
+  `NotebookLmCli` (pip), `OhMyPosh` (binary, checksum-verified via a
+  shared `checksums.txt`), `Antigravity` (static, unverified — no
+  published digest). All disabled by default.
+
 ### Fixed
 - `version_from_file_name` picked the first digit run in a file name, so
   scrape-resolved installs recorded junk versions (`.vendor-version` = `"2"`

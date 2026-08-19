@@ -1,0 +1,19 @@
+{
+  "OhMyPi": {
+    "name": "Oh My Pi",
+    "description": "Enhancement framework for the Pi CLI coding agent - coordinated multi-agent orchestration",
+    "provides": [
+      "oh-my-pi"
+    ],
+    "extractDir": "oh-my-pi",
+    "enabled": false,
+    "required": false,
+    "dependencies": [
+      "NodeJS"
+    ],
+    "releaseSource": {
+      "type": "npm",
+      "package": "oh-my-pi"
+    }
+  }
+}
