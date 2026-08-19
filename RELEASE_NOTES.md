@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.4.
+
+## v0.9.4 — 2026-08-19
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.3...v0.9.4).
+
 - Reported live right after v0.9.3 shipped: a fresh `naner init` dumped the
   *entire* configuration-validation report — every `VendorPath` for a
   vendor that hasn't been installed yet, every profile icon that doesn't

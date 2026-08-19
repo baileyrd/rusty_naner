@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.4] - 2026-08-19
 ### Fixed
 - Windows Terminal installation during first-run bootstrap printed the
   entire configuration-validation warning report — every not-yet-installed
