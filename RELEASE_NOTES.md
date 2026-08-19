@@ -9,6 +9,16 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+- New vendor: uv, Astral's Python package and project manager. Ships as a
+  `github`-sourced zip (`astral-sh/uv`, `uv-x86_64-pc-windows-msvc.zip`)
+  verified against the `.sha256` sidecar uv publishes alongside every asset
+  — the same mechanism rustup uses, so resolved and fallback downloads are
+  both digest-checked. Disabled by default like the other optional tool
+  vendors; `provides: ["uv", "uvx"]` wires it into `naner suggest`, and its
+  cache, managed Pythons, and installed tools are pointed under
+  `%NANER_ROOT%\home` (with `UV_TOOL_BIN_DIR` on the already-exported
+  `home\.local\bin`) so nothing leaks outside the portable tree.
+
 - Command-not-found suggestions (#103): typing `node` in a shell where naner
   could provide it now prints what to do instead of only the shell's generic
   error. `naner suggest <name> [--porcelain]` maps an executable name to a
