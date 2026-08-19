@@ -16,9 +16,9 @@
     "releaseSource": {
       "type": "nodejs-api",
       "fallback": {
-        "version": "v20.11.0",
-        "url": "https://nodejs.org/dist/v20.11.0/node-v20.11.0-win-x64.zip",
-        "fileName": "node-v20.11.0-win-x64.zip",
+        "version": "v26.7.0",
+        "url": "https://nodejs.org/dist/v26.7.0/node-v26.7.0-win-x64.zip",
+        "fileName": "node-v26.7.0-win-x64.zip",
         "size": "~30"
       }
     },

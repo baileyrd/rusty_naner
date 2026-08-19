@@ -1,4 +1,16 @@
 ## [Unreleased]
+### Fixed
+- `version_from_file_name` picked the first digit run in a file name, so
+  scrape-resolved installs recorded junk versions (`.vendor-version` = `"2"`
+  for MSYS2, `"7"` for 7-Zip). It now picks the run with the most digits and
+  trims trailing dots. Surfaced by the first real `refresh-pins` pass.
+
+### Changed
+- Fallback pins refreshed (URLs verified live): Go `go1.26.6`, NodeJS
+  `v26.7.0`, DotNetSDK `10.0.400`, MSYS2 `20260611`. GitHub-sourced pins
+  unchanged — unreachable from the refreshing environment (`api.github.com`
+  blocked); static-URL vendors remain manual.
+
 ### Added
 - `naner refresh-pins [dir] [--dry-run] [--porcelain]`: re-resolves upstream
   latest for every dynamically-sourced vendor and rewrites the `fallback`

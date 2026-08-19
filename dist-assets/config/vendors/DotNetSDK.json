@@ -12,9 +12,9 @@
     "releaseSource": {
       "type": "dotnet-api",
       "fallback": {
-        "version": "10.0.102",
-        "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.102/dotnet-sdk-10.0.102-win-x64.zip",
-        "fileName": "dotnet-sdk-10.0.102-win-x64.zip",
+        "version": "10.0.400",
+        "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.400/dotnet-sdk-10.0.400-win-x64.zip",
+        "fileName": "dotnet-sdk-10.0.400-win-x64.zip",
         "size": "~290"
       }
     },
