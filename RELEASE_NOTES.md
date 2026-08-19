@@ -9,7 +9,27 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.2.
+- Windows Terminal's four Naner profiles used to be hand-duplicated a
+  second time in WT's own schema, in
+  `dist-assets/home/.config/windows-terminal/settings.json` — a second copy
+  of "how do you start the Unified profile" that nothing kept in sync with
+  `naner.json`, and had already drifted from it in the shipped repo (#83).
+  That file is gone. `settings/settings.json`'s profile list is now
+  generated fresh from `naner.json`'s own `Profiles`, on every install and
+  update, so there is exactly one place to edit a profile's shell, icon, or
+  starting directory. GUIDs are unchanged and still fixed per profile,
+  never derived from the config — the identity `naner`'s GUID-aware merge
+  (#52) locates a profile by, so every already-installed `settings.json`
+  reconciles the same way it always has, no resurrected deletions. One
+  wrinkle worth knowing: `naner --profile X` sets up naner's environment on
+  itself before it ever spawns `wt.exe`, so `naner.json`'s own
+  `CustomShell.Arguments` for a PowerShell profile just sources
+  `profile.ps1` directly — no bootstrapping needed. A profile picked
+  straight from Windows Terminal's own list (double-click, pinned tile,
+  WT's own "+" menu) starts cold, with none of that process state, so the
+  *generated* `commandline` splices in the same `naner.exe --export-env
+  --no-comments | Invoke-Expression` self-bootstrap the old template always
+  carried for exactly that case.
 
 ## v0.9.2 — 2026-08-19
 

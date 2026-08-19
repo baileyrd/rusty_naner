@@ -1,7 +1,13 @@
 //! Port of `WindowsTerminalConfigurator`: `.portable` marker + `settings/
-//! settings.json` from the home template with string-level `%NANER_ROOT%`
-//! substitution on first install (backslashes doubled for JSON); a
-//! GUID-identified merge into an existing file after that (#52).
+//! settings.json` with a GUID-identified merge into an existing file (#52).
+//!
+//! Naner's four profile entries in `profiles.list` are generated fresh, on
+//! every call, from `config/naner.json`'s own `Profiles` section — the
+//! single source of truth (#83). Before #83 they were hand-duplicated a
+//! second time in WT's own schema, in
+//! `dist-assets/home/.config/windows-terminal/settings.json`; nothing kept
+//! that copy in sync, and it had already drifted from `naner.json` in the
+//! shipped repo by the time #83 was filed. That file is gone.
 //!
 //! The merge is a `serde_json::Value` round-trip, not a byte-level JSONC
 //! splice: comments in the user's file do not survive it. That is the same
@@ -13,24 +19,38 @@
 //! key binding they had. Key *order* does survive: `serde_json` here runs
 //! with `preserve_order`, so only the profiles actually touched move.
 //!
-//! Every profile the shipped template defines carries a fixed GUID, which is
-//! the identity a profile is located by -- never its name, which a user is
-//! free to rename without an update mistaking the result for a new profile.
-//! A GUID present in the user's file is refreshed to match the template; a
-//! GUID that has gone missing is checked against `.naner-managed-profiles.json`
-//! (written next to `settings.json`) before deciding whether that is a
-//! profile naner has never offered yet (added) or one the user deliberately
-//! removed (left alone -- re-adding it would be the same shape of bug as #50,
-//! just smaller). A tree upgrading from before this marker existed is the one
-//! case that cannot be told apart from "never added"; it is treated as
-//! "assume nothing is owned yet" so an old, hand-deleted profile is never
-//! silently resurrected -- the safe direction, matching #50's own resolution.
+//! Every Naner profile carries a fixed GUID (`FIXED_GUIDS`), which is the
+//! identity a profile is located by -- never its name, which a user is free
+//! to rename without an update mistaking the result for a new profile, and
+//! never derived from the `naner.json` key either, since a freshly-derived
+//! GUID would make every already-installed `settings.json` look like the
+//! user deleted all four profiles on their next update -- the same failure
+//! class as #50, just narrower. A GUID present in the user's file is
+//! refreshed to match naner.json; a GUID that has gone missing is checked
+//! against `.naner-managed-profiles.json` (written next to `settings.json`)
+//! before deciding whether that is a profile naner has never offered yet
+//! (added) or one the user deliberately removed (left alone). A tree
+//! upgrading from before this marker existed is the one case that cannot be
+//! told apart from "never added"; it is treated as "assume nothing is owned
+//! yet" so an old, hand-deleted profile is never silently resurrected -- the
+//! safe direction, matching #50's own resolution.
+//!
+//! One deliberate behavioural gap between naner.json's two consumers of the
+//! same `Profiles` data: `naner --profile X` (`launcher::build_terminal_arguments`)
+//! sets up the naner environment on itself before it ever spawns `wt.exe`,
+//! so `CustomShell.Arguments` for a PowerShell profile just sources
+//! `profile.ps1` directly. A profile picked straight from Windows
+//! Terminal's own profile list (double-click, pinned tile, WT's own "+"
+//! menu) starts `pwsh.exe` cold, with none of that -- so the generated
+//! `commandline` here splices in a self-bootstrap
+//! (`with_export_env_bootstrap`) that `naner --profile X` does not need and
+//! does not get.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value};
 
-use crate::config::strip_json_comments;
+use crate::config::{self, strip_json_comments};
 use crate::fs_atomic::{back_up, write_atomic};
 use crate::logger;
 
@@ -46,6 +66,62 @@ pub fn is_windows_terminal(vendor_name: &str) -> bool {
 /// for one that simply hasn't been added yet.
 const MANAGED_PROFILES_FILE: &str = ".naner-managed-profiles.json";
 
+/// Naner's four built-in profiles, keyed by their `naner.json` `Profiles`
+/// entry, each paired with the GUID the original hand-maintained template
+/// shipped. WT locates a profile by GUID, not name or position, so these
+/// can never change without resurrecting every profile a user ever deleted
+/// (#50, #83) -- a `naner.json` profile with no entry here is simply not a
+/// profile the generator can place in Windows Terminal.
+const FIXED_GUIDS: [(&str, &str); 4] = [
+    ("Unified", "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}"),
+    ("PowerShell", "{574e775e-4f2a-5b96-ac1e-a2962a402336}"),
+    ("Bash", "{2c4de342-38b7-51cf-b940-2309a097f518}"),
+    ("CMD", "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}"),
+];
+
+fn fixed_guid(profile_key: &str) -> Option<&'static str> {
+    FIXED_GUIDS
+        .iter()
+        .find(|(key, _)| *key == profile_key)
+        .map(|(_, guid)| *guid)
+}
+
+/// naner.exe's own `wt.exe --` launch already has the environment set on
+/// itself before wt.exe starts (`launcher::setup_path_environment` runs
+/// first), so naner.json's own `CustomShell.Arguments` for a PowerShell
+/// profile just sources `profile.ps1` directly -- see the module doc. A
+/// profile launched straight from Windows Terminal needs the same
+/// self-bootstrap the old hand-maintained template always carried for these
+/// two profiles: run `naner.exe --export-env --no-comments |
+/// Invoke-Expression` before whatever `-Command` naner.json's Arguments
+/// already specifies. Spliced in right after the opening quote of that
+/// `-Command` body rather than rebuilt from scratch, so a hand-written,
+/// unusual Arguments string is only ever extended, never reinterpreted.
+fn with_export_env_bootstrap(args: &str, naner_exe: &str) -> String {
+    let marker = "-Command \"";
+    let Some(range) = crate::paths::match_ranges_ignore_case(args, marker)
+        .into_iter()
+        .next()
+    else {
+        // Doesn't shape up as `...-Command "<body>"` -- leave it alone
+        // rather than guess where a bootstrap would even belong.
+        return args.to_string();
+    };
+    let bootstrap = format!("& '{naner_exe}' --export-env --no-comments | Invoke-Expression; ");
+    format!("{}{bootstrap}{}", &args[..range.end], &args[range.end..])
+}
+
+/// WT's `commandline` is tokenized like a shell command line: an unquoted
+/// executable path breaks the moment `%NANER_ROOT%` expands to somewhere
+/// containing a space.
+fn quote_if_needed(path: &str) -> String {
+    if path.chars().any(char::is_whitespace) {
+        format!("\"{path}\"")
+    } else {
+        path.to_string()
+    }
+}
+
 /// What `update_settings` actually did, so the caller can log something more
 /// specific than "configured".
 #[derive(Debug, PartialEq, Eq)]
@@ -53,7 +129,7 @@ pub enum SettingsOutcome {
     /// No `settings.json` existed yet; the full template was written.
     Created,
     /// An existing file was inspected and every Naner profile it should have
-    /// already matches the template -- nothing written.
+    /// already matches naner.json -- nothing written.
     UpToDate,
     /// An existing file was rewritten: `touched` Naner profiles were added
     /// or refreshed; `respected_deletions` were left gone because the user
@@ -112,19 +188,18 @@ impl<'a> WindowsTerminalConfigurator<'a> {
         Ok(())
     }
 
-    /// `CreateSettings`: template from `home/.config/windows-terminal/
-    /// settings.json` with `%NANER_ROOT%` replaced by the root path with
-    /// doubled backslashes; inline default otherwise. No existing file to
-    /// reconcile against, so this always writes fresh.
+    /// `CreateSettings`: the generated skeleton, with Naner's profiles
+    /// freshly built from `naner.json`. No existing file to reconcile
+    /// against, so this always writes fresh.
     pub fn create_settings(&self, settings_path: &Path) -> std::io::Result<()> {
         std::fs::write(settings_path, self.rendered_template()?)?;
-        let guids = self.template_naner_guids().unwrap_or_default();
+        let guids = self.template_naner_guids();
         self.write_managed_guids(settings_path, &guids)?;
         Ok(())
     }
 
     /// Reconcile Naner's profiles into an existing `settings.json`, or write
-    /// the template fresh if none exists yet.
+    /// the generated skeleton fresh if none exists yet.
     fn update_settings(&self, settings_path: &Path) -> std::io::Result<SettingsOutcome> {
         if !settings_path.is_file() {
             self.create_settings(settings_path)?;
@@ -137,7 +212,7 @@ impl<'a> WindowsTerminalConfigurator<'a> {
             return Ok(SettingsOutcome::LeftUnparsed);
         };
 
-        let template_profiles = self.template_naner_profiles()?;
+        let template_profiles = self.template_naner_profiles();
         let marker_path = Self::managed_marker_path(settings_path);
         let had_marker = marker_path.is_file();
         let previously_managed = Self::read_managed_guids(&marker_path);
@@ -212,53 +287,106 @@ impl<'a> WindowsTerminalConfigurator<'a> {
         })
     }
 
-    /// `%NANER_ROOT%`-substituted template text, or the inline default.
+    /// The full `settings.json` text: `DEFAULT_SETTINGS`'s skeleton
+    /// ($schema, keybindings, colour schemes, ...) with `profiles.list` and
+    /// `defaultProfile` replaced by what naner.json currently describes. A
+    /// `naner.json` that fails to load leaves the skeleton's own single
+    /// built-in fallback profile untouched, matching what a missing
+    /// template used to do.
     fn rendered_template(&self) -> std::io::Result<String> {
-        let template_path = self.template_path();
-        if template_path.is_file() {
-            let template = std::fs::read_to_string(&template_path)?;
-            let root = self.naner_root.to_string_lossy().replace('\\', "\\\\");
-            Ok(template.replace("%NANER_ROOT%", &root))
-        } else {
-            Ok(DEFAULT_SETTINGS.to_string())
-        }
-    }
-
-    fn template_path(&self) -> PathBuf {
-        self.naner_root
-            .join("home")
-            .join(".config")
-            .join("windows-terminal")
-            .join("settings.json")
-    }
-
-    /// Naner's own profile objects from the template, keyed by GUID. The
-    /// template only ever contains Naner's profiles, so every entry that
-    /// carries a `guid` is one -- nothing to keep in sync with a second,
-    /// hardcoded GUID list.
-    fn template_naner_profiles(&self) -> std::io::Result<Vec<(String, Value)>> {
-        let rendered = self.rendered_template()?;
-        let stripped = strip_json_comments(&rendered);
-        let parsed: Value = serde_json::from_str(&stripped)
+        let mut skeleton: Value = serde_json::from_str(DEFAULT_SETTINGS)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        Ok(parsed["profiles"]["list"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|p| {
-                let guid = p.get("guid").and_then(Value::as_str)?.to_string();
-                Some((guid, p))
-            })
-            .collect())
+
+        let profiles = self.template_naner_profiles();
+        if !profiles.is_empty()
+            && let Value::Object(root) = &mut skeleton
+        {
+            let list: Vec<Value> = profiles.into_iter().map(|(_, v)| v).collect();
+            if let Some(Value::Object(profiles_obj)) = root.get_mut("profiles") {
+                profiles_obj.insert("list".to_string(), Value::Array(list));
+            }
+            if let Some(default_guid) = self.default_profile_guid() {
+                root.insert("defaultProfile".to_string(), Value::String(default_guid));
+            }
+        }
+
+        serde_json::to_string_pretty(&skeleton)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
 
-    fn template_naner_guids(&self) -> std::io::Result<Vec<String>> {
-        Ok(self
-            .template_naner_profiles()?
+    fn default_profile_guid(&self) -> Option<String> {
+        let config = config::load(self.naner_root, None).ok()?;
+        fixed_guid(&config.default_profile).map(str::to_string)
+    }
+
+    /// Naner's own profile objects, generated fresh from `naner.json`'s own
+    /// `Profiles` -- the single source of truth per #83 -- keyed by GUID. A
+    /// `naner.json` that cannot be loaded yields no profiles rather than
+    /// erroring the whole Windows Terminal install; the caller's fallback
+    /// (an empty list changes nothing) is the safe default, matching what a
+    /// missing template used to do.
+    fn template_naner_profiles(&self) -> Vec<(String, Value)> {
+        let Ok(config) = config::load(self.naner_root, None) else {
+            return Vec::new();
+        };
+        let root = self.naner_root.to_string_lossy();
+        let naner_exe = format!("{root}\\vendor\\bin\\naner.exe");
+
+        FIXED_GUIDS
+            .iter()
+            .filter_map(|(key, guid)| {
+                let profile = config.profiles.get(key)?;
+                let custom = profile.custom_shell.as_ref()?;
+                if custom.executable_path.trim().is_empty() {
+                    return None;
+                }
+
+                let exe = custom.executable_path.replace("%NANER_ROOT%", &root);
+                let mut args = custom
+                    .arguments
+                    .as_deref()
+                    .unwrap_or_default()
+                    .replace("%NANER_ROOT%", &root);
+                if profile.shell.eq_ignore_ascii_case("PowerShell") {
+                    args = with_export_env_bootstrap(&args, &naner_exe);
+                }
+
+                let commandline = if args.is_empty() {
+                    quote_if_needed(&exe)
+                } else {
+                    format!("{} {args}", quote_if_needed(&exe))
+                };
+
+                let mut obj = Map::new();
+                obj.insert("guid".to_string(), Value::String((*guid).to_string()));
+                obj.insert("name".to_string(), Value::String(profile.name.clone()));
+                obj.insert("hidden".to_string(), Value::Bool(false));
+                obj.insert("commandline".to_string(), Value::String(commandline));
+                obj.insert(
+                    "startingDirectory".to_string(),
+                    Value::String(profile.starting_directory.replace("%NANER_ROOT%", &root)),
+                );
+                obj.insert(
+                    "colorScheme".to_string(),
+                    Value::String(profile.color_scheme.clone()),
+                );
+                if let Some(icon) = &profile.icon {
+                    obj.insert(
+                        "icon".to_string(),
+                        Value::String(icon.replace("%NANER_ROOT%", &root)),
+                    );
+                }
+
+                Some(((*guid).to_string(), Value::Object(obj)))
+            })
+            .collect()
+    }
+
+    fn template_naner_guids(&self) -> Vec<String> {
+        self.template_naner_profiles()
             .into_iter()
             .map(|(guid, _)| guid)
-            .collect())
+            .collect()
     }
 
     fn managed_marker_path(settings_path: &Path) -> PathBuf {
@@ -283,11 +411,25 @@ impl<'a> WindowsTerminalConfigurator<'a> {
     }
 }
 
+/// Last-resort skeleton: used whole when `naner.json` cannot be loaded at
+/// all (its own single profile is the fallback), and as the base every
+/// other field (`$schema`, keybindings, colour schemes, `newTabMenu`) comes
+/// from even on a normal install, with `profiles.list`/`defaultProfile`
+/// replaced by what naner.json currently describes.
 const DEFAULT_SETTINGS: &str = r#"{
     "$schema": "https://aka.ms/terminal-profiles-schema",
     "defaultProfile": "{naner-unified}",
     "copyOnSelect": false,
     "copyFormatting": "none",
+    "keybindings": [
+        { "id": "Terminal.CopyToClipboard", "keys": "ctrl+c" },
+        { "id": "Terminal.PasteFromClipboard", "keys": "ctrl+v" },
+        { "id": "Terminal.FindText", "keys": "ctrl+shift+f" },
+        { "id": "Terminal.DuplicatePaneAuto", "keys": "alt+shift+d" }
+    ],
+    "newTabMenu": [
+        { "type": "remainingProfiles" }
+    ],
     "profiles": {
         "defaults": {},
         "list": [
@@ -316,19 +458,113 @@ mod tests {
         assert!(!is_windows_terminal(""));
     }
 
-    fn write_template(root: &Path, body: &str) {
-        let template_dir = root.join("home/.config/windows-terminal");
-        std::fs::create_dir_all(&template_dir).unwrap();
-        std::fs::write(template_dir.join("settings.json"), body).unwrap();
+    #[test]
+    fn guids_are_fixed_and_never_derived() {
+        // A regression guard, not a design decision to relitigate: swapping
+        // any of these breaks every already-installed settings.json (#50).
+        assert_eq!(
+            fixed_guid("Unified"),
+            Some("{61c54bbd-c2c6-5271-96e7-009a87ff44bf}")
+        );
+        assert_eq!(
+            fixed_guid("PowerShell"),
+            Some("{574e775e-4f2a-5b96-ac1e-a2962a402336}")
+        );
+        assert_eq!(
+            fixed_guid("Bash"),
+            Some("{2c4de342-38b7-51cf-b940-2309a097f518}")
+        );
+        assert_eq!(
+            fixed_guid("CMD"),
+            Some("{0caa0dad-35be-5f56-a8ff-afceeeaa6101}")
+        );
+        assert_eq!(fixed_guid("SomeNewProfile"), None);
     }
 
     #[test]
-    fn template_substitution_doubles_backslashes() {
-        let root = tempfile::tempdir().unwrap();
-        write_template(
-            root.path(),
-            r#"{ "commandline": "%NANER_ROOT%\\vendor\\powershell\\pwsh.exe" }"#,
+    fn export_env_bootstrap_is_spliced_after_the_command_flag() {
+        let args = r#"-NoExit -NoLogo -NoProfile -Command ". 'profile.ps1'""#;
+        let spliced = with_export_env_bootstrap(args, "naner.exe");
+        assert!(
+            spliced.starts_with(
+                r#"-NoExit -NoLogo -NoProfile -Command "& 'naner.exe' --export-env --no-comments | Invoke-Expression; . 'profile.ps1'""#
+            ),
+            "{spliced}"
         );
+    }
+
+    #[test]
+    fn export_env_bootstrap_leaves_non_command_arguments_alone() {
+        // Bash/CMD-shaped Arguments never reach this function in practice
+        // (only PowerShell-shell profiles call it), but the function itself
+        // must not guess when there is nothing to splice into.
+        assert_eq!(
+            with_export_env_bootstrap("--login -i", "naner.exe"),
+            "--login -i"
+        );
+        assert_eq!(with_export_env_bootstrap("", "naner.exe"), "");
+    }
+
+    #[test]
+    fn quoting_only_happens_when_needed() {
+        assert_eq!(quote_if_needed("cmd.exe"), "cmd.exe");
+        assert_eq!(
+            quote_if_needed(r"C:\tools\naner\pwsh.exe"),
+            r"C:\tools\naner\pwsh.exe"
+        );
+        assert_eq!(
+            quote_if_needed(r"C:\Users\Bailey RD\naner\pwsh.exe"),
+            r#""C:\Users\Bailey RD\naner\pwsh.exe""#
+        );
+    }
+
+    const MINIMAL_NANER_JSON: &str = r#"{
+        "DefaultProfile": "Unified",
+        "Profiles": {
+            "Unified": {
+                "Name": "Naner (Unified)",
+                "Shell": "PowerShell",
+                "StartingDirectory": "%USERPROFILE%",
+                "ColorScheme": "Campbell",
+                "CustomShell": {
+                    "ExecutablePath": "%NANER_ROOT%\\vendor\\powershell\\pwsh.exe",
+                    "Arguments": "-NoExit -NoLogo -NoProfile -Command \". '%NANER_ROOT%\\home\\.config\\powershell\\profile.ps1'\""
+                }
+            },
+            "Bash": {
+                "Name": "Naner Bash",
+                "Shell": "Bash",
+                "StartingDirectory": "~",
+                "ColorScheme": "Campbell",
+                "CustomShell": {
+                    "ExecutablePath": "%NANER_ROOT%\\vendor\\git\\bin\\bash.exe",
+                    "Arguments": "--login -i"
+                }
+            }
+        }
+    }"#;
+
+    const SIMPLE_NANER_JSON: &str = r#"{
+        "DefaultProfile": "Unified",
+        "Profiles": {
+            "Unified": {
+                "Name": "Naner (Unified)",
+                "Shell": "PowerShell",
+                "CustomShell": { "ExecutablePath": "new-pwsh.exe" }
+            }
+        }
+    }"#;
+
+    fn write_naner_config(root: &Path, body: &str) {
+        let config_dir = root.join("config");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("naner.json"), body).unwrap();
+    }
+
+    #[test]
+    fn naner_root_is_substituted_in_generated_profiles() {
+        let root = tempfile::tempdir().unwrap();
+        write_naner_config(root.path(), MINIMAL_NANER_JSON);
 
         let target = root.path().join("vendor/terminal");
         std::fs::create_dir_all(&target).unwrap();
@@ -338,14 +574,15 @@ mod tests {
 
         assert!(target.join(".portable").is_file());
         let written = std::fs::read_to_string(target.join("settings/settings.json")).unwrap();
-        let expected_root = root.path().to_string_lossy().replace('\\', "\\\\");
-        assert!(written.contains(&expected_root));
         assert!(!written.contains("%NANER_ROOT%"));
+        assert!(written.contains("powershell"));
+        assert!(written.contains("bash.exe"));
     }
 
     #[test]
-    fn missing_template_writes_default() {
+    fn missing_naner_json_writes_the_default_fallback() {
         let root = tempfile::tempdir().unwrap();
+        // No config/naner.json at all.
         let target = root.path().join("terminal");
         std::fs::create_dir_all(&target).unwrap();
         WindowsTerminalConfigurator::new(root.path())
@@ -355,19 +592,14 @@ mod tests {
         assert!(written.contains("{naner-unified}"));
     }
 
-    /// The template's one profile is absent from a hand-written file with no
-    /// prior marker -- "never added", the safe interpretation -- so it is
-    /// added. Everything the user already had, including a field the
-    /// template does not know about, survives untouched.
+    /// naner.json's two profiles are absent from a hand-written file with no
+    /// prior marker -- "never added", the safe interpretation -- so both are
+    /// added. Everything the user already had, including a field naner
+    /// knows nothing about, survives untouched.
     #[test]
-    fn a_missing_naner_profile_is_added_and_the_rest_of_the_file_survives() {
+    fn missing_naner_profiles_are_added_and_the_rest_of_the_file_survives() {
         let root = tempfile::tempdir().unwrap();
-        write_template(
-            root.path(),
-            r#"{ "profiles": { "list": [
-                { "guid": "{naner-unified}", "name": "Naner (Unified)", "commandline": "pwsh.exe" }
-            ] } }"#,
-        );
+        write_naner_config(root.path(), MINIMAL_NANER_JSON);
 
         let target = root.path().join("vendor/terminal");
         std::fs::create_dir_all(target.join("settings")).unwrap();
@@ -388,30 +620,31 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
         assert_eq!(written["mine"], "keep this");
         let list = written["profiles"]["list"].as_array().unwrap();
-        assert_eq!(list.len(), 2);
+        assert_eq!(list.len(), 3);
         assert!(
             list.iter()
                 .any(|p| p["guid"] == "{someone-elses}" && p["name"] == "Their Shell"),
             "a third-party profile must survive the merge: {list:?}"
         );
         assert!(
-            list.iter().any(|p| p["guid"] == "{naner-unified}"),
-            "the missing Naner profile must be added: {list:?}"
+            list.iter()
+                .any(|p| p["guid"] == "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}"),
+            "the missing Unified profile must be added: {list:?}"
+        );
+        assert!(
+            list.iter()
+                .any(|p| p["guid"] == "{2c4de342-38b7-51cf-b940-2309a097f518}"),
+            "the missing Bash profile must be added: {list:?}"
         );
     }
 
-    /// A Naner profile the user has hand-customised is refreshed back to the
-    /// current template on update -- "template changes reach an existing
-    /// install" is the entire point of #52.
+    /// A Naner profile the user has hand-customised is refreshed back to
+    /// what naner.json currently describes on update -- "config changes
+    /// reach an existing install" is the entire point of #52 and #83.
     #[test]
-    fn a_present_naner_profile_is_refreshed_to_match_the_template() {
+    fn a_present_naner_profile_is_refreshed_to_match_naner_json() {
         let root = tempfile::tempdir().unwrap();
-        write_template(
-            root.path(),
-            r#"{ "profiles": { "list": [
-                { "guid": "{naner-unified}", "name": "Naner (Unified)", "commandline": "new-pwsh.exe" }
-            ] } }"#,
-        );
+        write_naner_config(root.path(), SIMPLE_NANER_JSON);
 
         let target = root.path().join("vendor/terminal");
         std::fs::create_dir_all(target.join("settings")).unwrap();
@@ -419,7 +652,7 @@ mod tests {
         std::fs::write(
             &settings,
             r#"{ "profiles": { "list": [
-                { "guid": "{naner-unified}", "name": "Naner (Unified)", "commandline": "old-pwsh.exe" }
+                { "guid": "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}", "name": "Naner (Unified)", "commandline": "old-pwsh.exe" }
             ] } }"#,
         )
         .unwrap();
@@ -442,13 +675,7 @@ mod tests {
     #[test]
     fn a_deliberately_removed_naner_profile_is_not_resurrected() {
         let root = tempfile::tempdir().unwrap();
-        write_template(
-            root.path(),
-            r#"{ "profiles": { "list": [
-                { "guid": "{naner-unified}", "name": "Naner (Unified)", "commandline": "pwsh.exe" },
-                { "guid": "{naner-bash}", "name": "Naner Bash", "commandline": "bash.exe" }
-            ] } }"#,
-        );
+        write_naner_config(root.path(), MINIMAL_NANER_JSON);
 
         let target = root.path().join("vendor/terminal");
         std::fs::create_dir_all(target.join("settings")).unwrap();
@@ -472,7 +699,7 @@ mod tests {
                 .as_array()
                 .unwrap()
                 .iter()
-                .filter(|p| p["guid"] != "{naner-bash}")
+                .filter(|p| p["guid"] != "{2c4de342-38b7-51cf-b940-2309a097f518}")
                 .cloned()
                 .collect(),
         );
@@ -486,7 +713,7 @@ mod tests {
             serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
         let list = after_update["profiles"]["list"].as_array().unwrap();
         assert_eq!(list.len(), 1, "deleted profile must stay deleted: {list:?}");
-        assert_eq!(list[0]["guid"], "{naner-unified}");
+        assert_eq!(list[0]["guid"], "{61c54bbd-c2c6-5271-96e7-009a87ff44bf}");
     }
 
     /// A file naner cannot parse is never overwritten -- the file might be
@@ -495,12 +722,7 @@ mod tests {
     #[test]
     fn an_unparseable_settings_file_is_left_exactly_as_found() {
         let root = tempfile::tempdir().unwrap();
-        write_template(
-            root.path(),
-            r#"{ "profiles": { "list": [
-                { "guid": "{naner-unified}", "name": "Naner (Unified)", "commandline": "pwsh.exe" }
-            ] } }"#,
-        );
+        write_naner_config(root.path(), SIMPLE_NANER_JSON);
 
         let target = root.path().join("vendor/terminal");
         std::fs::create_dir_all(target.join("settings")).unwrap();
@@ -520,12 +742,7 @@ mod tests {
     #[test]
     fn an_already_reconciled_file_is_not_rewritten() {
         let root = tempfile::tempdir().unwrap();
-        write_template(
-            root.path(),
-            r#"{ "profiles": { "list": [
-                { "guid": "{naner-unified}", "name": "Naner (Unified)", "commandline": "pwsh.exe" }
-            ] } }"#,
-        );
+        write_naner_config(root.path(), SIMPLE_NANER_JSON);
 
         let target = root.path().join("vendor/terminal");
         std::fs::create_dir_all(target.join("settings")).unwrap();
@@ -556,12 +773,7 @@ mod tests {
     #[test]
     fn a_merge_that_rewrites_the_file_backs_it_up_first() {
         let root = tempfile::tempdir().unwrap();
-        write_template(
-            root.path(),
-            r#"{ "profiles": { "list": [
-                { "guid": "{naner-unified}", "name": "Naner (Unified)", "commandline": "pwsh.exe" }
-            ] } }"#,
-        );
+        write_naner_config(root.path(), SIMPLE_NANER_JSON);
 
         let target = root.path().join("vendor/terminal");
         std::fs::create_dir_all(target.join("settings")).unwrap();

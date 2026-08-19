@@ -1,10 +1,11 @@
-//! Regression guard for the WT settings template shipping a hardcoded
-//! dev-machine path instead of `%NANER_ROOT%` (rusty_naner#58). The bug
-//! was invisible to every existing test because `wt_config.rs`'s unit
-//! tests only exercise `%NANER_ROOT%` substitution against a synthetic
-//! template built in-memory -- never the real file that actually ships
-//! in `dist-assets/` and gets copied into every release bundle. This
-//! test reads that real file.
+//! Regression guard for `naner.json` shipping a hardcoded dev-machine path
+//! in one of its `Profiles` instead of `%NANER_ROOT%` (rusty_naner#58,
+//! carried forward when #83 made `naner.json` the only source Windows
+//! Terminal profiles are generated from). The bug was invisible to every
+//! `wt_config.rs` unit test because those only exercise `%NANER_ROOT%`
+//! substitution against synthetic config built in-memory -- never the real
+//! file that ships in `dist-assets/` and gets copied into every release
+//! bundle. This test reads that real file.
 
 use std::path::{Path, PathBuf};
 
@@ -18,39 +19,38 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
-fn template_path() -> PathBuf {
+fn naner_json_path() -> PathBuf {
     repo_root()
         .join("dist-assets")
-        .join("home")
-        .join(".config")
-        .join("windows-terminal")
-        .join("settings.json")
+        .join("config")
+        .join("naner.json")
 }
 
 #[test]
-fn shipped_template_has_no_hardcoded_dev_machine_path() {
-    let template = std::fs::read_to_string(template_path()).expect("dist-assets template exists");
+fn shipped_naner_json_has_no_hardcoded_dev_machine_path() {
+    let config =
+        std::fs::read_to_string(naner_json_path()).expect("dist-assets/config/naner.json exists");
 
     // The exact regression: someone captured already-substituted output
     // from their own machine (once at `C:\tools\cmd_line\naner`) instead
-    // of authoring the template with the placeholder token
-    // `create_settings` actually substitutes.
+    // of authoring a profile with the placeholder token the generator
+    // actually substitutes.
     assert!(
-        !template.to_lowercase().contains("cmd_line"),
-        "template contains a literal dev-machine path instead of %NANER_ROOT%"
+        !config.to_lowercase().contains("cmd_line"),
+        "naner.json contains a literal dev-machine path instead of %NANER_ROOT%"
     );
     assert!(
-        template.contains("%NANER_ROOT%"),
-        "template has no %NANER_ROOT% placeholder for create_settings to substitute"
+        config.contains("%NANER_ROOT%"),
+        "naner.json's Profiles have no %NANER_ROOT% placeholder to substitute"
     );
 }
 
 #[test]
-fn shipped_template_substitutes_cleanly_for_a_real_root() {
+fn shipped_naner_json_generates_wt_profiles_that_substitute_cleanly() {
     let root = tempfile::tempdir().unwrap();
-    let template_dir = root.path().join("home/.config/windows-terminal");
-    std::fs::create_dir_all(&template_dir).unwrap();
-    std::fs::copy(template_path(), template_dir.join("settings.json")).unwrap();
+    let config_dir = root.path().join("config");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::copy(naner_json_path(), config_dir.join("naner.json")).unwrap();
 
     let settings_path = root.path().join("out-settings.json");
     WindowsTerminalConfigurator::new(root.path())
@@ -60,15 +60,15 @@ fn shipped_template_substitutes_cleanly_for_a_real_root() {
     let written = std::fs::read_to_string(&settings_path).unwrap();
     assert!(
         !written.contains("%NANER_ROOT%"),
-        "a leftover %NANER_ROOT% means create_settings and the template disagree on the token"
+        "a leftover %NANER_ROOT% means the generator and naner.json disagree on the token"
     );
     assert!(
         !written.to_lowercase().contains("cmd_line"),
         "the substituted output must not retain the old dev-machine path"
     );
 
-    // Every profile's commandline/icon must actually resolve to this
-    // install's root, not silently fall back to something unrelated.
+    // Every generated profile's commandline/icon must actually resolve to
+    // this install's root, not silently fall back to something unrelated.
     let expected_root = root.path().to_string_lossy().replace('\\', "\\\\");
     assert!(
         written.contains(&expected_root),

@@ -2665,6 +2665,20 @@ mod tests {
         .unwrap();
         std::fs::write(target.join("WindowsTerminal.exe"), "old").unwrap();
 
+        // Windows Terminal's profiles are generated from naner.json's own
+        // `Profiles` (#83) -- a real naner tree always has this by the time
+        // any vendor gets installed, so the fixture needs one too.
+        let config_dir = root.path().join("config");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(
+            config_dir.join("naner.json"),
+            r#"{ "Profiles": { "Unified": {
+                "Name": "Naner (Unified)", "Shell": "PowerShell",
+                "CustomShell": { "ExecutablePath": "pwsh.exe" }
+            } } }"#,
+        )
+        .unwrap();
+
         let vendor = VendorDefinition {
             name: "Windows Terminal".into(),
             extract_dir: "terminal".into(),
