@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.3] - 2026-08-19
 ### Fixed
 - `reexec_in_own_console_if_racy` (the #81 relaunch that dodges the
   keystroke race by spawning a console of naner's own) silently fell back

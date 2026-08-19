@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.3.
+
+## v0.9.3 — 2026-08-19
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.2...v0.9.3).
+
 - The #81 keystroke-race relaunch (`reexec_in_own_console_if_racy`) had a
   gap the original fix never covered: it only handles the race once the
   relaunch into a console of naner's own actually *succeeds*. Reported live
