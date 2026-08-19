@@ -9,6 +9,29 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+- The #81 keystroke-race relaunch (`reexec_in_own_console_if_racy`) had a
+  gap the original fix never covered: it only handles the race once the
+  relaunch into a console of naner's own actually *succeeds*. Reported live
+  on v0.9.2, right after the #116 stdin fix and #121 both shipped: `naner
+  update`'s prompt didn't respond to `Y`/Enter, reproduced in two different
+  shells (a naner-launched profile and a plain `Windows PowerShell`
+  window), with no second console ever appearing in either. That's the
+  spawn itself failing — `Command::new(exe)
+  .creation_flags(CREATE_NEW_CONSOLE)` erroring out — and the code's own
+  fallback ("racy beats broken") silently ran the rest of the flow inline,
+  landing right back in the pre-#81 race with no indication anything had
+  gone wrong. The prompt printing and taking a cursor in the *same* window
+  the banner appeared in, rather than a new one, was the tell. The fallback
+  now logs the actual spawn error and the `Start-Process -Wait
+  naner.exe -ArgumentList "..."` workaround before continuing, so the
+  failure is visible instead of indistinguishable from the bug it exists to
+  dodge. The underlying question — *why* the spawn fails on some machines —
+  is still open; this makes it debuggable instead of silent.
+
+## v0.9.2 — 2026-08-19
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.1...v0.9.2).
+
 - Windows Terminal's four Naner profiles used to be hand-duplicated a
   second time in WT's own schema, in
   `dist-assets/home/.config/windows-terminal/settings.json` — a second copy
@@ -30,10 +53,6 @@ PR until it is tagged. Terse per-category entries live in
   *generated* `commandline` splices in the same `naner.exe --export-env
   --no-comments | Invoke-Expression` self-bootstrap the old template always
   carried for exactly that case.
-
-## v0.9.2 — 2026-08-19
-
-[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.1...v0.9.2).
 
 - `rustup`/`cargo`/`rustc` were unreachable from every naner-launched shell,
   no matter how you launched one — reported live after enabling the Rust

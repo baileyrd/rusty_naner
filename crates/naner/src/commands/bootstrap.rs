@@ -270,19 +270,36 @@ pub fn reexec_in_own_console_if_racy(state: ConsoleState) -> Option<i32> {
         return None;
     }
     let exe = std::env::current_exe().ok()?;
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
 
     use std::os::windows::process::CommandExt;
     const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
     logger::info("Opening a console of naner's own for the prompts...");
     match std::process::Command::new(exe)
-        .args(std::env::args_os().skip(1))
+        .args(&args)
         .env(OWN_CONSOLE_ENV, "1")
         .creation_flags(CREATE_NEW_CONSOLE)
         .status()
     {
         Ok(status) => Some(status.code().unwrap_or(1)),
-        // Could not spawn: fall through and run inline -- racy beats broken.
-        Err(_) => None,
+        Err(e) => {
+            // Could not spawn: fall through and run inline -- racy beats
+            // broken. Silent about *why* would be its own bug: without
+            // this, the prompt below looks identical to the pre-#81 race
+            // (types with no effect) and gives no clue what happened or how
+            // to work around it.
+            let joined = args
+                .iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join(" ");
+            logger::warning(&format!("  Could not open a console of naner's own: {e}"));
+            logger::warning(&format!(
+                "  Continuing here -- if the next prompt doesn't respond to Y/n, run: \
+                 Start-Process -Wait naner.exe -ArgumentList \"{joined}\""
+            ));
+            None
+        }
     }
 }
 
