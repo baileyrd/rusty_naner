@@ -1,4 +1,17 @@
 ## [Unreleased]
+### Fixed
+- `reexec_in_own_console_if_racy` (the #81 relaunch that dodges the
+  keystroke race by spawning a console of naner's own) silently fell back
+  to running inline whenever the spawn itself failed — reproduced live on a
+  real machine where `Command::new(exe).creation_flags(CREATE_NEW_CONSOLE)`
+  errors, in both a naner-launched shell and a plain `Windows PowerShell`
+  window. No second console ever appeared; the interactive prompt printed
+  and accepted a cursor in the *original* window instead, indistinguishable
+  from the pre-#81 race itself, with no indication anything had gone wrong.
+  The fallback now logs the spawn error and the `Start-Process -Wait`
+  workaround before continuing, instead of failing silently.
+
+## [0.9.2] - 2026-08-19
 ### Changed
 - Windows Terminal's four Naner profiles in `settings/settings.json` are now
   generated fresh from `config/naner.json`'s own `Profiles`, on every
@@ -12,7 +25,6 @@
   template always did for that case; `naner --profile X` itself needs no
   such thing, since it sets the environment before spawning `wt.exe`. (#83)
 
-## [0.9.2] - 2026-08-19
 ### Fixed
 - The `Rust` vendor's `pathPrecedence`/`CARGO_HOME`/`RUSTUP_HOME` pointed at
   `vendor/rust/cargo/bin` and `vendor/rust/rustc/bin` — folders `rustup-init`
