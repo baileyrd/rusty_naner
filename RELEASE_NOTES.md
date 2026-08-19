@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.2.
+
+## v0.9.2 — 2026-08-19
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.1...v0.9.2).
+
 - `rustup`/`cargo`/`rustc` were unreachable from every naner-launched shell,
   no matter how you launched one — reported live after enabling the Rust
   vendor. `Rust.json`'s `pathPrecedence` pointed at

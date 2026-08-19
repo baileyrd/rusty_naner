@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.2] - 2026-08-19
 ### Fixed
 - The `Rust` vendor's `pathPrecedence`/`CARGO_HOME`/`RUSTUP_HOME` pointed at
   `vendor/rust/cargo/bin` and `vendor/rust/rustc/bin` — folders `rustup-init`
