@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.5.
+
+## v0.9.5 — 2026-08-19
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.4...v0.9.5).
+
 - Reported live right after v0.9.4 shipped: at the "Press any key to
   exit..." pause (the one naner-init shows in a console of its own before
   closing), pressing a key did nothing — the screenshot showed keystrokes
