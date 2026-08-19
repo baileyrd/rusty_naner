@@ -8,7 +8,7 @@
       "pip"
     ],
     "extractDir": "anaconda",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

@@ -8,7 +8,7 @@
       "npx"
     ],
     "extractDir": "nodejs",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [
       "SevenZip"

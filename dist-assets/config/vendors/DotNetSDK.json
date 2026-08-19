@@ -6,7 +6,7 @@
       "dotnet"
     ],
     "extractDir": "dotnet-sdk",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

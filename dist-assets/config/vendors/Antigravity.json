@@ -3,7 +3,7 @@
     "name": "Antigravity",
     "description": "Google's agentic IDE",
     "extractDir": "antigravity",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

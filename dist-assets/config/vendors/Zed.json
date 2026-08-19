@@ -3,7 +3,7 @@
     "name": "Zed",
     "description": "High-performance, multiplayer code editor from the creators of Atom and Tree-sitter",
     "extractDir": "zed",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

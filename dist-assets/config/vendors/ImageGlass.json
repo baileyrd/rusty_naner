@@ -3,7 +3,7 @@
     "name": "ImageGlass",
     "description": "Fast, lightweight and versatile image viewer",
     "extractDir": "imageglass",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

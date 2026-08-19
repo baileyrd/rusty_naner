@@ -8,7 +8,7 @@
       "notebooklm-server"
     ],
     "extractDir": "notebooklm-cli",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [
       "Anaconda"

@@ -6,7 +6,7 @@
       "codex"
     ],
     "extractDir": "codex",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [
       "NodeJS"

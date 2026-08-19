@@ -6,7 +6,7 @@
       "oh-my-posh"
     ],
     "extractDir": "oh-my-posh",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

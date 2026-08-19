@@ -3,7 +3,7 @@
     "name": "MSYS2",
     "description": "Collection of tools and libraries for Windows",
     "extractDir": "msys64",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [
       "SevenZip"

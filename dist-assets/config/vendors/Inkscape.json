@@ -3,7 +3,7 @@
     "name": "Inkscape",
     "description": "Professional vector graphics editor",
     "extractDir": "inkscape",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

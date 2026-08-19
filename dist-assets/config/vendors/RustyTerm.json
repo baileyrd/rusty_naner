@@ -3,7 +3,7 @@
     "name": "Rusty Term",
     "description": "Experimental Rust-based terminal emulator",
     "extractDir": "rustyterm",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

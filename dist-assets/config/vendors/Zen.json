@@ -3,7 +3,7 @@
     "name": "Zen Browser",
     "description": "Privacy-focused, Firefox-based browser for a calmer, more productive internet",
     "extractDir": "zen",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

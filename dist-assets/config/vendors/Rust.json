@@ -8,7 +8,7 @@
       "rustup"
     ],
     "extractDir": "rust",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [],
     "releaseSource": {

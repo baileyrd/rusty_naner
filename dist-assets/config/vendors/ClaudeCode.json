@@ -6,7 +6,7 @@
       "claude"
     ],
     "extractDir": "claude-code",
-    "enabled": false,
+    "enabled": true,
     "required": false,
     "dependencies": [
       "NodeJS"
