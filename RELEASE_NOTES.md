@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.1.
+
+## v0.9.1 — 2026-08-19
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.0...v0.9.1).
+
 - The #81 keystroke race is still with us, one layer down: reported live on
   v0.9.0, `naner update`/`naner init` re-launch themselves into a console of
   their own to dodge racing the calling shell for input (the v0.8.1 fix) —

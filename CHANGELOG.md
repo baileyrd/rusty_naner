@@ -1,4 +1,8 @@
 ## [Unreleased]
+
+Nothing merged since v0.9.1.
+
+## [0.9.1] - 2026-08-19
 ### Fixed
 - `naner init`/`naner update`, when re-launched into a console of their own
   (the #81 keystroke-race fix), never wired up stdin — `AllocConsole`
