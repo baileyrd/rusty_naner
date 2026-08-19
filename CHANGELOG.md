@@ -1,5 +1,9 @@
 ## [Unreleased]
 ### Added
+- New vendor `Uv` (uv, Astral's Python package/project manager): GitHub
+  release source with `.sha256` sidecar verification, disabled by default,
+  `provides: ["uv", "uvx"]`, cache/python/tool dirs redirected under
+  `%NANER_ROOT%\home`, and a `VendorPaths` entry for `uv.exe`.
 - `naner suggest <name> [--porcelain]`: maps a command the shell failed to
   find to the vendor providing it (vendor `provides` lists first, then
   `VendorPaths`-derived names) and prints the install/enable/"not a naner

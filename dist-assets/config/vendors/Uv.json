@@ -1,0 +1,39 @@
+{
+  "Uv": {
+    "name": "uv",
+    "description": "Extremely fast Python package and project manager, written in Rust",
+    "provides": [
+      "uv",
+      "uvx"
+    ],
+    "extractDir": "uv",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "astral-sh/uv",
+      "assetPattern": "uv-x86_64-pc-windows-msvc.zip",
+      "fallback": {
+        "version": "0.8.4",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.8.4/uv-x86_64-pc-windows-msvc.zip",
+        "fileName": "uv-x86_64-pc-windows-msvc.zip",
+        "size": "~15"
+      }
+    },
+    "checksumSource": {
+      "type": "sidecar",
+      "suffix": ".sha256"
+    },
+    "pathPriority": 55,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\uv"
+    ],
+    "environmentVariables": {
+      "UV_CACHE_DIR": "%NANER_ROOT%\\home\\.cache\\uv",
+      "UV_PYTHON_INSTALL_DIR": "%NANER_ROOT%\\home\\.local\\share\\uv\\python",
+      "UV_TOOL_DIR": "%NANER_ROOT%\\home\\.local\\share\\uv\\tools",
+      "UV_TOOL_BIN_DIR": "%NANER_ROOT%\\home\\.local\\bin"
+    }
+  }
+}

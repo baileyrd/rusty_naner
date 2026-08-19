@@ -19,7 +19,8 @@
     "Cargo": "%NANER_ROOT%\\vendor\\rust\\cargo\\bin\\cargo.exe",
     "Ruby": "%NANER_ROOT%\\vendor\\ruby\\bin\\ruby.exe",
     "Gem": "%NANER_ROOT%\\vendor\\ruby\\bin\\gem.cmd",
-    "DotNet": "%NANER_ROOT%\\vendor\\dotnet-sdk\\dotnet.exe"
+    "DotNet": "%NANER_ROOT%\\vendor\\dotnet-sdk\\dotnet.exe",
+    "Uv": "%NANER_ROOT%\\vendor\\uv\\uv.exe"
   },
   "Environment": {
     "UnifiedPath": true,
