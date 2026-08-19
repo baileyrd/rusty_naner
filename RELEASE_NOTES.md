@@ -9,7 +9,19 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.4.
+- Reported live right after v0.9.4 shipped: at the "Press any key to
+  exit..." pause (the one naner-init shows in a console of its own before
+  closing), pressing a key did nothing — the screenshot showed keystrokes
+  piling up as literal echoed characters on screen, and only Enter actually
+  closed it. The message promised a single keypress; the implementation was
+  `std::io::stdin().lock().read_line(...)`, a line-buffered read that
+  needs Enter and echoes every character typed while it waits. Added
+  `naner_core::console::wait_for_keypress`, which briefly clears
+  `ENABLE_LINE_INPUT`/`ENABLE_ECHO_INPUT` on `CONIN$`, blocks on
+  `ReadConsoleInputW` for the first key-down event, and restores the
+  original console mode before returning — a real single-keypress wait,
+  with the old line-read kept as a fallback if raw mode can't be
+  established for some reason.
 
 ## v0.9.4 — 2026-08-19
 
