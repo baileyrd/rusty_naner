@@ -103,7 +103,8 @@ fn config_schema_value() -> serde_json::Value {
                             "PreservePath": { "type": "boolean" },
                             "InheritSystemPath": { "type": "boolean" },
                             "VerboseLogging": { "type": "boolean" },
-                            "DebugMode": { "type": "boolean" }
+                            "DebugMode": { "type": "boolean" },
+                            "IsolateEnvironment": { "type": "boolean" }
                         }
                     },
                     "CustomProfiles": {

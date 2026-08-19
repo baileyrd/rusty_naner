@@ -123,7 +123,12 @@
     "PreservePath": false,
     "InheritSystemPath": true,
     "VerboseLogging": false,
-    "DebugMode": false
+    "DebugMode": false,
+    // Testing/dev switch: clears host env vars (other than a small
+    // OS-survival allowlist) before naner sets its own, so tools already
+    // installed system- or user-wide can't leak into a test run. Off by
+    // default; also settable per-invocation with NANER_ISOLATE_ENVIRONMENT=true.
+    "IsolateEnvironment": false
   },
   "CustomProfiles": {
     // Opt-in examples (comments are stripped by the loader — uncomment to
