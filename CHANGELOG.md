@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.5] - 2026-08-19
 ### Fixed
 - The "Press any key to exit..." pause at the end of `naner init` (and other
   exit paths that hold a console of naner's own open) said "any key" but
