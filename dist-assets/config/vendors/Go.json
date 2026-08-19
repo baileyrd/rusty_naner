@@ -14,9 +14,9 @@
       "type": "golang-api",
       "url": "https://go.dev/dl/?mode=json",
       "fallback": {
-        "version": "go1.21.6",
-        "url": "https://go.dev/dl/go1.21.6.windows-amd64.zip",
-        "fileName": "go1.21.6.windows-amd64.zip",
+        "version": "go1.26.6",
+        "url": "https://go.dev/dl/go1.26.6.windows-amd64.zip",
+        "fileName": "go1.26.6.windows-amd64.zip",
         "size": "~140"
       }
     },

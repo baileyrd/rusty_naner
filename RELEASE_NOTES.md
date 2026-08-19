@@ -9,6 +9,19 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+- First real `refresh-pins` pass over the shipped pins, from a sandbox whose
+  proxy blocks `api.github.com`: the four resolvable-from-here vendors were
+  refreshed and their new URLs verified live — Go `go1.21.6` -> `go1.26.6`,
+  Node `v20.11.0` -> `v26.7.0`, .NET SDK `10.0.102` -> `10.0.400`, MSYS2
+  `20240727` -> `20260611`. The 14 GitHub-sourced pins couldn't be checked
+  from this environment and are unchanged; the four static-URL vendors are
+  manual by design. The pass also caught a real installer bug the new
+  command surfaced: `version_from_file_name` took the *first* digit run in a
+  file name, so every MSYS2 install recorded `.vendor-version` as literally
+  `"2"` (the digit in "msys2") and 7-Zip's scrape as `"7"`. It now picks the
+  run carrying the most digits and trims a trailing dot the pattern could
+  drag in from the extension.
+
 - Vendor version-pin upkeep, in three connected pieces. `naner refresh-pins
   [dir] [--dry-run]` re-resolves what upstream currently calls latest for
   every dynamically-sourced vendor and rewrites the hardcoded `fallback`

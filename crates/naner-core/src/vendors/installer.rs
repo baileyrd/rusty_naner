@@ -1038,13 +1038,29 @@ fn with_v_prefix(version: &str) -> String {
 
 /// `ExtractVersionFromFileName`: first `(\d+\.?\d*\.?\d*\.?\d*)` match, else
 /// "latest".
+/// Best version-looking run in a file name. The *first* match is usually
+/// wrong: `msys2-base-x86_64-20240727.tar.xz` starts with the `2` in "msys2"
+/// and `7z2408-x64.msi` with the `7` in "7z", so every MSYS2 install recorded
+/// `.vendor-version` as literally `"2"`. The match carrying the most digits
+/// is the version; on a tie the later one wins (versions sit near the end).
 fn version_from_file_name(file_name: &str) -> String {
     let regex = crate::regex_shim::compile(r"(\d+\.?\d*\.?\d*\.?\d*)").unwrap();
-    regex
-        .captures(file_name)
-        .and_then(|c| c.get(1))
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| "latest".to_string())
+    let mut best: Option<String> = None;
+    for captures in regex.captures_iter(file_name) {
+        // The pattern's optional dots can trail into a file extension
+        // (`20240727.` out of `20240727.tar.xz`); a version never ends in one.
+        let Some(candidate) = captures.get(1).map(|s| s.trim_end_matches('.').to_string()) else {
+            continue;
+        };
+        let digits = |s: &str| s.chars().filter(char::is_ascii_digit).count();
+        if best
+            .as_deref()
+            .is_none_or(|b| digits(&candidate) >= digits(b))
+        {
+            best = Some(candidate);
+        }
+    }
+    best.unwrap_or_else(|| "latest".to_string())
 }
 
 /// Dependency-first ordering (fix for B3): repeatedly emit the first vendor
@@ -1466,6 +1482,27 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use std::io::Write;
+
+    /// The first digit run in a file name is usually part of the *name*
+    /// (`msys2`, `7z`, `x86_64`), not the version — MSYS2 installs recorded
+    /// `.vendor-version` as literally `"2"` because of it.
+    #[test]
+    fn version_from_file_name_picks_the_version_not_the_first_digit() {
+        assert_eq!(
+            version_from_file_name("msys2-base-x86_64-20240727.tar.xz"),
+            "20240727"
+        );
+        assert_eq!(version_from_file_name("7z2408-x64.msi"), "2408");
+        assert_eq!(
+            version_from_file_name("node-v20.11.0-win-x64.zip"),
+            "20.11.0"
+        );
+        assert_eq!(
+            version_from_file_name("go1.21.6.windows-amd64.zip"),
+            "1.21.6"
+        );
+        assert_eq!(version_from_file_name("no-digits-here.zip"), "latest");
+    }
 
     /// Stub HTTP: canned text responses per URL; downloads write canned
     /// bytes (or fail when the URL is marked bad).
@@ -2341,9 +2378,10 @@ mod tests {
             "https://repo.msys2.org/distrib/x86_64/msys2-base-x86_64-20240727.tar.xz"
         );
         assert_eq!(info.file_name, "msys2-base-x86_64-20240727.tar.xz");
-        // Quirk preserved: the C# `(\d+\.?\d*\.?\d*\.?\d*)` regex matches the
-        // FIRST digit run — the "2" in "msys2" — not the date.
-        assert_eq!(info.version.as_deref(), Some("2"));
+        // The C# regex took the FIRST digit run — the "2" in "msys2" — so
+        // every MSYS2 install recorded `.vendor-version` as literally "2".
+        // Fixed: the run with the most digits is the version.
+        assert_eq!(info.version.as_deref(), Some("20240727"));
     }
 
     /// A directory index lists many archives, ascending. Taking the leftmost
@@ -2400,7 +2438,7 @@ mod tests {
             None
         );
 
-        assert_eq!(version_from_file_name("7z2408-x64.msi"), "7"); // "7" in "7z"
+        assert_eq!(version_from_file_name("7z2408-x64.msi"), "2408");
         assert_eq!(
             version_from_file_name("PowerShell-7.4.6-win-x64.zip"),
             "7.4.6"
