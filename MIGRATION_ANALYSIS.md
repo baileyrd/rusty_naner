@@ -86,8 +86,10 @@ kernel32 console APIs, `%VAR%` expansion, process creation, and known folders.
   retries) → optional checksum (never populated in practice; uppercase-hex,
   punctuation-stripped compare) → extract to `vendor/<extractDir>/` → flatten a single
   top-level subdirectory (rename-based) → post-install (Windows Terminal only: write
-  `.portable` marker + `settings/settings.json` from a `%NANER_ROOT%`-substituted
-  template) → write `vendor/<extractDir>/.vendor-version` → delete `vendor/.downloads`.
+  `.portable` marker + `settings/settings.json`, its four Naner profiles generated
+  fresh from `config/naner.json`'s own `Profiles` on every call — the single source of
+  truth per #83, not a second hand-maintained WT-schema template) → write
+  `vendor/<extractDir>/.vendor-version` → delete `vendor/.downloads`.
   "Installed" = extract dir exists and is non-empty. Updates delete-and-reinstall,
   **except Windows Terminal**, which is extracted over-top to preserve settings.
 - **Archive handling**: `.zip` natively (System.IO.Compression); `.7z` and `.tar.xz` by

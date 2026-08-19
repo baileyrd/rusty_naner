@@ -1,3 +1,17 @@
+## [Unreleased]
+### Changed
+- Windows Terminal's four Naner profiles in `settings/settings.json` are now
+  generated fresh from `config/naner.json`'s own `Profiles`, on every
+  install/update, instead of being hand-duplicated a second time in WT's
+  own schema in `dist-assets/home/.config/windows-terminal/settings.json`
+  (now deleted). GUIDs are unchanged and still fixed, never derived, so
+  every already-installed `settings.json` reconciles normally. A profile
+  launched directly from Windows Terminal (not via `naner --profile X`)
+  gets a `naner.exe --export-env --no-comments | Invoke-Expression`
+  self-bootstrap spliced into its `-Command`, matching what the old
+  template always did for that case; `naner --profile X` itself needs no
+  such thing, since it sets the environment before spawning `wt.exe`. (#83)
+
 ## [0.9.2] - 2026-08-19
 ### Fixed
 - The `Rust` vendor's `pathPrecedence`/`CARGO_HOME`/`RUSTUP_HOME` pointed at
