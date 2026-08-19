@@ -57,6 +57,8 @@ fn build_cli_command() -> Command {
         .subcommand(
             Command::new("suggest").about("Map a missing command to the vendor providing it"),
         )
+        .subcommand(Command::new("outdated").about("Compare installed vendors against latest"))
+        .subcommand(Command::new("refresh-pins").about("Refresh vendor fallback pins"))
 }
 
 #[cfg(test)]

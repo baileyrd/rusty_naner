@@ -1,5 +1,17 @@
 ## [Unreleased]
 ### Added
+- `naner refresh-pins [dir] [--dry-run] [--porcelain]`: re-resolves upstream
+  latest for every dynamically-sourced vendor and rewrites the `fallback`
+  pins in `config/vendors/*.json`; static-URL vendors reported manual-only.
+- `naner outdated [--porcelain]`: compares installed vendors'
+  `.vendor-version` against live upstream, flags `outdated (major)` for
+  first-segment jumps, exits non-zero when updates exist.
+- `naner doctor` now prints an offline "updates are available" nudge when an
+  installed vendor is older than its shipped fallback pin (porcelain:
+  `stale_installed`), plus a lenient vendor-version comparator in
+  `naner-core::version` (`vendor_compare`/`vendor_major_differs`) that
+  handles `go1.21.6` / `bun-v1.3.14` style strings the C#-quirk comparator
+  mangles.
 - New vendor `Uv` (uv, Astral's Python package/project manager): GitHub
   release source with `.sha256` sidecar verification, disabled by default,
   `provides: ["uv", "uvx"]`, cache/python/tool dirs redirected under

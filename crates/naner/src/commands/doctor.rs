@@ -3,7 +3,7 @@
 //! Supports `--porcelain` for machine-readable JSON output compatible with
 //! terminal side-channels (such as rusty_term's l13 / MCP protocol).
 
-use naner_core::{config, constants, logger, paths, vendors};
+use naner_core::{config, constants, logger, paths, vendors, version};
 use serde_json::json;
 
 pub fn execute(args: &[String]) -> i32 {
@@ -55,6 +55,23 @@ pub fn execute(args: &[String]) -> i32 {
         .map(|(name, ..)| name.as_str())
         .collect();
 
+    // Offline update nudge: an installed vendor whose recorded version is
+    // older than its shipped fallback pin has verifiably fallen behind,
+    // without touching the network. The pin is a floor, not the truth —
+    // `refresh-pins` keeps it recent, `naner outdated` does the live check —
+    // so this can only under-report, never cry wolf. Informational: it does
+    // not flip the health verdict.
+    let stale_installed: Vec<String> = vendor_defs
+        .iter()
+        .filter(|v| vendors_loader.is_vendor_installed(v))
+        .filter_map(|v| {
+            let installed = vendors_loader.vendor_version(v)?;
+            let pin = v.fallback_version.as_deref()?;
+            (version::vendor_compare(&installed, pin) == std::cmp::Ordering::Less)
+                .then(|| format!("{} (installed {installed}, pinned {pin})", v.name))
+        })
+        .collect();
+
     let config_path = config::find_configuration_file(&naner_root);
     let config_ok = config_path
         .as_ref()
@@ -76,7 +93,8 @@ pub fn execute(args: &[String]) -> i32 {
                     "installed": installed,
                     "required": required
                 })
-            }).collect::<Vec<_>>()
+            }).collect::<Vec<_>>(),
+            "stale_installed": stale_installed,
         });
         println!("{}", json_output);
         return exit_code;
@@ -92,6 +110,15 @@ pub fn execute(args: &[String]) -> i32 {
         println!("\x1b[{color}m  {symbol} {name} (vendor/{dir})\x1b[0m");
     }
     logger::newline();
+
+    if !stale_installed.is_empty() {
+        logger::warning("Updates are available for installed vendor(s):");
+        for line in &stale_installed {
+            logger::warning(&format!("  - {line}"));
+        }
+        logger::info("Run 'naner outdated' for a live check, or 'naner update-vendors' to update.");
+        logger::newline();
+    }
 
     let check_conflicts = args
         .iter()

@@ -144,6 +144,27 @@ impl VendorConfigurationLoader {
         }
     }
 
+    /// A loader over an explicit vendor-definitions directory, for tooling
+    /// that operates outside a naner tree — `refresh-pins` pointed at this
+    /// repo's own `dist-assets/config/vendors`, for instance. Install-state
+    /// queries (`is_vendor_installed`, `vendor_version`) resolve against
+    /// `<dir>/../../vendor`, which simply won't exist for such a directory
+    /// and correctly answers "not installed."
+    pub fn from_vendors_dir(vendors_dir: &Path) -> Self {
+        let root = vendors_dir
+            .parent()
+            .and_then(Path::parent)
+            .unwrap_or(vendors_dir);
+        Self {
+            config_dir: vendors_dir.to_path_buf(),
+            legacy_config_path: vendors_dir
+                .parent()
+                .unwrap_or(vendors_dir)
+                .join(constants::LEGACY_VENDORS_CONFIG_FILE_NAME),
+            vendor_dir: root.join(constants::directory_names::VENDOR),
+        }
+    }
+
     /// `LoadVendors`: file → parse → convert, with the default-essential
     /// fallback and the same warnings.
     /// Vendors the user has actually opted into.
