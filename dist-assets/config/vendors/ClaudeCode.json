@@ -1,0 +1,19 @@
+{
+  "ClaudeCode": {
+    "name": "Claude Code",
+    "description": "Anthropic's agentic coding CLI",
+    "provides": [
+      "claude"
+    ],
+    "extractDir": "claude-code",
+    "enabled": false,
+    "required": false,
+    "dependencies": [
+      "NodeJS"
+    ],
+    "releaseSource": {
+      "type": "npm",
+      "package": "@anthropic-ai/claude-code"
+    }
+  }
+}

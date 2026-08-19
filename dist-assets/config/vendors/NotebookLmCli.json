@@ -1,0 +1,21 @@
+{
+  "NotebookLmCli": {
+    "name": "NotebookLM CLI",
+    "description": "Unofficial CLI/MCP server for automating Google NotebookLM (notebooklm-py)",
+    "provides": [
+      "notebooklm",
+      "notebooklm-mcp",
+      "notebooklm-server"
+    ],
+    "extractDir": "notebooklm-cli",
+    "enabled": false,
+    "required": false,
+    "dependencies": [
+      "Anaconda"
+    ],
+    "releaseSource": {
+      "type": "pip",
+      "package": "notebooklm-py"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "OhMyPosh": {
+    "name": "Oh My Posh",
+    "description": "Prompt theme engine for any shell",
+    "provides": [
+      "oh-my-posh"
+    ],
+    "extractDir": "oh-my-posh",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://cdn.ohmyposh.dev/releases/latest/posh-windows-amd64.exe",
+      "version": "latest",
+      "fileName": "posh-windows-amd64.exe",
+      "size": "~15"
+    },
+    "checksumSource": {
+      "type": "scrape",
+      "url": "https://cdn.ohmyposh.dev/releases/latest/checksums.txt",
+      "pattern": "([0-9a-fA-F]{64})\\s+{FILE}"
+    },
+    "installType": "binary",
+    "binaryName": "oh-my-posh.exe",
+    "pathPriority": 70,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\oh-my-posh"
+    ]
+  }
+}

@@ -28,6 +28,21 @@ pub enum VendorSourceType {
     NodeJsApi,
     GolangApi,
     DotNetApi,
+    /// Additive (no C# counterpart): a tool published only as an npm package
+    /// (`releaseSource.package`). Resolution asks the npm registry for the
+    /// `latest` dist-tag; installation runs the vendored NodeJS's `npm.cmd`
+    /// into `home\.npm-global` (already on PATH) instead of downloading an
+    /// archive, and leaves a marker directory under `vendor\<extractDir>`
+    /// carrying only `.vendor-version` so installed-state and `outdated`
+    /// checks keep working. npm verifies its own tarball integrity;
+    /// `naner.lock` does not pin these.
+    Npm,
+    /// Additive: the pip twin of [`Self::Npm`] — a tool published on PyPI
+    /// (`releaseSource.package`), resolved against `pypi.org`'s JSON API and
+    /// installed with the vendored Anaconda's `python.exe -m pip install
+    /// --user` into `home\.local` (whose `bin`/`Scripts` are already on
+    /// PATH). Same marker-directory contract, same no-lockfile rule.
+    Pip,
 }
 
 /// `WebScrapeConfig`.
@@ -111,6 +126,13 @@ pub struct VendorDefinition {
     /// for `naner suggest`'s command-not-found mapping. Optional: vendors
     /// without one are still reachable through `naner.json`'s `VendorPaths`.
     pub provides: Vec<String>,
+    /// Package name for `source_type == Npm` or `Pip`
+    /// (`@anthropic-ai/claude-code`, `notebooklm-py`).
+    pub package_name: Option<String>,
+    /// For `installType: "binary"`: the file name the verified download is
+    /// placed under in the vendor directory (`oh-my-posh.exe`), so the
+    /// command users type doesn't have to be the upstream artifact name.
+    pub binary_name: Option<String>,
 }
 
 impl Default for VendorDefinition {
@@ -142,6 +164,8 @@ impl Default for VendorDefinition {
             path_precedence: Vec::new(),
             environment_variables: crate::collections::OrderedMap::new(),
             provides: Vec::new(),
+            package_name: None,
+            binary_name: None,
         }
     }
 }

@@ -1,0 +1,17 @@
+{
+  "Antigravity": {
+    "name": "Antigravity",
+    "description": "Google's agentic IDE",
+    "extractDir": "antigravity",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://storage.googleapis.com/antigravity-public/antigravity-hub/2.8.1-6512087774658560/windows-x64/Antigravity-x64.exe",
+      "version": "2.8.1",
+      "fileName": "Antigravity-x64.exe",
+      "size": "~133"
+    }
+  }
+}

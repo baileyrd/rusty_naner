@@ -1,0 +1,28 @@
+{
+  "GitHubCli": {
+    "name": "GitHub CLI",
+    "description": "Official command-line tool for GitHub",
+    "provides": [
+      "gh"
+    ],
+    "extractDir": "gh",
+    "enabled": false,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "cli/cli",
+      "assetPattern": "windows_amd64.zip",
+      "fallback": {
+        "version": "v2.86.0",
+        "url": "https://github.com/cli/cli/releases/download/v2.86.0/gh_2.86.0_windows_amd64.zip",
+        "fileName": "gh_2.86.0_windows_amd64.zip",
+        "size": "~10"
+      }
+    },
+    "pathPriority": 65,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\gh\\bin"
+    ]
+  }
+}

@@ -9,6 +9,32 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+- Seven new vendors, and two new ways for a vendor to install. Most CLI
+  tools these days are distributed through a language package manager
+  rather than a standalone archive, so two release-source types join the
+  existing six: `npm` (resolved against `registry.npmjs.org`'s `latest`
+  dist-tag, installed with the vendored NodeJS's `npm install -g` into
+  `home\.npm-global`) and `pip` (PyPI's JSON API, `python -m pip install
+  --user` into `home\.local` via the vendored Anaconda). Both leave only a
+  `.vendor-version` marker under `vendor\<name>\` — the real install lives
+  in the package manager's own tree — and neither is pinned by
+  `naner.lock`; the package manager verifies its own artifact. A third
+  addition, `installType: "binary"`, covers a vendor that ships as one
+  verified executable with nothing to extract: the download is placed
+  directly under the vendor directory instead of through the archive
+  extractor.
+
+  New vendors: `GitHubCli` (`gh`, GitHub-sourced), `ClaudeCode`, `OhMyPi`,
+  and `Codex` (all npm-sourced, all depending on the `NodeJS` vendor),
+  `NotebookLmCli` (`notebooklm-py`, pip-sourced, depending on `Anaconda`),
+  `OhMyPosh` (a `binary`-type static download, checksum-verified against
+  the shared `checksums.txt` its CDN publishes alongside every release —
+  the same scrape mechanism Anaconda's resolver already used, applied to a
+  manifest instead of a directory listing), and `Antigravity` (a static
+  `.exe`; Google publishes no digest for it, so it installs unverified,
+  the same posture OneCommander already has). All seven ship disabled by
+  default like every other optional vendor.
+
 - Dotfolder leakage into the real `C:\Users\<name>\` profile is closed for
   the tools that can be redirected. naner has always pointed `HOME` into the
   portable tree, but Windows tools mostly resolve home via
