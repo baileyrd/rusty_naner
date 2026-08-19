@@ -49,6 +49,13 @@
           },
           "description": "List of vendor IDs that must be installed before this one"
         },
+        "provides": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Bare executable names (no extension) this vendor puts on PATH, e.g. [\"node\", \"npm\", \"npx\"]. Consumed by `naner suggest` to map a command the shell failed to find back to the vendor to install or enable. Optional: vendors without one are still reachable through names derived from naner.json's VendorPaths."
+        },
         "releaseSource": {
           "$ref": "#/definitions/releaseSource"
         },

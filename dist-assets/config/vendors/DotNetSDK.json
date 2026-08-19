@@ -2,6 +2,9 @@
   "DotNetSDK": {
     "name": ".NET SDK",
     "description": "Software development kit for building .NET applications (required for C# migration)",
+    "provides": [
+      "dotnet"
+    ],
     "extractDir": "dotnet-sdk",
     "enabled": false,
     "required": false,

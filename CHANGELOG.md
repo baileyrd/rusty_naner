@@ -1,5 +1,13 @@
 ## [Unreleased]
 ### Added
+- `naner suggest <name> [--porcelain]`: maps a command the shell failed to
+  find to the vendor providing it (vendor `provides` lists first, then
+  `VendorPaths`-derived names) and prints the install/enable/"not a naner
+  shell" hint; silent with exit 1 on no match. `setup-shell` writes matching
+  command-not-found hooks for PowerShell and Bash, the shipped `profile.ps1`
+  gains the PowerShell hook, and vendor definitions accept an optional
+  `provides` array (shipped for NodeJS, Bun, Go, Rust, Ruby, Anaconda,
+  DotNetSDK, GitForWindows, PowerShell, SevenZip). (#103)
 - The first-run bootstrap (and `naner init`) now offers to put naner on the
   user PATH after a successful install — the same edit `naner add-to-path`
   makes, as an opt-in `(Y/n)` prompt. Declining just prints how to do it

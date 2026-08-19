@@ -2,6 +2,11 @@
   "NodeJS": {
     "name": "Node.js",
     "description": "JavaScript runtime built on Chrome's V8 engine",
+    "provides": [
+      "node",
+      "npm",
+      "npx"
+    ],
     "extractDir": "nodejs",
     "enabled": false,
     "required": false,

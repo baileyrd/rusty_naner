@@ -2,6 +2,10 @@
   "Bun": {
     "name": "Bun",
     "description": "Fast all-in-one JavaScript runtime, bundler, test runner and package manager",
+    "provides": [
+      "bun",
+      "bunx"
+    ],
     "extractDir": "bun",
     "enabled": false,
     "required": false,

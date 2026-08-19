@@ -9,6 +9,21 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+- Command-not-found suggestions (#103): typing `node` in a shell where naner
+  could provide it now prints what to do instead of only the shell's generic
+  error. `naner suggest <name> [--porcelain]` maps an executable name to a
+  vendor — each vendor's new optional `provides` list first (shipped for the
+  ten tool vendors), then names derived from `naner.json`'s `VendorPaths` —
+  and prints the state-appropriate next step: install it, flip `"enabled":
+  true` first for a disabled vendor (since `naner install` refuses those), or
+  note the tool is only on PATH inside naner-launched shells. No match means
+  no output and a non-zero exit, so a wrong guess never outshouts the shell's
+  own error. `setup-shell` now writes the matching hooks
+  (`CommandNotFoundAction` for PowerShell, `command_not_found_handle` for
+  Bash) into its managed block, and the shipped `profile.ps1` carries the
+  PowerShell hook — all guarded on `naner.exe` existing, offline, and
+  error-swallowing so a missing or moved naner never breaks a shell.
+
 - The first-run bootstrap offers PATH setup: after a successful install it
   asks whether to put `vendor\bin` on the user PATH (the `add-to-path`
   edit), so a fresh install ends with `naner` callable from any new shell

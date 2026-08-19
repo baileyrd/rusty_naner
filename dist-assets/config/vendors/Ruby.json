@@ -2,6 +2,13 @@
   "Ruby": {
     "name": "Ruby",
     "description": "Dynamic, open source programming language",
+    "provides": [
+      "ruby",
+      "gem",
+      "bundle",
+      "irb",
+      "rake"
+    ],
     "extractDir": "ruby",
     "enabled": false,
     "required": false,

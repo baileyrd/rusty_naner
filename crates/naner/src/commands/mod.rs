@@ -21,6 +21,7 @@ pub mod root;
 pub mod schema;
 pub mod setup_shell;
 pub mod shell_integration;
+pub mod suggest;
 pub mod vendors;
 pub mod version;
 
@@ -54,8 +55,9 @@ pub mod names {
     pub const UPDATE: &str = "update";
     pub const CHECK_UPDATE: &str = "check-update";
     pub const ADD_TO_PATH: &str = "add-to-path";
+    pub const SUGGEST: &str = "suggest";
 
-    pub const CONSOLE_COMMANDS: [&str; 29] = [
+    pub const CONSOLE_COMMANDS: [&str; 30] = [
         VERSION,
         VERSION_SHORT,
         HELP,
@@ -85,6 +87,7 @@ pub mod names {
         UPDATE,
         CHECK_UPDATE,
         ADD_TO_PATH,
+        SUGGEST,
     ];
 }
 
@@ -119,6 +122,7 @@ pub enum Verb {
     Update,
     CheckUpdate,
     AddToPath,
+    Suggest,
 }
 
 impl Verb {
@@ -150,6 +154,7 @@ impl Verb {
             names::UPDATE => Self::Update,
             names::CHECK_UPDATE => Self::CheckUpdate,
             names::ADD_TO_PATH => Self::AddToPath,
+            names::SUGGEST => Self::Suggest,
             _ => return None,
         })
     }
@@ -182,6 +187,7 @@ impl Verb {
             Self::Update => bootstrap::execute_update(state),
             Self::CheckUpdate => bootstrap::execute_check_update(),
             Self::AddToPath => add_to_path::execute(rest),
+            Self::Suggest => suggest::execute(rest),
         }
     }
 }
@@ -252,6 +258,7 @@ mod tests {
             names::UPDATE,
             names::CHECK_UPDATE,
             names::ADD_TO_PATH,
+            names::SUGGEST,
         ] {
             assert!(
                 names::CONSOLE_COMMANDS.contains(&name),
@@ -321,6 +328,7 @@ mod tests {
             Verb::Update,
             Verb::CheckUpdate,
             Verb::AddToPath,
+            Verb::Suggest,
         ];
         for verb in all {
             assert!(
