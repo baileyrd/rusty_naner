@@ -393,7 +393,7 @@ mod vendor_merge_tests {
     /// real shipped vendor directory, so a priority typo fails here.
     #[test]
     fn the_shipped_config_reproduces_the_original_path_order() {
-        const EXPECTED: [&str; 29] = [
+        const EXPECTED: [&str; 28] = [
             "bin",
             "home/.npm-global",
             "home/go/bin",
@@ -403,8 +403,7 @@ mod vendor_merge_tests {
             "home/.local/Scripts",
             "vendor/bin",
             "vendor/go/bin",
-            "vendor/rust/cargo/bin",
-            "vendor/rust/rustc/bin",
+            "vendor/rust/.cargo/bin",
             "vendor/ruby/bin",
             "vendor/anaconda",
             "vendor/anaconda/Scripts",

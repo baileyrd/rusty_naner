@@ -9,6 +9,24 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+- `rustup`/`cargo`/`rustc` were unreachable from every naner-launched shell,
+  no matter how you launched one — reported live after enabling the Rust
+  vendor. `Rust.json`'s `pathPrecedence` pointed at
+  `vendor/rust/cargo/bin`/`vendor/rust/rustc/bin`, and its `CARGO_HOME`/
+  `RUSTUP_HOME` env vars pointed at `home/.cargo`/`home/.rustup` — neither
+  matches where `rustup-init` actually puts things. The installer (per
+  `archives::run_exe_installer`, already documented in
+  `MIGRATION_ANALYSIS.md` as "RUSTUP_HOME/CARGO_HOME pointed into the vendor
+  dir") runs `rustup-init` with `CARGO_HOME`/`RUSTUP_HOME` set to the
+  vendor's own `.cargo`/`.rustup` — rustup then drops every proxy binary
+  (`rustup`, `cargo`, `rustc`, `rustfmt`, ...) into that single
+  `$CARGO_HOME\bin`. `naner install` reported success, `naner doctor` and
+  `naner suggest` both reported the vendor installed and "on PATH" — the
+  binaries just never lived at the path the config pointed to. Fixed
+  `Rust.json`'s `pathPrecedence`/`CARGO_HOME`/`RUSTUP_HOME` and
+  `naner.json`'s `VendorPaths.Rustc`/`Cargo` to point at the real
+  `vendor/rust/.cargo/bin`.
+
 - Every optional vendor now defaults to `"enabled": true`. Until now, only
   the four essential tools (Git for Windows, PowerShell, 7-Zip, Windows
   Terminal) shipped enabled, and the other 26 — Rust, Go, NodeJS, Ruby,
