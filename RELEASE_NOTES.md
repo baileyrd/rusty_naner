@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.0.
+
+## v0.9.0 — 2026-08-19
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.8.2...v0.9.0).
+
 - Seven new vendors, and two new ways for a vendor to install. Most CLI
   tools these days are distributed through a language package manager
   rather than a standalone archive, so two release-source types join the
