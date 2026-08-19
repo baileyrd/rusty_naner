@@ -1,6 +1,12 @@
 ## [Unreleased]
-
-Nothing merged since v0.9.0.
+### Fixed
+- `naner init`/`naner update`, when re-launched into a console of their own
+  (the #81 keystroke-race fix), never wired up stdin — `AllocConsole`
+  claimed the console `CreateProcess` had just created for the child and
+  output ended up bound correctly, but `STD_INPUT_HANDLE` was never
+  reopened, so the `Y`/Enter prompt sat there taking every keystroke and
+  doing nothing, silently, in the relaunched window. `console::setup` now
+  reopens `CONIN$` the same way it has always reopened `CONOUT$`.
 
 ## [0.9.0] - 2026-08-19
 ### Added

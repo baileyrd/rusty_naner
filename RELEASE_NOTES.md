@@ -9,7 +9,22 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.0.
+- The #81 keystroke race is still with us, one layer down: reported live on
+  v0.9.0, `naner update`/`naner init` re-launch themselves into a console of
+  their own to dodge racing the calling shell for input (the v0.8.1 fix) —
+  but the relaunched child never actually wired stdin to that console.
+  `AllocConsole` succeeds (it already owns the console `CreateProcess` just
+  created for it), `console::setup`'s existing `reopen_conout` dance gets
+  stdout/stderr working — visibly, since the version check and prompt text
+  render fine — but nothing ever reopens `CONIN$` the same way, so
+  `STD_INPUT_HANDLE` stays whatever the GUI-subsystem loader left it
+  (unset). The `Y`/Enter prompt sits there forever: no race this time, no
+  error either, just silence — every keystroke goes to a handle that was
+  never opened. `console::setup` now reopens `CONIN$` right alongside
+  `CONOUT$`/stderr, the same technique that already worked for output,
+  applied to the one std handle it never covered. `Start-Process -Wait
+  .\naner.exe -ArgumentList update` remains a working manual escape hatch
+  either way — it never goes through this relaunch path at all.
 
 ## v0.9.0 — 2026-08-19
 
