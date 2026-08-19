@@ -9,6 +9,24 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+- Vendor version-pin upkeep, in three connected pieces. `naner refresh-pins
+  [dir] [--dry-run]` re-resolves what upstream currently calls latest for
+  every dynamically-sourced vendor and rewrites the hardcoded `fallback`
+  pins in `config/vendors/*.json` — the pins existed for installs whose
+  resolution fails, but nothing ever refreshed them (Go's fallback said
+  `go1.21.6`, Node's `v20.11.0`), so a degraded install silently got a
+  years-old version. `naner outdated` answers the user-facing half: it
+  compares each installed vendor's `.vendor-version` against live upstream
+  and flags major-version jumps distinctly, exiting non-zero when updates
+  exist. And `naner doctor` gains an offline nudge — an installed vendor
+  older than its fallback pin prints an "updates are available" warning
+  with no network touched, which stays honest precisely because
+  `refresh-pins` keeps the pins recent. Resolution deliberately skips both
+  `naner.lock` and the fallback cascade: checking a pin against the pin
+  itself would always answer "current". Static-URL vendors (Anaconda,
+  Inkscape, HiFile, OneCommander) are reported manual-only in both
+  commands — their pinned version *is* the install.
+
 - New vendor: uv, Astral's Python package and project manager. Ships as a
   `github`-sourced zip (`astral-sh/uv`, `uv-x86_64-pc-windows-msvc.zip`)
   verified against the `.sha256` sidecar uv publishes alongside every asset

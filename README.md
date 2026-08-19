@@ -95,8 +95,8 @@ the binary in the tree — including itself, by renaming the running exe
 aside.
 
 `naner --help` lists every subcommand — `doctor`, `schema`, `completions`,
-`setup-shell`, `suggest`, `repair`, `profile`, `diff`, `bench`, `migrate`,
-`pack`, `lock`, and more — each with its own `--help` text; the full reference is
+`setup-shell`, `suggest`, `outdated`, `refresh-pins`, `repair`, `profile`,
+`diff`, `bench`, `migrate`, `pack`, `lock`, and more — each with its own `--help` text; the full reference is
 also in [Core CLI Subcommands](#core-cli-subcommands) below.
 
 ## Status
@@ -173,6 +173,8 @@ that cross-publish has been removed. Phases 0–5 done:
 - **`naner setup-shell [pwsh|bash|cmd] [--dry-run]`**: Adds the naner environment export to the shell's startup file, idempotently and with a backup — plus a command-not-found hook (`CommandNotFoundAction` for PowerShell, `command_not_found_handle` for Bash) that calls `naner suggest` so a missing command prints how to get it. `cmd` has no startup file to edit, so it prints the line and says why.
 - **`naner suggest <name> [--porcelain]`**: Maps an executable name the shell failed to find to the vendor that provides it — from each vendor's optional `provides` list, falling back to names derived from `naner.json`'s `VendorPaths` — and prints the right next step: `naner install <vendor>`, the `"enabled": true` edit for a disabled vendor, or a reminder that the tool is only on PATH inside naner-launched shells. Offline, fast, and silent (exit 1) when nothing matches, so the shell hooks can call it on every miss.
 - **`naner add-to-path [--remove] [--dry-run]`**: Puts `%NANER_ROOT%\vendor\bin` on the *user* PATH (`HKCU\Environment`, no admin), so `naner` itself resolves from any shell without importing the whole environment the way `setup-shell` does. Edits the registry value directly — `setx` truncates at 1024 characters — preserving its type and the rest of its contents, then broadcasts the change so new shells see it. `--remove` undoes it.
+- **`naner outdated [--porcelain]`**: Compares each *installed* vendor's recorded version (`.vendor-version`) against what its release source currently calls latest, flagging major-version jumps distinctly (`outdated (major)`). Exits non-zero when updates exist, so scripts can gate on it; `naner update-vendors` remains the tool that actually updates. Static-URL vendors are reported `unchecked` — their pinned version *is* the install.
+- **`naner refresh-pins [dir] [--dry-run] [--porcelain]`**: Re-resolves upstream latest for every vendor with a dynamic release source and rewrites the hardcoded `fallback` pin (`version`/`url`/`fileName`) in `config/vendors/<Key>.json` — the maintenance pass that stops fallback pins rotting. `[dir]` points at a vendor-definitions directory explicitly (e.g. this repo's `dist-assets/config/vendors` from a checkout). Static-URL vendors are reported manual-only, never rewritten. `naner doctor` complements both offline: an installed vendor older than its (now-refreshable) fallback pin gets an "updates available" nudge with no network involved.
 - **`naner repair`**: Cleans broken staging directories and re-bootstraps missing essential vendor tools.
 - **`naner profile [list|export|import]`**: Lists profiles, exports one to JSON, and imports one back. `import` writes into `CustomProfiles` (so a built-in of the same name is never overwritten in place), keeps a timestamped backup, and supports `--as <name>` and `--dry-run`.
 - **`naner diff [profile]`**: Compares host environment variables against target profile environment definitions.

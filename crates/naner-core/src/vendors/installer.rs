@@ -339,18 +339,32 @@ impl<'a> UnifiedVendorInstaller<'a> {
         }
     }
 
-    /// `FetchVendorDownloadInfoAsync`: per-source resolution, then the
-    /// resolution-level fallback (both the returned-None and the threw-error
-    /// paths use it — the cascade that hides bug B1 in production).
-    fn fetch_download_info(&self, vendor: &VendorDefinition) -> Option<VendorDownloadInfo> {
-        let resolved = match vendor.source_type {
+    /// What upstream currently calls latest, resolved fresh: no `naner.lock`,
+    /// no download, and — unlike [`Self::install_vendor`]'s path — **no
+    /// fallback cascade**. `outdated` and `refresh-pins` exist to check the
+    /// hardcoded pins against reality; answering resolution failure with the
+    /// hardcoded pin would report the stale value as the truth it was meant
+    /// to be checked against. A `StaticUrl` vendor resolves to its own
+    /// configured artifact — the caller decides what "latest" means there.
+    pub fn resolve_upstream(
+        &self,
+        vendor: &VendorDefinition,
+    ) -> Result<Option<VendorDownloadInfo>, String> {
+        match vendor.source_type {
             VendorSourceType::StaticUrl => Ok(fetch_static(vendor)),
             VendorSourceType::GitHub => self.fetch_github(vendor),
             VendorSourceType::WebScrape => self.fetch_web_scrape(vendor),
             VendorSourceType::NodeJsApi => self.fetch_nodejs(),
             VendorSourceType::GolangApi => self.fetch_golang(),
             VendorSourceType::DotNetApi => self.fetch_dotnet(),
-        };
+        }
+    }
+
+    /// `FetchVendorDownloadInfoAsync`: per-source resolution, then the
+    /// resolution-level fallback (both the returned-None and the threw-error
+    /// paths use it — the cascade that hides bug B1 in production).
+    fn fetch_download_info(&self, vendor: &VendorDefinition) -> Option<VendorDownloadInfo> {
+        let resolved = self.resolve_upstream(vendor);
 
         match resolved {
             Ok(Some(mut info)) => {

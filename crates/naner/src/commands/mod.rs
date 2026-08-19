@@ -14,8 +14,10 @@ pub mod doctor;
 pub mod help;
 pub mod lock;
 pub mod migrate;
+pub mod outdated;
 pub mod pack;
 pub mod profile;
+pub mod refresh_pins;
 pub mod repair;
 pub mod root;
 pub mod schema;
@@ -56,8 +58,10 @@ pub mod names {
     pub const CHECK_UPDATE: &str = "check-update";
     pub const ADD_TO_PATH: &str = "add-to-path";
     pub const SUGGEST: &str = "suggest";
+    pub const OUTDATED: &str = "outdated";
+    pub const REFRESH_PINS: &str = "refresh-pins";
 
-    pub const CONSOLE_COMMANDS: [&str; 30] = [
+    pub const CONSOLE_COMMANDS: [&str; 32] = [
         VERSION,
         VERSION_SHORT,
         HELP,
@@ -88,6 +92,8 @@ pub mod names {
         CHECK_UPDATE,
         ADD_TO_PATH,
         SUGGEST,
+        OUTDATED,
+        REFRESH_PINS,
     ];
 }
 
@@ -123,6 +129,8 @@ pub enum Verb {
     CheckUpdate,
     AddToPath,
     Suggest,
+    Outdated,
+    RefreshPins,
 }
 
 impl Verb {
@@ -155,6 +163,8 @@ impl Verb {
             names::CHECK_UPDATE => Self::CheckUpdate,
             names::ADD_TO_PATH => Self::AddToPath,
             names::SUGGEST => Self::Suggest,
+            names::OUTDATED => Self::Outdated,
+            names::REFRESH_PINS => Self::RefreshPins,
             _ => return None,
         })
     }
@@ -188,6 +198,8 @@ impl Verb {
             Self::CheckUpdate => bootstrap::execute_check_update(),
             Self::AddToPath => add_to_path::execute(rest),
             Self::Suggest => suggest::execute(rest),
+            Self::Outdated => outdated::execute(rest),
+            Self::RefreshPins => refresh_pins::execute(rest),
         }
     }
 }
@@ -259,6 +271,8 @@ mod tests {
             names::CHECK_UPDATE,
             names::ADD_TO_PATH,
             names::SUGGEST,
+            names::OUTDATED,
+            names::REFRESH_PINS,
         ] {
             assert!(
                 names::CONSOLE_COMMANDS.contains(&name),
@@ -329,6 +343,8 @@ mod tests {
             Verb::CheckUpdate,
             Verb::AddToPath,
             Verb::Suggest,
+            Verb::Outdated,
+            Verb::RefreshPins,
         ];
         for verb in all {
             assert!(

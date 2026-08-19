@@ -25,6 +25,8 @@ pub fn execute() -> i32 {
     println!("  root                       Print the Naner root directory and exit");
     println!("  add-to-path                Put naner on the user PATH (undo: --remove)");
     println!("  suggest <name>             Map a missing command to the vendor providing it");
+    println!("  outdated                   Compare installed vendors against latest releases");
+    println!("  refresh-pins [dir]         Re-resolve and rewrite vendor fallback pins");
     println!();
 
     println!("OPTIONS:");
