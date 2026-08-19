@@ -1,5 +1,38 @@
 ## [Unreleased]
+
+Nothing merged since v0.9.0.
+
+## [0.9.0] - 2026-08-19
 ### Added
+- `naner suggest <name> [--porcelain]`: maps a command the shell failed to
+  find to the vendor providing it (vendor `provides` lists first, then
+  `VendorPaths`-derived names) and prints the install/enable/"not a naner
+  shell" hint; silent with exit 1 on no match. `setup-shell` writes matching
+  command-not-found hooks for PowerShell and Bash, the shipped `profile.ps1`
+  gains the PowerShell hook, and vendor definitions accept an optional
+  `provides` array (shipped for NodeJS, Bun, Go, Rust, Ruby, Anaconda,
+  DotNetSDK, GitForWindows, PowerShell, SevenZip). (#103)
+- New vendor `Uv` (uv, Astral's Python package/project manager): GitHub
+  release source with `.sha256` sidecar verification, disabled by default,
+  `provides: ["uv", "uvx"]`, cache/python/tool dirs redirected under
+  `%NANER_ROOT%\home`, and a `VendorPaths` entry for `uv.exe`.
+- `naner refresh-pins [dir] [--dry-run] [--porcelain]`: re-resolves upstream
+  latest for every dynamically-sourced vendor and rewrites the `fallback`
+  pins in `config/vendors/*.json`; static-URL vendors reported manual-only.
+- `naner outdated [--porcelain]`: compares installed vendors'
+  `.vendor-version` against live upstream, flags `outdated (major)` for
+  first-segment jumps, exits non-zero when updates exist.
+- `naner doctor` now prints an offline "updates are available" nudge when an
+  installed vendor is older than its shipped fallback pin (porcelain:
+  `stale_installed`), plus a lenient vendor-version comparator in
+  `naner-core::version` (`vendor_compare`/`vendor_major_differs`) that
+  handles `go1.21.6` / `bun-v1.3.14` style strings the C#-quirk comparator
+  mangles.
+- The first-run bootstrap (and `naner init`) now offers to put naner on the
+  user PATH after a successful install — the same edit `naner add-to-path`
+  makes, as an opt-in `(Y/n)` prompt. Declining just prints how to do it
+  later, a registry failure does not fail the bootstrap, and non-interactive
+  runs (EOF) decline automatically.
 - Two new vendor `releaseSource.type`s: `npm` (registry.npmjs.org latest
   dist-tag, installed via the vendored NodeJS's `npm install -g` into
   `home\.npm-global`) and `pip` (pypi.org JSON API, installed via the
@@ -13,53 +46,22 @@
   shared `checksums.txt`), `Antigravity` (static, unverified — no
   published digest). All disabled by default.
 
-### Fixed
-- Dotfolders no longer leak into the real Windows profile for redirectable
-  tools: shipped environment gains `XDG_CONFIG_HOME`/`XDG_DATA_HOME`/
-  `XDG_CACHE_HOME` (under `%NANER_ROOT%\home`) and `CLAUDE_CONFIG_DIR`;
-  Bun's vendor file gains `BUN_INSTALL`. `USERPROFILE` deliberately stays
-  untouched; tools reading only it cannot be redirected by environment.
-- `version_from_file_name` picked the first digit run in a file name, so
-  scrape-resolved installs recorded junk versions (`.vendor-version` = `"2"`
-  for MSYS2, `"7"` for 7-Zip). It now picks the run with the most digits and
-  trims trailing dots. Surfaced by the first real `refresh-pins` pass.
-
 ### Changed
 - Fallback pins refreshed (URLs verified live): Go `go1.26.6`, NodeJS
   `v26.7.0`, DotNetSDK `10.0.400`, MSYS2 `20260611`. GitHub-sourced pins
   unchanged — unreachable from the refreshing environment (`api.github.com`
   blocked); static-URL vendors remain manual.
 
-### Added
-- `naner refresh-pins [dir] [--dry-run] [--porcelain]`: re-resolves upstream
-  latest for every dynamically-sourced vendor and rewrites the `fallback`
-  pins in `config/vendors/*.json`; static-URL vendors reported manual-only.
-- `naner outdated [--porcelain]`: compares installed vendors'
-  `.vendor-version` against live upstream, flags `outdated (major)` for
-  first-segment jumps, exits non-zero when updates exist.
-- `naner doctor` now prints an offline "updates are available" nudge when an
-  installed vendor is older than its shipped fallback pin (porcelain:
-  `stale_installed`), plus a lenient vendor-version comparator in
-  `naner-core::version` (`vendor_compare`/`vendor_major_differs`) that
-  handles `go1.21.6` / `bun-v1.3.14` style strings the C#-quirk comparator
-  mangles.
-- New vendor `Uv` (uv, Astral's Python package/project manager): GitHub
-  release source with `.sha256` sidecar verification, disabled by default,
-  `provides: ["uv", "uvx"]`, cache/python/tool dirs redirected under
-  `%NANER_ROOT%\home`, and a `VendorPaths` entry for `uv.exe`.
-- `naner suggest <name> [--porcelain]`: maps a command the shell failed to
-  find to the vendor providing it (vendor `provides` lists first, then
-  `VendorPaths`-derived names) and prints the install/enable/"not a naner
-  shell" hint; silent with exit 1 on no match. `setup-shell` writes matching
-  command-not-found hooks for PowerShell and Bash, the shipped `profile.ps1`
-  gains the PowerShell hook, and vendor definitions accept an optional
-  `provides` array (shipped for NodeJS, Bun, Go, Rust, Ruby, Anaconda,
-  DotNetSDK, GitForWindows, PowerShell, SevenZip). (#103)
-- The first-run bootstrap (and `naner init`) now offers to put naner on the
-  user PATH after a successful install — the same edit `naner add-to-path`
-  makes, as an opt-in `(Y/n)` prompt. Declining just prints how to do it
-  later, a registry failure does not fail the bootstrap, and non-interactive
-  runs (EOF) decline automatically.
+### Fixed
+- `version_from_file_name` picked the first digit run in a file name, so
+  scrape-resolved installs recorded junk versions (`.vendor-version` = `"2"`
+  for MSYS2, `"7"` for 7-Zip). It now picks the run with the most digits and
+  trims trailing dots. Surfaced by the first real `refresh-pins` pass.
+- Dotfolders no longer leak into the real Windows profile for redirectable
+  tools: shipped environment gains `XDG_CONFIG_HOME`/`XDG_DATA_HOME`/
+  `XDG_CACHE_HOME` (under `%NANER_ROOT%\home`) and `CLAUDE_CONFIG_DIR`;
+  Bun's vendor file gains `BUN_INSTALL`. `USERPROFILE` deliberately stays
+  untouched; tools reading only it cannot be redirected by environment.
 
 ## [0.8.2] - 2026-08-18
 ### Added
