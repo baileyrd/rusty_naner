@@ -25,6 +25,9 @@
     "pathPriority": 60,
     "pathPrecedence": [
       "%NANER_ROOT%\\vendor\\bun"
-    ]
+    ],
+    "environmentVariables": {
+      "BUN_INSTALL": "%NANER_ROOT%\\home\\.bun"
+    }
   }
 }
