@@ -315,7 +315,7 @@ pub fn wait_for_key_before_exit(state: ConsoleState) {
     if state.allocated() || std::env::var_os(OWN_CONSOLE_ENV).is_some() {
         logger::newline();
         println!("Press any key to exit...");
-        let _ = std::io::stdin().lock().read_line(&mut String::new());
+        console::wait_for_keypress();
     }
 }
 

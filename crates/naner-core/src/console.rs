@@ -76,9 +76,19 @@ pub fn setup(needs_console: bool) -> ConsoleState {
     imp::setup()
 }
 
+/// Block for a single keypress, without echoing it or requiring Enter --
+/// what naner-init's "Press any key to exit..." pause promises. Falls back
+/// to a line-buffered `stdin` read (the old behavior) if raw console-mode
+/// input can't be set up for any reason, so the pause can never wedge the
+/// process waiting on an API that isn't going to answer.
+pub fn wait_for_keypress() {
+    imp::wait_for_keypress();
+}
+
 #[cfg(windows)]
 mod imp {
     use super::ConsoleState;
+    use std::io::BufRead;
     use windows_sys::Win32::Foundation::{
         GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
     };
@@ -87,9 +97,10 @@ mod imp {
         GetFileType, OPEN_EXISTING,
     };
     use windows_sys::Win32::System::Console::{
-        ATTACH_PARENT_PROCESS, AllocConsole, AttachConsole, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-        GetConsoleMode, GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
-        SetConsoleMode, SetStdHandle,
+        ATTACH_PARENT_PROCESS, AllocConsole, AttachConsole, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT,
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetStdHandle, INPUT_RECORD, KEY_EVENT,
+        ReadConsoleInputW, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleMode,
+        SetStdHandle,
     };
 
     fn std_handle(which: u32) -> Option<HANDLE> {
@@ -214,14 +225,69 @@ mod imp {
         }
         state
     }
+
+    pub fn wait_for_keypress() {
+        if !try_read_single_key() {
+            let _ = std::io::stdin().lock().read_line(&mut String::new());
+        }
+    }
+
+    /// Temporarily clear `ENABLE_LINE_INPUT`/`ENABLE_ECHO_INPUT` on CONIN$ and
+    /// block on `ReadConsoleInputW` for the first key-down event, restoring
+    /// the original mode before returning. `false` means raw mode couldn't be
+    /// established or the read failed outright -- the caller falls back to a
+    /// line read rather than leaving the console stuck in raw mode.
+    fn try_read_single_key() -> bool {
+        let Some(h) = std_handle(STD_INPUT_HANDLE) else {
+            return false;
+        };
+        let mut mode = 0u32;
+        // SAFETY: `h` is a live handle; `mode` is a valid out-pointer.
+        if unsafe { GetConsoleMode(h, &mut mode) } == 0 {
+            return false;
+        }
+        let raw_mode = mode & !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+        // SAFETY: `h` is a live handle; `raw_mode` is a valid console-mode
+        // bitmask.
+        if unsafe { SetConsoleMode(h, raw_mode) } == 0 {
+            return false;
+        }
+
+        let mut record: INPUT_RECORD = unsafe { std::mem::zeroed() };
+        let mut read = 0u32;
+        let ok = loop {
+            // SAFETY: `h` is a live handle; `record`/`read` are valid
+            // out-pointers sized for a single-element read.
+            if unsafe { ReadConsoleInputW(h, &mut record, 1, &mut read) } == 0 || read == 0 {
+                break false;
+            }
+            // SAFETY: `record.EventType` tags the union as a
+            // `KEY_EVENT_RECORD` before `Event.KeyEvent` is read.
+            let is_key_down = record.EventType as u32 == KEY_EVENT
+                && unsafe { record.Event.KeyEvent.bKeyDown } != 0;
+            if is_key_down {
+                break true;
+            }
+        };
+
+        // SAFETY: `h` is a live handle; `mode` is the value `GetConsoleMode`
+        // reported before this function changed it.
+        unsafe { SetConsoleMode(h, mode) };
+        ok
+    }
 }
 
 #[cfg(not(windows))]
 mod imp {
     use super::ConsoleState;
+    use std::io::BufRead;
 
     pub fn setup() -> ConsoleState {
         ConsoleState::Inherited
+    }
+
+    pub fn wait_for_keypress() {
+        let _ = std::io::stdin().lock().read_line(&mut String::new());
     }
 }
 

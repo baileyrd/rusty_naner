@@ -1,3 +1,14 @@
+## [Unreleased]
+### Fixed
+- The "Press any key to exit..." pause at the end of `naner init` (and other
+  exit paths that hold a console of naner's own open) said "any key" but
+  actually did a line-buffered `stdin` read: it required Enter and echoed
+  every character typed beforehand onto the screen. Added
+  `naner_core::console::wait_for_keypress`, a real single-keypress read via
+  `ReadConsoleInputW` with `ENABLE_LINE_INPUT`/`ENABLE_ECHO_INPUT`
+  temporarily cleared (mode restored after), falling back to the old
+  line-read if raw mode can't be set up.
+
 ## [0.9.4] - 2026-08-19
 ### Fixed
 - Windows Terminal installation during first-run bootstrap printed the
