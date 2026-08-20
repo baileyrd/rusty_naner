@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.9] - 2026-08-20
 ### Changed
 - Diagnostics only, no confirmed fix: `naner update`'s "Update now?" prompt
   is still reported stuck live -- a screenshot showed the prompt text
