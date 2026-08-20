@@ -85,11 +85,11 @@ pub fn wait_for_keypress() {
     imp::wait_for_keypress();
 }
 
-/// Re-associate stdin with a fresh console input handle right before an
-/// interactive prompt reads it. See `imp::refresh_conin` for why. A no-op
-/// off Windows.
-pub fn refresh_conin() {
-    imp::refresh_conin();
+/// Re-associate stdin, stdout, and stderr with fresh console handles right
+/// before an interactive prompt reads/writes them. See
+/// `imp::refresh_std_handles` for why. A no-op (returns `true`) off Windows.
+pub fn refresh_std_handles() -> bool {
+    imp::refresh_std_handles()
 }
 
 #[cfg(windows)]
@@ -162,8 +162,10 @@ mod imp {
 
     /// Open `device` and install it as `which`'s std handle unconditionally
     /// -- unlike `reopen_con`, even when a handle is already present. Shared
-    /// by `reopen_con` (only-if-missing) and `refresh_conin` (always).
-    fn install_fresh_handle(which: u32, device: &str, share_mode: u32) {
+    /// by `reopen_con` (only-if-missing) and `refresh_std_handles` (always).
+    /// Returns whether the reopen succeeded, so callers can tell a real
+    /// recovery from a silent no-op.
+    fn install_fresh_handle(which: u32, device: &str, share_mode: u32) -> bool {
         let name: Vec<u16> = format!("{device}\0").encode_utf16().collect();
         // SAFETY: valid NUL-terminated wide string; null security attrs and
         // template are documented as acceptable; the returned handle is
@@ -182,25 +184,30 @@ mod imp {
         if h != INVALID_HANDLE_VALUE && !h.is_null() {
             // SAFETY: `h` is a live console handle; SetStdHandle just stores it.
             unsafe { SetStdHandle(which, h) };
+            true
+        } else {
+            false
         }
     }
 
-    /// Re-associate STD_INPUT_HANDLE with a fresh `CONIN$` handle right
-    /// before an interactive read, regardless of whether one is already
-    /// set. Reported live: on a freshly allocated console (double-click
-    /// launch), a Y/n prompt that follows a blocking network call (e.g.
-    /// `naner update`'s release check before "Update now?") stops
-    /// responding to keystrokes, while an equivalent prompt with no network
-    /// call before it works -- consistent with something about a blocking
-    /// I/O wait invalidating the process's notion of its input handle. The
-    /// existing `reopen_conin` (used by `setup()`) only acts when no handle
-    /// is set at all, so it can't recover a handle that still *looks* set
-    /// but no longer delivers input; this always re-opens, on the same
-    /// mechanism already proven to fix the analogous #81
-    /// `CREATE_NEW_CONSOLE`-relaunch case. Cheap and safe to call before
-    /// every prompt: a failed re-open just leaves the existing handle alone.
-    pub fn refresh_conin() {
-        install_fresh_handle(STD_INPUT_HANDLE, "CONIN$", FILE_SHARE_READ);
+    /// Re-associate stdin, stdout, and stderr with fresh `CONIN$`/`CONOUT$`
+    /// handles right before an interactive read, regardless of whether they
+    /// already look set. Reported live: `naner update`'s "Update now?"
+    /// prompt text stayed visible in the caller's shell while the process
+    /// had already exited by the time a key was pressed -- what actually
+    /// got typed went to the underlying shell's own prompt instead (visible
+    /// as a stray PSReadLine history-search popup), meaning stdin and
+    /// stdout were not both associated with the same console session. All
+    /// three are refreshed together here, not just input, so a prompt can
+    /// never again be legible on one console while listening on another.
+    /// Returns whether stdin's reopen succeeded (the one that actually
+    /// gates whether the read below can work at all); a failed reopen on
+    /// any handle just leaves that handle as it was.
+    pub fn refresh_std_handles() -> bool {
+        let stdin_ok = install_fresh_handle(STD_INPUT_HANDLE, "CONIN$", FILE_SHARE_READ);
+        install_fresh_handle(STD_OUTPUT_HANDLE, "CONOUT$", FILE_SHARE_WRITE);
+        install_fresh_handle(STD_ERROR_HANDLE, "CONOUT$", FILE_SHARE_WRITE);
+        stdin_ok
     }
 
     /// Enable VT (ANSI escape) processing so the Phase 1 logger's colors work
@@ -322,7 +329,9 @@ mod imp {
         let _ = std::io::stdin().lock().read_line(&mut String::new());
     }
 
-    pub fn refresh_conin() {}
+    pub fn refresh_std_handles() -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
