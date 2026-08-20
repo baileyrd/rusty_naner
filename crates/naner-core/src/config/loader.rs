@@ -188,13 +188,26 @@ pub const VENDOR_PATHS_MARKER: &str = "%VENDOR_PATHS%";
 /// vendor value is a default, the config file is an instruction.
 fn merge_vendor_environment(config: &mut NanerConfig, naner_root: &Path) {
     // `load_vendors`, so a vendor switched off contributes nothing: no PATH
-    // entry, no variable. `enabled` means "I want this vendor", and installing
-    // one requires it, so on a real tree this mostly agrees with what
-    // `build_unified_path` already did by dropping directories that do not
-    // exist. Where it differs is the case that motivated the change -- a vendor
-    // installed and later switched off used to keep its directory on PATH and
-    // its variables set, which is precisely what switching it off should stop.
-    let mut vendors = crate::vendors::VendorConfigurationLoader::new(naner_root).load_vendors();
+    // entry, no variable. `enabled` means "I want this vendor", but wanting
+    // one is not having it -- an enabled-but-not-yet-installed vendor (e.g.
+    // Rust, enabled in the catalog but never installed) must contribute
+    // neither its PATH entry nor its variables until `naner install` has
+    // actually put something in its vendor directory. Reported live: with
+    // only the `enabled` filter, Rust's CARGO_HOME/RUSTUP_HOME applied
+    // before Rust was ever installed, and a host `rustup` already on PATH
+    // (installed independently of naner) inherited those vars and wrote
+    // into naner's not-yet-populated vendor directory -- exactly what
+    // installing it later is supposed to control. `build_unified_path`
+    // separately drops any PATH directory that doesn't exist, so the same
+    // gate here is about keeping the *data*, not just the built PATH
+    // string, honest -- and it's the only guard environment variables have
+    // at all.
+    let loader = crate::vendors::VendorConfigurationLoader::new(naner_root);
+    let mut vendors: Vec<_> = loader
+        .load_vendors()
+        .into_iter()
+        .filter(|v| loader.is_vendor_installed(v))
+        .collect();
     vendors.sort_by(|a, b| match (a.path_priority, b.path_priority) {
         (Some(x), Some(y)) => x.cmp(&y).then_with(|| a.key.cmp(&b.key)),
         (Some(_), None) => std::cmp::Ordering::Less,
@@ -459,6 +472,16 @@ mod vendor_merge_tests {
             .unwrap();
         }
 
+        // A vendor's PATH entries (and variables) only apply once it's
+        // actually installed -- simulate that for every vendor this test
+        // just switched on, so the assertion below still exercises the full
+        // ordering.
+        for vendor in crate::vendors::VendorConfigurationLoader::new(tmp.path()).load_vendors() {
+            let dir = tmp.path().join("vendor").join(&vendor.extract_dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(".installed"), b"").unwrap();
+        }
+
         let mut cfg = load_file(&config.join("naner.json")).unwrap();
         merge_vendor_environment(&mut cfg, tmp.path());
 
@@ -509,6 +532,54 @@ mod vendor_merge_tests {
         );
     }
 
+    /// Reported live: Rust is enabled in the shipped catalog but not
+    /// essential, so a plain `naner init` never installs it -- yet its
+    /// CARGO_HOME/RUSTUP_HOME applied anyway, and a `rustup` already on the
+    /// host's PATH (installed independently of naner) inherited them and
+    /// wrote into naner's not-yet-populated vendor directory. `enabled`
+    /// means "wanted", not "present" -- a vendor contributes nothing until
+    /// `naner install` has actually put something in its vendor directory.
+    #[test]
+    fn an_enabled_but_not_installed_vendor_contributes_neither_path_nor_variables() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vendors = tmp.path().join("config/vendors");
+        std::fs::create_dir_all(&vendors).unwrap();
+        std::fs::write(
+            vendors.join("Rust.json"),
+            r#"{"Rust":{"name":"Rust","extractDir":"rust","enabled":true,
+                 "pathPriority":1,"pathPrecedence":["%NANER_ROOT%\\vendor\\rust\\.cargo\\bin"],
+                 "environmentVariables":{"CARGO_HOME":"x","RUSTUP_HOME":"y"}}}"#,
+        )
+        .unwrap();
+        // Deliberately no `vendor/rust` directory: not installed.
+
+        let mut cfg = NanerConfig {
+            environment: crate::config::EnvironmentConfig {
+                path_precedence: vec![VENDOR_PATHS_MARKER.to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        merge_vendor_environment(&mut cfg, tmp.path());
+
+        assert!(
+            cfg.environment.path_precedence.is_empty(),
+            "an enabled but uninstalled vendor must not put a directory on PATH"
+        );
+        assert!(
+            !cfg.environment
+                .environment_variables
+                .contains_key("CARGO_HOME"),
+            "an enabled but uninstalled vendor must not set its variables"
+        );
+        assert!(
+            !cfg.environment
+                .environment_variables
+                .contains_key("RUSTUP_HOME"),
+            "an enabled but uninstalled vendor must not set its variables"
+        );
+    }
+
     /// A value in `naner.json` is an instruction; a vendor's is a default.
     #[test]
     fn a_user_set_variable_wins_over_a_vendors() {
@@ -521,6 +592,9 @@ mod vendor_merge_tests {
                  "environmentVariables":{"GOROOT":"vendor-default","GOPATH":"vendor-only"}}}"#,
         )
         .unwrap();
+        // A vendor's variables only apply once it's actually installed.
+        std::fs::create_dir_all(tmp.path().join("vendor/go")).unwrap();
+        std::fs::write(tmp.path().join("vendor/go/go.exe"), b"").unwrap();
 
         let mut cfg = NanerConfig::default();
         cfg.environment
@@ -552,6 +626,10 @@ mod vendor_merge_tests {
                 format!(r#"{{"{key}":{{"name":"{key}","extractDir":"{key}",{body}}}}}"#),
             )
             .unwrap();
+            // A vendor's PATH entries only apply once it's actually installed.
+            let dir = tmp.path().join("vendor").join(key);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(".installed"), b"").unwrap();
         }
 
         let mut cfg = NanerConfig {
@@ -587,6 +665,9 @@ mod vendor_merge_tests {
                  "environmentVariables":{"DOTNET_CLI_TELEMETRY_OPTOUT":"1"}}}"#,
         )
         .unwrap();
+        // A vendor's variables only apply once it's actually installed.
+        std::fs::create_dir_all(tmp.path().join("vendor/dotnet-sdk")).unwrap();
+        std::fs::write(tmp.path().join("vendor/dotnet-sdk/dotnet.exe"), b"").unwrap();
 
         let mut cfg = NanerConfig::default();
         crate::config::apply_env_overrides_from(&mut cfg, Vec::new());

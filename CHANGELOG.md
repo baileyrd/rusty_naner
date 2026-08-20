@@ -1,3 +1,17 @@
+## [Unreleased]
+### Fixed
+- Reported live while chasing a false `[OK] Rust` in `naner install --list`:
+  an enabled vendor's PATH entries and environment variables were merged
+  into the effective config regardless of whether that vendor was actually
+  installed. With `Advanced.IsolateEnvironment` off, this let a host
+  `rustup` (installed independently of naner, found first on PATH since
+  naner's own Rust was never installed) inherit naner's pre-set
+  `CARGO_HOME`/`RUSTUP_HOME` and write into naner's empty vendor directory
+  -- making an uninstalled vendor look installed. `merge_vendor_environment`
+  now filters vendors through `is_vendor_installed` before contributing
+  either PATH entries or variables: `enabled` means "wanted", not
+  "present".
+
 ## [0.9.9] - 2026-08-20
 ### Changed
 - Diagnostics only, no confirmed fix: `naner update`'s "Update now?" prompt
