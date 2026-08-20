@@ -108,6 +108,14 @@ pub struct AdvancedConfig {
 
     #[serde(default, alias = "debugMode", alias = "debugmode")]
     pub debug_mode: bool,
+
+    /// Additive (no C# counterpart): testing/dev switch. When true, every
+    /// process environment variable not on `env_isolation::KEEP_ON_ISOLATE`
+    /// is cleared before NANER_ROOT/NANER_ENVIRONMENT/HOME/PATH/configured
+    /// variables are set, so tools already installed system- or user-wide
+    /// can't leak into naner's environment during a test run.
+    #[serde(default, alias = "isolateEnvironment", alias = "isolateenvironment")]
+    pub isolate_environment: bool,
 }
 
 impl Default for AdvancedConfig {
@@ -117,6 +125,7 @@ impl Default for AdvancedConfig {
             inherit_system_path: true,
             verbose_logging: false,
             debug_mode: false,
+            isolate_environment: false,
         }
     }
 }

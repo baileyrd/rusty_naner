@@ -6,6 +6,9 @@
 //!   `"false"` enables inheritance (exact C# comparison)
 //! - `NANER_DEBUG` — exactly (case-insensitive) `"true"` enables debug;
 //!   any other non-empty value disables it
+//! - `NANER_ISOLATE_ENVIRONMENT` — exactly (case-insensitive) `"true"`
+//!   enables environment isolation (see `env_isolation`); any other
+//!   non-empty value disables it. Additive (no C# counterpart).
 //! - `NANER_ENV_<NAME>` — adds/overrides an environment variable
 //! - `NANER_PATH_<NAME>` — prepends a PATH entry
 
@@ -78,6 +81,12 @@ pub fn apply_env_overrides_from(
         && !debug.is_empty()
     {
         config.advanced.debug_mode = debug.eq_ignore_ascii_case("true");
+    }
+
+    if let Some(isolate) = get("NANER_ISOLATE_ENVIRONMENT")
+        && !isolate.is_empty()
+    {
+        config.advanced.isolate_environment = isolate.eq_ignore_ascii_case("true");
     }
 
     // NANER_ENV_*: prefix matched case-insensitively (C# StartsWith
@@ -154,6 +163,15 @@ mod tests {
         assert!(config.advanced.debug_mode);
         apply_env_overrides_from(&mut config, vars(&[("NANER_DEBUG", "1")]));
         assert!(!config.advanced.debug_mode);
+    }
+
+    #[test]
+    fn isolate_environment_is_exactly_true() {
+        let mut config = NanerConfig::default();
+        apply_env_overrides_from(&mut config, vars(&[("NANER_ISOLATE_ENVIRONMENT", "TRUE")]));
+        assert!(config.advanced.isolate_environment);
+        apply_env_overrides_from(&mut config, vars(&[("NANER_ISOLATE_ENVIRONMENT", "1")]));
+        assert!(!config.advanced.isolate_environment);
     }
 
     #[test]

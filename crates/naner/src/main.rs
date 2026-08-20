@@ -179,6 +179,20 @@ fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleS
     );
 
     // 3. Environment setup (process env, inherited by the terminal).
+    //
+    // Additive (no C# counterpart): Advanced.IsolateEnvironment clears
+    // everything not on env_isolation::KEEP_ON_ISOLATE from *this* process
+    // before anything below sets NANER_ROOT/configured vars/PATH, so a
+    // spawned terminal (which inherits this process's env, not the host's)
+    // can't see tools a prior system install left on it.
+    let isolated_vars = if cfg.advanced.isolate_environment {
+        if !quiet {
+            logger::status("Isolating environment (Advanced.IsolateEnvironment)...");
+        }
+        naner_core::env_isolation::clear_host_environment()
+    } else {
+        Vec::new()
+    };
     if !quiet {
         logger::status("Setting up environment...");
     }
@@ -227,7 +241,13 @@ fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleS
 
     // --export-env: print the eval-able script and exit.
     if opts.export_env {
-        return handle_export_env(&cfg, &unified_path, &opts.format, opts.no_comments);
+        return handle_export_env(
+            &cfg,
+            &unified_path,
+            &opts.format,
+            opts.no_comments,
+            &isolated_vars,
+        );
     }
 
     // --setup-only: environment configured, done.
@@ -271,12 +291,18 @@ fn setup_environment(naner_root: &Path, environment: &str) {
 
 /// `Program.HandleExportEnv`: NANER_ROOT/NANER_ENVIRONMENT/NANER_HOME/HOME
 /// first, then every configured variable read back from the process env;
-/// output trimmed with no trailing newline (pipeline safety).
+/// output trimmed with no trailing newline (pipeline safety). `isolated_vars`
+/// (additive, no C# counterpart) asks the emitted script to also unset those
+/// names in the *calling* shell, for `Advanced.IsolateEnvironment` -- needed
+/// because a profile launched straight from Windows Terminal's own list runs
+/// this through `--export-env | Invoke-Expression` in an already-environed
+/// pwsh, never through naner's own isolated process.
 fn handle_export_env(
     cfg: &config::NanerConfig,
     unified_path: &str,
     format: &str,
     no_comments: bool,
+    isolated_vars: &[String],
 ) -> i32 {
     let shell_format = match env_export::parse_format(format) {
         Ok(f) => f,
@@ -302,7 +328,14 @@ fn handle_export_env(
         }
     }
 
-    let output = env_export::export(&env_vars, unified_path, shell_format, no_comments);
+    let output = env_export::export_at(
+        &env_vars,
+        unified_path,
+        shell_format,
+        no_comments,
+        isolated_vars,
+        &naner_core::timestamp::now_local(),
+    );
     print!("{}", output.trim_end());
     0
 }

@@ -1,3 +1,15 @@
+## [Unreleased]
+### Added
+- `Advanced.IsolateEnvironment` (`naner.json`) / `NANER_ISOLATE_ENVIRONMENT`: a
+  testing/dev switch, off by default. When on, every process environment
+  variable outside a small OS-survival allowlist (`env_isolation`) is cleared
+  before naner sets NANER_ROOT/NANER_ENVIRONMENT/HOME/PATH/configured
+  variables, so tools already installed system- or user-wide on the host
+  can't leak into a test run. `--export-env`'s emitted script also unsets
+  those names in the calling shell, so a profile launched directly from
+  Windows Terminal's own list is isolated too, not just a normal `naner`
+  launch.
+
 ## [0.9.5] - 2026-08-19
 ### Fixed
 - The "Press any key to exit..." pause at the end of `naner init` (and other

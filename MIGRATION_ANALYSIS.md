@@ -63,7 +63,11 @@ kernel32 console APIs, `%VAR%` expansion, process creation, and known folders.
   `naner.yaml` → `naner.yml` (no cross-file merging), PascalCase keys, case-insensitive,
   unknown fields ignored, JSON comments + trailing commas tolerated. Env-var overrides
   applied on top: `NANER_DEFAULT_PROFILE`, `NANER_INHERIT_SYSTEM_PATH`, `NANER_DEBUG`,
-  `NANER_ENV_<NAME>` (adds env var), `NANER_PATH_<NAME>` (prepends PATH entry).
+  `NANER_ENV_<NAME>` (adds env var), `NANER_PATH_<NAME>` (prepends PATH entry). Additive
+  (no C# counterpart): `Advanced.IsolateEnvironment` / `NANER_ISOLATE_ENVIRONMENT` — a
+  testing/dev switch that clears host env vars outside a small OS-survival allowlist
+  before naner sets its own, so a prior system install of the same tools can't leak into
+  a test run (`env_isolation`).
 - **Placeholder expansion**, in order: `%NANER_ROOT%` (case-insensitive literal) →
   Windows `%VAR%` → PowerShell-style `$env:VAR` (regex `\$env:(\w+)`, unset left as-is).
 - **PATH construction**: config `PathPrecedence` in order, **silently dropping entries

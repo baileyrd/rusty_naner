@@ -57,6 +57,7 @@ pub fn export(
         path,
         format,
         no_comments,
+        &[],
         &crate::timestamp::now_local(),
     )
 }
@@ -67,6 +68,7 @@ pub fn export_at(
     path: &str,
     format: ShellFormat,
     no_comments: bool,
+    isolate_unset: &[String],
     timestamp: &str,
 ) -> String {
     let mut out = String::new();
@@ -84,6 +86,24 @@ pub fn export_at(
             "Source this file or execute these commands to configure your shell",
             format,
         ));
+    }
+
+    // Additive (no C# counterpart): Advanced.IsolateEnvironment asks the
+    // caller's own live shell to drop the same host variables naner's own
+    // process already cleared, so a profile launched straight from Windows
+    // Terminal's own list (which runs `--export-env | Invoke-Expression` in
+    // an already-environed pwsh, never through naner's isolated process) is
+    // isolated too.
+    if !isolate_unset.is_empty() {
+        if !no_comments {
+            line(comment("Isolating host environment", format));
+        }
+        for name in isolate_unset {
+            line(unset_variable(name, format));
+        }
+    }
+
+    if !no_comments {
         line(comment("PATH Configuration", format));
     }
 
@@ -101,6 +121,16 @@ pub fn export_at(
     }
 
     out
+}
+
+fn unset_variable(name: &str, format: ShellFormat) -> String {
+    match format {
+        ShellFormat::PowerShell => {
+            format!("Remove-Item Env:{name} -ErrorAction SilentlyContinue")
+        }
+        ShellFormat::Bash => format!("unset {name}"),
+        ShellFormat::Cmd => format!("SET \"{name}=\""),
+    }
 }
 
 fn comment(text: &str, format: ShellFormat) -> String {
@@ -204,6 +234,7 @@ mod tests {
             "C:\\naner\\bin;C:\\Windows",
             ShellFormat::PowerShell,
             false,
+            &[],
             "2026-01-01 00:00:00",
         );
         let l = lines(&script);
@@ -224,6 +255,7 @@ mod tests {
             "C:\\bin",
             ShellFormat::PowerShell,
             true,
+            &[],
             "t",
         );
         assert_eq!(
@@ -239,6 +271,7 @@ mod tests {
             "C:\\naner\\bin;D:\\tools",
             ShellFormat::Bash,
             true,
+            &[],
             "t",
         );
         let l = lines(&script);
@@ -254,6 +287,7 @@ mod tests {
             "C:\\bin",
             ShellFormat::Cmd,
             false,
+            &[],
             "t",
         );
         let l = lines(&script);
@@ -269,8 +303,56 @@ mod tests {
             "real",
             ShellFormat::PowerShell,
             true,
+            &[],
             "t",
         );
         assert_eq!(lines(&script), vec!["$env:PATH = 'real'", "$env:A = '1'"]);
+    }
+
+    #[test]
+    fn isolate_unset_emits_per_shell_removal_before_path() {
+        let ps = export_at(
+            &vars(&[("A", "1")]),
+            "C:\\bin",
+            ShellFormat::PowerShell,
+            true,
+            &["CARGO_HOME".to_string(), "GIT_CONFIG_GLOBAL".to_string()],
+            "t",
+        );
+        assert_eq!(
+            lines(&ps),
+            vec![
+                "Remove-Item Env:CARGO_HOME -ErrorAction SilentlyContinue",
+                "Remove-Item Env:GIT_CONFIG_GLOBAL -ErrorAction SilentlyContinue",
+                "$env:PATH = 'C:\\bin'",
+                "$env:A = '1'",
+            ]
+        );
+
+        let bash = export_at(
+            &vars(&[]),
+            "/bin",
+            ShellFormat::Bash,
+            true,
+            &["CARGO_HOME".to_string()],
+            "t",
+        );
+        assert_eq!(
+            lines(&bash),
+            vec!["unset CARGO_HOME", "export PATH=\"/bin\""]
+        );
+
+        let cmd = export_at(
+            &vars(&[]),
+            "C:\\bin",
+            ShellFormat::Cmd,
+            true,
+            &["CARGO_HOME".to_string()],
+            "t",
+        );
+        assert_eq!(
+            lines(&cmd),
+            vec!["SET \"CARGO_HOME=\"", "SET \"PATH=C:\\bin\""]
+        );
     }
 }

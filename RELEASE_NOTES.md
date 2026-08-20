@@ -9,7 +9,26 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.5.
+- Requested for testing on a dev machine that already has Git/Node/PowerShell/
+  Rust etc. installed system-wide: naner's `Advanced.InheritSystemPath`
+  already isolated PATH resolution, but everything else inherited from the
+  host (HOME-equivalents, and any `GIT_*`/`CARGO_HOME`/`RUSTUP_HOME`/
+  `PYTHONHOME`/npm-config-style variable a prior install left set) still
+  leaked through with no way to turn it off. Added `Advanced.IsolateEnvironment`
+  (`naner.json`) / `NANER_ISOLATE_ENVIRONMENT` env override: when on, naner
+  clears its own process environment down to a small OS-survival allowlist
+  (`SystemRoot`, `ComSpec`, `TEMP`, etc. — nothing that reveals installed
+  tools) before setting NANER_ROOT/HOME/configured variables/PATH, so a
+  spawned terminal only ever sees naner's own environment. Since a profile
+  picked directly from Windows Terminal's own list runs through
+  `--export-env | Invoke-Expression` in an already-environed shell rather
+  than through naner's own isolated process, `--export-env`'s output also
+  emits removal statements (`Remove-Item Env:`/`unset`/`SET "NAME="` per
+  shell) for the same variables, so that path is isolated too. Restoring
+  after a test run needs no special handling: naner always isolates a
+  freshly spawned process (or, for `--export-env`, only the shell it's
+  piped into), never anything persistent — closing that window/tab is
+  enough.
 
 ## v0.9.5 — 2026-08-19
 
