@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "naner"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "clap",
  "clap_complete",
@@ -514,7 +514,7 @@ dependencies = [
 
 [[package]]
 name = "naner-core"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "lzma-rs",
  "native-tls",
