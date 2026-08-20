@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.7] - 2026-08-20
 ### Fixed
 - Reported live: `naner update`'s "Update now? (Y/n):" prompt (and
   potentially other interactive prompts following a blocking network call,

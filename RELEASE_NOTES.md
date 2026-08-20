@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.7.
+
+## v0.9.7 — 2026-08-20
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.6...v0.9.7).
+
 - Reported live right after v0.9.6 shipped: `naner update`'s "Update now?
   (Y/n):" prompt got stuck -- no keystroke did anything, even after
   clicking directly on the console window to make sure it had focus. Ruled
