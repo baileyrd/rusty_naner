@@ -9,7 +9,25 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.9.
+- Chasing a live report of `naner install --list` showing `[OK] Rust` when
+  Rust had never been installed turned up the actual bug behind it: an
+  enabled vendor's PATH entries and environment variables were merged into
+  the effective config the moment `enabled: true` was set, with no check
+  for whether the vendor was actually present on disk. Without
+  `Advanced.IsolateEnvironment` on, the reporter's own system-wide `rustup`
+  was still first on PATH (naner's vendored Rust was never installed), so
+  running it inherited naner's pre-set `CARGO_HOME`/`RUSTUP_HOME` and wrote
+  its own state into naner's empty `vendor/rust` directory -- which then
+  made `is_vendor_installed` report Rust as present, even though `naner
+  install` had never touched it. `build_unified_path` already dropped
+  nonexistent PATH directories from the final built PATH string, but the
+  underlying `Environment.PathPrecedence` *data* still carried an
+  uninstalled vendor's entry, and environment variables had no such filter
+  at all. `merge_vendor_environment` now filters vendors through
+  `is_vendor_installed` before contributing either PATH entries or
+  variables -- `enabled` means "wanted", not "present", and a vendor
+  contributes nothing until `naner install` has actually put something in
+  its vendor directory.
 
 ## v0.9.9 — 2026-08-20
 
