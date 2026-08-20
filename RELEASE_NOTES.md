@@ -9,7 +9,25 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.8.
+- `naner update`'s "Update now?" prompt is still reported stuck live, even
+  after v0.9.7's CONIN$ refresh -- but new evidence changes the diagnosis. A
+  screenshot showed that after the prompt appeared, typing a letter
+  triggered the *calling shell's* own PSReadLine history-search popup, not
+  naner reading it. That only happens once naner's own process has already
+  exited and returned control of the pane to the parent shell -- meaning
+  the process hit EOF on stdin (or errored) essentially immediately, rather
+  than genuinely hanging waiting for input the whole time. This is not a
+  confirmed fix -- it's targeted diagnostics plus a plausible tightening:
+  `console::refresh_conin` is broadened to `refresh_std_handles`,
+  reassociating stdin *and* stdout/stderr with fresh console handles
+  together right before a prompt (previously only stdin was refreshed,
+  which could leave a prompt's text and its actual input listening on two
+  different console sessions). `prompt_yes` now also warns -- but only
+  inside naner's own relaunched console, never for the deliberately-silent
+  EOF-is-no path plain scripted/CI use depends on -- when the handle
+  refresh fails or stdin reads EOF/errors immediately, so the next live
+  report will say definitively which of those is actually happening
+  instead of needing another screenshot to reconstruct it.
 
 ## v0.9.8 — 2026-08-20
 

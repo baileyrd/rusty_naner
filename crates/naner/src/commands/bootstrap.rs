@@ -237,14 +237,38 @@ fn offer_add_to_path(_naner_root: &Path) {}
 /// stdin reads zero bytes. Treating those the same made any non-interactive
 /// spawn of the bare binary in an empty directory silently *consent* to
 /// downloading and installing a full naner tree, which is how a CI test
-/// first caught this.
+/// first caught this. That silent EOF-is-no path is by design for scripted
+/// use (`Command::output()` closes stdin, and this must stay quiet there),
+/// so the diagnostics below only fire inside naner's own relaunched console
+/// (`OWN_CONSOLE_ENV`) -- the one case where an instant EOF is *not*
+/// expected, because that console exists specifically to be interactive.
 fn prompt_yes(question: &str) -> bool {
     print!("{question}");
     let _ = std::io::stdout().flush();
-    console::refresh_conin();
+    let own_console = std::env::var_os(OWN_CONSOLE_ENV).is_some();
+    if !console::refresh_std_handles() && own_console {
+        logger::warning("  Could not refresh this console's input/output before the prompt above");
+    }
     let mut response = String::new();
     match std::io::stdin().lock().read_line(&mut response) {
-        Ok(0) | Err(_) => return false,
+        Ok(0) => {
+            if own_console {
+                logger::warning(
+                    "  stdin read EOF immediately at the prompt above, inside naner's own \
+                     console -- input from the keyboard isn't reaching this process; \
+                     treating as \"no\"",
+                );
+            }
+            return false;
+        }
+        Err(e) => {
+            if own_console {
+                logger::warning(&format!(
+                    "  stdin read failed at the prompt above: {e} -- treating as \"no\""
+                ));
+            }
+            return false;
+        }
         Ok(_) => {}
     }
     let normalized = response.trim().to_lowercase();
