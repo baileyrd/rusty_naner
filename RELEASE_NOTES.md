@@ -9,7 +9,19 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.7.
+- Reported live while testing `Advanced.IsolateEnvironment` (#128) on real
+  Windows: a fresh isolated shell threw `x86: The term 'x86' is not
+  recognized...`. Root cause: the isolation allowlist
+  (`env_isolation::KEEP_ON_ISOLATE`) dropped `ProgramFiles(x86)` (and its
+  siblings `ProgramFiles`, `CommonProgramFiles`, `CommonProgramFiles(x86)`,
+  `ProgramW6432`, `CommonProgramW6432`) along with everything else under
+  isolation -- but those are standard OS directory locations a lot of
+  scripts read (PowerShell itself needs `${env:ProgramFiles(x86)}` syntax
+  to reference the paren-containing name at all; an unset read apparently
+  surfaced as a bare `x86` command elsewhere). None of them reveal which
+  dev tools are installed, so they belong in the "always keep" list
+  alongside `PROGRAMDATA`/`ALLUSERSPROFILE`, which are already there.
+  Added.
 
 ## v0.9.7 — 2026-08-20
 
