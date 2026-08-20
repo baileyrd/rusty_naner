@@ -45,6 +45,16 @@ pub const KEEP_ON_ISOLATE: &[&str] = &[
     "CommonProgramFiles",
     "CommonProgramFiles(x86)",
     "CommonProgramW6432",
+    // Reported live: with isolation on, double-clicking naner.exe threw
+    // "Could not access starting directory ...%USERPROFILE%" -- naner.json
+    // deliberately leaves `%USERPROFILE%` for the host to expand (profiles
+    // start there; it's the one thing Windows tools that ignore HOME still
+    // resolve, and known-folder APIs depend on it), but with USERPROFILE
+    // cleared it stayed literal, and wt.exe resolved the literal string
+    // relative to its own working directory (naner_root) instead. Same
+    // category as the ProgramFiles family above: a standard per-user OS
+    // variable every process expects, not a tool-install indicator.
+    "USERPROFILE",
 ];
 
 fn is_kept(name: &str) -> bool {
@@ -100,6 +110,12 @@ mod tests {
         assert!(is_kept("CommonProgramFiles"));
         assert!(is_kept("CommonProgramFiles(x86)"));
         assert!(is_kept("CommonProgramW6432"));
+    }
+
+    #[test]
+    fn keeps_userprofile() {
+        assert!(is_kept("USERPROFILE"));
+        assert!(is_kept("userprofile"));
     }
 
     #[test]

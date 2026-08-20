@@ -9,7 +9,21 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.10.
+- Reported live right after v0.9.10 shipped: with `Advanced.IsolateEnvironment`
+  on, double-clicking `naner.exe` threw `Could not access starting directory
+  "C:\tools\naner\%USERPROFILE%"` instead of launching. `naner.json` sets
+  every default profile's `StartingDirectory` to `%USERPROFILE%` and
+  deliberately leaves that one variable for the host to expand rather than
+  overriding it the way `HOME` is -- it's the one thing Windows tools that
+  ignore `HOME` still resolve, and known-folder APIs depend on it. But
+  `USERPROFILE` wasn't on `env_isolation::KEEP_ON_ISOLATE`, so isolation
+  cleared it along with everything else; with it gone, `%USERPROFILE%` had
+  nothing to expand into and stayed literal, and `wt.exe` -- launched with
+  its working directory set to `naner_root` -- resolved that literal string
+  as a path relative to `naner_root` instead of an unrecognized token.
+  `USERPROFILE` joins the `ProgramFiles` family already on the keep list:
+  a standard per-user OS variable every process expects to be set, not a
+  signal of which dev tools are installed.
 
 ## v0.9.10 — 2026-08-20
 
