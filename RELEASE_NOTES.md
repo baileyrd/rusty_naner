@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.10.
+
+## v0.9.10 — 2026-08-20
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.9...v0.9.10).
+
 - Chasing a live report of `naner install --list` showing `[OK] Rust` when
   Rust had never been installed turned up the actual bug behind it: an
   enabled vendor's PATH entries and environment variables were merged into
