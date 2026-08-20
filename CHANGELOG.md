@@ -1,3 +1,14 @@
+## [Unreleased]
+### Fixed
+- Reported live while testing `Advanced.IsolateEnvironment` (#128): the
+  `ProgramFiles`/`ProgramFiles(x86)`/`CommonProgramFiles`/`ProgramW6432`
+  family wasn't on the isolation allowlist, so clearing them under
+  isolation broke a script that referenced `ProgramFiles(x86)` (surfaced as
+  a bare `x86` command not being recognized). Added the whole family to
+  `env_isolation::KEEP_ON_ISOLATE` -- they're standard OS directory
+  locations, not tool-install indicators, same category as the
+  `PROGRAMDATA`/`ALLUSERSPROFILE` entries already kept.
+
 ## [0.9.7] - 2026-08-20
 ### Fixed
 - Reported live: `naner update`'s "Update now? (Y/n):" prompt (and

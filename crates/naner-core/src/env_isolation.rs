@@ -34,6 +34,17 @@ pub const KEEP_ON_ISOLATE: &[&str] = &[
     "PROGRAMDATA",
     "ALLUSERSPROFILE",
     "PUBLIC",
+    // Standard OS directory locations, not tool-install indicators -- same
+    // category as PROGRAMDATA/ALLUSERSPROFILE above. Reported live: missing
+    // `ProgramFiles(x86)` broke a script that reads it (PowerShell needs
+    // `${env:ProgramFiles(x86)}` to reference it at all; an unset read
+    // apparently surfaced as a bare `x86` command).
+    "ProgramFiles",
+    "ProgramFiles(x86)",
+    "ProgramW6432",
+    "CommonProgramFiles",
+    "CommonProgramFiles(x86)",
+    "CommonProgramW6432",
 ];
 
 fn is_kept(name: &str) -> bool {
@@ -78,6 +89,17 @@ mod tests {
         assert!(!is_kept("CARGO_HOME"));
         assert!(!is_kept("GIT_CONFIG_GLOBAL"));
         assert!(!is_kept("APPDATA"));
+    }
+
+    #[test]
+    fn keeps_the_program_files_family() {
+        assert!(is_kept("ProgramFiles"));
+        assert!(is_kept("ProgramFiles(x86)"));
+        assert!(is_kept("programfiles(x86)"));
+        assert!(is_kept("ProgramW6432"));
+        assert!(is_kept("CommonProgramFiles"));
+        assert!(is_kept("CommonProgramFiles(x86)"));
+        assert!(is_kept("CommonProgramW6432"));
     }
 
     #[test]
