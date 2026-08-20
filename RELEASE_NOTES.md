@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.9.
+
+## v0.9.9 — 2026-08-20
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.8...v0.9.9).
+
 - `naner update`'s "Update now?" prompt is still reported stuck live, even
   after v0.9.7's CONIN$ refresh -- but new evidence changes the diagnosis. A
   screenshot showed that after the prompt appeared, typing a letter
