@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.6] - 2026-08-20
 ### Added
 - `Advanced.IsolateEnvironment` (`naner.json`) / `NANER_ISOLATE_ENVIRONMENT`: a
   testing/dev switch, off by default. When on, every process environment

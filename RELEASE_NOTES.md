@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.6.
+
+## v0.9.6 — 2026-08-20
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.5...v0.9.6).
+
 - Requested for testing on a dev machine that already has Git/Node/PowerShell/
   Rust etc. installed system-wide: naner's `Advanced.InheritSystemPath`
   already isolated PATH resolution, but everything else inherited from the
