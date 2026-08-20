@@ -85,6 +85,13 @@ pub fn wait_for_keypress() {
     imp::wait_for_keypress();
 }
 
+/// Re-associate stdin with a fresh console input handle right before an
+/// interactive prompt reads it. See `imp::refresh_conin` for why. A no-op
+/// off Windows.
+pub fn refresh_conin() {
+    imp::refresh_conin();
+}
+
 #[cfg(windows)]
 mod imp {
     use super::ConsoleState;
@@ -142,6 +149,21 @@ mod imp {
         if std_handle(which).is_some() {
             return;
         }
+        install_fresh_handle(which, device, share_mode);
+    }
+
+    fn reopen_conout(which: u32) {
+        reopen_con(which, "CONOUT$", FILE_SHARE_WRITE);
+    }
+
+    fn reopen_conin() {
+        reopen_con(STD_INPUT_HANDLE, "CONIN$", FILE_SHARE_READ);
+    }
+
+    /// Open `device` and install it as `which`'s std handle unconditionally
+    /// -- unlike `reopen_con`, even when a handle is already present. Shared
+    /// by `reopen_con` (only-if-missing) and `refresh_conin` (always).
+    fn install_fresh_handle(which: u32, device: &str, share_mode: u32) {
         let name: Vec<u16> = format!("{device}\0").encode_utf16().collect();
         // SAFETY: valid NUL-terminated wide string; null security attrs and
         // template are documented as acceptable; the returned handle is
@@ -163,12 +185,22 @@ mod imp {
         }
     }
 
-    fn reopen_conout(which: u32) {
-        reopen_con(which, "CONOUT$", FILE_SHARE_WRITE);
-    }
-
-    fn reopen_conin() {
-        reopen_con(STD_INPUT_HANDLE, "CONIN$", FILE_SHARE_READ);
+    /// Re-associate STD_INPUT_HANDLE with a fresh `CONIN$` handle right
+    /// before an interactive read, regardless of whether one is already
+    /// set. Reported live: on a freshly allocated console (double-click
+    /// launch), a Y/n prompt that follows a blocking network call (e.g.
+    /// `naner update`'s release check before "Update now?") stops
+    /// responding to keystrokes, while an equivalent prompt with no network
+    /// call before it works -- consistent with something about a blocking
+    /// I/O wait invalidating the process's notion of its input handle. The
+    /// existing `reopen_conin` (used by `setup()`) only acts when no handle
+    /// is set at all, so it can't recover a handle that still *looks* set
+    /// but no longer delivers input; this always re-opens, on the same
+    /// mechanism already proven to fix the analogous #81
+    /// `CREATE_NEW_CONSOLE`-relaunch case. Cheap and safe to call before
+    /// every prompt: a failed re-open just leaves the existing handle alone.
+    pub fn refresh_conin() {
+        install_fresh_handle(STD_INPUT_HANDLE, "CONIN$", FILE_SHARE_READ);
     }
 
     /// Enable VT (ANSI escape) processing so the Phase 1 logger's colors work
@@ -289,6 +321,8 @@ mod imp {
     pub fn wait_for_keypress() {
         let _ = std::io::stdin().lock().read_line(&mut String::new());
     }
+
+    pub fn refresh_conin() {}
 }
 
 #[cfg(test)]

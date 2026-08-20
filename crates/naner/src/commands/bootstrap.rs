@@ -241,6 +241,7 @@ fn offer_add_to_path(_naner_root: &Path) {}
 fn prompt_yes(question: &str) -> bool {
     print!("{question}");
     let _ = std::io::stdout().flush();
+    console::refresh_conin();
     let mut response = String::new();
     match std::io::stdin().lock().read_line(&mut response) {
         Ok(0) | Err(_) => return false,

@@ -9,7 +9,23 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.6.
+- Reported live right after v0.9.6 shipped: `naner update`'s "Update now?
+  (Y/n):" prompt got stuck -- no keystroke did anything, even after
+  clicking directly on the console window to make sure it had focus. Ruled
+  out: no second console opened (this is a double-click launch, not the
+  attached-shell case the #81 relaunch targets), and no error printed.
+  The one structural difference from `naner init`'s first prompt (which is
+  known to work on the same kind of launch): `naner update` makes a
+  blocking network call (the release check) before its only prompt, while
+  `naner init`'s first prompt has none before it. Added
+  `console::refresh_conin`, called right before every interactive prompt
+  read, which unconditionally re-opens `CONIN$` and re-installs it as
+  `STD_INPUT_HANDLE` -- the same mechanism (already used, more narrowly, by
+  `console::setup`) that fixed the structurally similar #81
+  `CREATE_NEW_CONSOLE`-relaunch stdin issue. This targets the reported
+  symptom on the best lead available; the underlying reason a blocking
+  network call would affect the input handle at all is not confirmed, so
+  this is worth re-testing live once it ships.
 
 ## v0.9.6 — 2026-08-20
 

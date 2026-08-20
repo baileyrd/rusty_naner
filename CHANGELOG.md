@@ -1,3 +1,16 @@
+## [Unreleased]
+### Fixed
+- Reported live: `naner update`'s "Update now? (Y/n):" prompt (and
+  potentially other interactive prompts following a blocking network call,
+  on a freshly allocated double-click console) stopped responding to
+  keystrokes -- confirmed not a window-focus issue. Added
+  `console::refresh_conin`, which unconditionally re-associates
+  `STD_INPUT_HANDLE` with a fresh `CONIN$` handle right before every
+  interactive prompt read, reusing the same mechanism that already fixed
+  the analogous #81 `CREATE_NEW_CONSOLE`-relaunch stdin issue. Root cause of
+  *why* the handle stops delivering input after a blocking network call is
+  still unconfirmed; this addresses the reported symptom.
+
 ## [0.9.6] - 2026-08-20
 ### Added
 - `Advanced.IsolateEnvironment` (`naner.json`) / `NANER_ISOLATE_ENVIRONMENT`: a
