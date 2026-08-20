@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.10] - 2026-08-20
 ### Fixed
 - Reported live while chasing a false `[OK] Rust` in `naner install --list`:
   an enabled vendor's PATH entries and environment variables were merged
