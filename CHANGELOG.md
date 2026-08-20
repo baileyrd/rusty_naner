@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.8] - 2026-08-20
 ### Fixed
 - Reported live while testing `Advanced.IsolateEnvironment` (#128): the
   `ProgramFiles`/`ProgramFiles(x86)`/`CommonProgramFiles`/`ProgramW6432`

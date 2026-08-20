@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.8.
+
+## v0.9.8 — 2026-08-20
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.7...v0.9.8).
+
 - Reported live while testing `Advanced.IsolateEnvironment` (#128) on real
   Windows: a fresh isolated shell threw `x86: The term 'x86' is not
   recognized...`. Root cause: the isolation allowlist
