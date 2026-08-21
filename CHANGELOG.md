@@ -14,6 +14,15 @@
   inside naner's own console, falling back to the old `stdin` path only
   when it reports no real console to read from (piped/redirected stdin,
   where EOF-is-no must stay exactly as it was).
+- Reported live: `naner install GitHub CLI`, typed straight out of
+  `naner install --list`, failed with `Unknown vendor: GitHub` /
+  `Unknown vendor: CLI` -- the shell splits the unquoted space into two
+  arguments. `naner install <name>` already resolved a vendor's
+  space-free JSON key too, but the list never showed it, so a
+  multi-word display name was the only thing to type and could never be
+  typed unquoted. `naner install --list` now hints the key in
+  parentheses for every name containing a space (11 of the shipped
+  vendors), e.g. `GitHub CLI (GitHubCli)`.
 
 ## [0.9.12] - 2026-08-21
 ### Fixed
