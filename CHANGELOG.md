@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.13] - 2026-08-21
 ### Fixed
 - Reported live, still unconfirmed on real Windows: `naner update`'s
   "Update now?" prompt could hang forever inside naner's own relaunched

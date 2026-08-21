@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.13.
+
+## v0.9.13 — 2026-08-21
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.12...v0.9.13).
+
 - Reported live, back on `naner update`'s long-running "Update now?" prompt
   issue (#130/#134): even after v0.9.9's broadened `refresh_std_handles`
   call, the prompt could still hang forever inside naner's own relaunched
