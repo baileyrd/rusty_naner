@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.12] - 2026-08-21
 ### Fixed
 - Reported live: `naner install anaconda` failed every attempt with
   `Installer exited with code 2`. Anaconda's constructor-based silent
