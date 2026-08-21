@@ -116,6 +116,18 @@ pub struct AdvancedConfig {
     /// can't leak into naner's environment during a test run.
     #[serde(default, alias = "isolateEnvironment", alias = "isolateenvironment")]
     pub isolate_environment: bool,
+
+    /// Additive (no C# counterpart): directory junctions created under
+    /// `home\` on first launch after init, `{link name under home -> real
+    /// target path}`. `%HOST_USERPROFILE%` in a target resolves to the
+    /// real Windows profile directory as it was before naner redirected
+    /// `USERPROFILE` to its own tree -- see `home_junctions` for the rest
+    /// of the expansion rules. Bridges specific, well-known real
+    /// directories (Documents/Downloads/Desktop, a personal dev folder)
+    /// back out from underneath that redirect, without giving up
+    /// USERPROFILE's containment for everything else.
+    #[serde(default, alias = "homeJunctions", alias = "homejunctions")]
+    pub home_junctions: OrderedMap<String>,
 }
 
 impl Default for AdvancedConfig {
@@ -126,6 +138,7 @@ impl Default for AdvancedConfig {
             verbose_logging: false,
             debug_mode: false,
             isolate_environment: false,
+            home_junctions: OrderedMap::new(),
         }
     }
 }

@@ -104,7 +104,11 @@ fn config_schema_value() -> serde_json::Value {
                             "InheritSystemPath": { "type": "boolean" },
                             "VerboseLogging": { "type": "boolean" },
                             "DebugMode": { "type": "boolean" },
-                            "IsolateEnvironment": { "type": "boolean" }
+                            "IsolateEnvironment": { "type": "boolean" },
+                            "HomeJunctions": {
+                                "type": "object",
+                                "additionalProperties": { "type": "string" }
+                            }
                         }
                     },
                     "CustomProfiles": {

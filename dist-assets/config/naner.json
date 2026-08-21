@@ -143,7 +143,20 @@
     // OS-survival allowlist) before naner sets its own, so tools already
     // installed system- or user-wide can't leak into a test run. Off by
     // default; also settable per-invocation with NANER_ISOLATE_ENVIRONMENT=true.
-    "IsolateEnvironment": false
+    "IsolateEnvironment": false,
+    // Directory junctions created under home\ on first launch after init --
+    // bridges specific real Windows locations back out from underneath the
+    // USERPROFILE redirect above, without giving up its containment for
+    // everything else. %HOST_USERPROFILE% resolves to the real profile
+    // directory (captured before naner redirects USERPROFILE); a plain
+    // absolute path works too. Skipped, not an error, if the target
+    // doesn't exist yet or something's already at the link path.
+    "HomeJunctions": {
+      "Documents": "%HOST_USERPROFILE%\\Documents",
+      "Downloads": "%HOST_USERPROFILE%\\Downloads",
+      "Desktop": "%HOST_USERPROFILE%\\Desktop",
+      "dev": "C:\\dev"
+    }
   },
   "CustomProfiles": {
     // Opt-in examples (comments are stripped by the loader — uncomment to
