@@ -174,7 +174,6 @@ impl<'a> UnifiedVendorInstaller<'a> {
         let staging_root = self.vendor_dir.join(".staging");
         let staging_target = staging_root.join(&vendor.extract_dir);
         let _ = std::fs::remove_dir_all(&staging_target);
-        let _ = std::fs::create_dir_all(&staging_target);
 
         // `installType: "binary"`: the download IS the tool — a single
         // verified executable placed as-is (no archive to extract, no
@@ -186,7 +185,13 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 .binary_name
                 .clone()
                 .unwrap_or_else(|| info.file_name.clone());
-            std::fs::copy(&download_path, staging_target.join(&placed_name)).is_ok()
+            // The lone copy target below needs `staging_target` to already
+            // exist; every archive extractor in the other branch already
+            // creates it internally (and an .exe installer must NOT find it
+            // pre-created -- see `run_exe_installer`), so this stays scoped
+            // to just the binary path.
+            std::fs::create_dir_all(&staging_target).is_ok()
+                && std::fs::copy(&download_path, staging_target.join(&placed_name)).is_ok()
         } else {
             let seven_zip = self.vendor_dir.join("7zip").join("7z.exe");
             archives::extract_archive(

@@ -321,16 +321,22 @@ fn extract_msi(archive_path: &Path, target_dir: &Path) -> bool {
 
 /// `ExeInstallerExtractor`: run the installer silently with per-vendor
 /// argument defaults and `%TARGETDIR%`/`$TARGETDIR` substitution.
+///
+/// Deliberately does NOT pre-create `target_dir` the way the archive
+/// extractors above do -- an installer .exe creates its own destination.
+/// Reported live: Anaconda's silent installer (`/S /D=<target>`) exited
+/// with code 2 on every attempt. Anaconda/Miniconda's constructor-based
+/// installer refuses to proceed when the target directory already exists,
+/// even empty -- interactively it prompts "directory already exists,
+/// continue?", and in silent mode that prompt has no way to be answered,
+/// so it aborts instead. Pre-creating an empty `target_dir` here tripped
+/// that check on the very first install.
 fn run_exe_installer(
     installer_path: &Path,
     target_dir: &Path,
     vendor_name: &str,
     installer_args: Option<&[String]>,
 ) -> bool {
-    if std::fs::create_dir_all(target_dir).is_err() {
-        return false;
-    }
-
     let arguments =
         build_installer_arguments(installer_path, target_dir, vendor_name, installer_args);
     logger::info(&format!(
@@ -569,5 +575,27 @@ mod tests {
             None,
         );
         assert_eq!(conda, vec!["/S", "/D=C:\\v\\conda"]);
+    }
+
+    /// Reported live: `naner install anaconda` failed every attempt with
+    /// "Installer exited with code 2". Anaconda's constructor-based silent
+    /// installer aborts if its `/D=` target directory already exists, even
+    /// empty -- and this function used to `create_dir_all` it before ever
+    /// spawning the installer. A missing installer binary fails to spawn
+    /// without touching the filesystem either way, so this only proves the
+    /// directory-creation side effect is gone.
+    #[test]
+    fn run_exe_installer_does_not_precreate_the_target_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target_dir = tmp.path().join("vendor").join(".staging").join("anaconda");
+        let missing_installer = tmp.path().join("does-not-exist.exe");
+
+        let ok = run_exe_installer(&missing_installer, &target_dir, "Anaconda", None);
+
+        assert!(!ok, "a missing installer binary should fail to spawn");
+        assert!(
+            !target_dir.exists(),
+            "run_exe_installer must not pre-create target_dir"
+        );
     }
 }
