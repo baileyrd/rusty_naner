@@ -217,6 +217,22 @@ fn find_root_or_explain() -> Option<std::path::PathBuf> {
     }
 }
 
+/// Reported live: `naner install GitHub CLI`, typed straight out of the
+/// list below, failed with "Unknown vendor: GitHub" / "Unknown vendor: CLI"
+/// -- the shell splits the unquoted space into two arguments before naner
+/// ever sees them. `naner install <name>` already resolves the space-free
+/// JSON key too (`loader::vendor_by_key`), but the list never showed it, so
+/// a multi-word vendor's name was the only thing to type and it could never
+/// be typed unquoted. Hint the key for exactly the names this bites -- the
+/// ones containing a space.
+fn vendor_list_label(name: &str, key: &str) -> String {
+    if name.contains(' ') {
+        format!("{name} ({key})")
+    } else {
+        name.to_string()
+    }
+}
+
 /// `ShowVendorList` — plus the machine-readable `--porcelain` variant.
 fn show_vendor_list(
     loader: &VendorConfigurationLoader,
@@ -256,7 +272,8 @@ fn show_vendor_list(
             };
             println!(
                 "\x1b[{color}m  {status} \x1b[0m{:<20} {}",
-                vendor.name, vendor.description
+                vendor_list_label(&vendor.name, &vendor.key),
+                vendor.description
             );
         }
         logger::newline();
@@ -504,7 +521,7 @@ fn show_install_help(optional: &[&VendorDefinition]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{enabled_essential_vendors, restart_hint_applies};
+    use super::{enabled_essential_vendors, restart_hint_applies, vendor_list_label};
     use naner_core::vendors::{VendorConfigurationLoader, essential_vendor_definitions};
 
     /// The bug: a checksum mismatch aborted the only install, and naner still
@@ -520,6 +537,20 @@ mod tests {
     #[test]
     fn a_partial_install_still_needs_a_restart() {
         assert!(restart_hint_applies(3, 1), "two of three landed");
+    }
+
+    /// Reported live: `naner install GitHub CLI`, typed from the list, split
+    /// on the shell's unquoted space into two unknown-vendor arguments. A
+    /// name with no space (the common case) is left untouched -- it was
+    /// always typeable as-is.
+    #[test]
+    fn only_space_containing_names_get_a_key_hint() {
+        assert_eq!(
+            vendor_list_label("GitHub CLI", "GitHubCli"),
+            "GitHub CLI (GitHubCli)"
+        );
+        assert_eq!(vendor_list_label("Go", "Go"), "Go");
+        assert_eq!(vendor_list_label("Node.js", "NodeJS"), "Node.js");
     }
 
     /// The bug: `naner install SevenZip DisabledVendor` with `SevenZip`
