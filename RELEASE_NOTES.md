@@ -98,6 +98,34 @@ PR until it is tagged. Terse per-category entries live in
   naner-owned, regardless of isolation state, so there's no host value
   left to lose in the first place.
 
+- Immediate follow-up: redirecting `USERPROFILE` traded away exactly the
+  thing GUI Save/Open dialogs and browser downloads use to find the real
+  Documents/Downloads/Desktop -- the tradeoff named above, now bridged
+  back rather than just accepted. `Advanced.HomeJunctions` creates
+  directory junctions under `home\` linking specific real Windows
+  locations back out from underneath the redirect: `Documents`,
+  `Downloads`, and `Desktop` to their real counterparts by default, plus
+  a personal `dev` to `C:\dev`.
+
+  A junction rather than a symlink: `mklink /D` (and Rust's
+  `std::os::windows::fs::symlink_dir`) needs `SeCreateSymbolicLinkPrivilege`
+  -- admin, or Developer Mode enabled -- a real ask of anyone who just
+  wants to double-click naner and go. `mklink /J` needs neither, and
+  works fine for this: local, same-machine directories, no network paths
+  involved. Targets can use the new `%HOST_USERPROFILE%` token --
+  resolved from the real `USERPROFILE` value, captured at the very start
+  of the launcher before naner's own redirect overwrites it for that
+  process -- or a plain absolute path, as `dev` does.
+
+  Created once, at first launch after init: a junction is a real
+  filesystem entry, so every later launch's "does something already
+  exist at this path" check is already true and skips it -- no repeated
+  work, and nothing already there (a prior junction, or a real directory
+  the user put there instead) ever gets overwritten. A target that
+  doesn't exist yet (nobody's created `C:\dev` on this machine) is
+  skipped the same way, not an error -- there's simply nothing to link
+  to until it does.
+
 ## v0.9.12 — 2026-08-21
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.11...v0.9.12).

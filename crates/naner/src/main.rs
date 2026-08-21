@@ -97,6 +97,12 @@ fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleS
         return 0;
     }
 
+    // Captured before anything below can redirect USERPROFILE: the real
+    // Windows profile directory, for Advanced.HomeJunctions' %HOST_USERPROFILE%
+    // targets to bridge back out to. Once naner's own EnvironmentVariables
+    // loop runs, this process's own $env:USERPROFILE no longer says it.
+    let host_userprofile = std::env::var("USERPROFILE").ok();
+
     // Quiet unless debugging — the launcher's normal path prints nothing.
     let quiet = !opts.debug;
 
@@ -249,6 +255,16 @@ fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleS
             &isolated_vars,
         );
     }
+
+    // Advanced.HomeJunctions: bridge specific real Windows locations back
+    // out from underneath the USERPROFILE redirect above. A one-time
+    // filesystem side effect (the junction persists after this), skipped
+    // for --export-env since that path must stay a pure script generator.
+    naner_core::home_junctions::ensure_home_junctions(
+        &naner_root,
+        &cfg.advanced.home_junctions,
+        host_userprofile.as_deref(),
+    );
 
     // --setup-only: environment configured, done.
     if opts.setup_only {

@@ -40,6 +40,17 @@
   instead of the real Windows profile. Also makes the `Advanced.IsolateEnvironment`
   + `USERPROFILE` fix from earlier moot going forward: `USERPROFILE` is
   now always naner-owned, isolated or not.
+- `Advanced.HomeJunctions` (`naner.json`): directory junctions
+  (`mklink /J` -- no admin or Developer Mode needed, unlike a real
+  symlink) created under `home\` on first launch after init, bridging
+  specific real Windows locations back out from underneath the
+  `USERPROFILE` redirect above. Shipped default links `Documents`,
+  `Downloads`, and `Desktop` to their real counterparts via the new
+  `%HOST_USERPROFILE%` token (the real profile directory, captured
+  before naner's own redirect overwrites it for this process) plus a
+  personal `dev` to `C:\dev`. Skipped, not an error, when a target
+  doesn't exist yet or something's already at the link path -- never
+  overwrites.
 
 ## [0.9.12] - 2026-08-21
 ### Fixed
