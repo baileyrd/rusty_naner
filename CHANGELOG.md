@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.9.11] - 2026-08-21
 ### Fixed
 - Reported live: with `Advanced.IsolateEnvironment` on, double-clicking
   `naner.exe` threw `Could not access starting directory
