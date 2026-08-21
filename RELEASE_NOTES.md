@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.12.
+
+## v0.9.12 — 2026-08-21
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.11...v0.9.12).
+
 - Reported live: `naner install anaconda` failed every time with
   `Installer exited with code 2`, right after the download and checksum
   verification succeeded. Anaconda's own installer (constructor-based
