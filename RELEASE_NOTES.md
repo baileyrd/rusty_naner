@@ -65,6 +65,39 @@ PR until it is tagged. Terse per-category entries live in
   contains a space -- `GitHub CLI (GitHubCli)` -- so the unquoted form is
   visible right where someone would otherwise copy the name that breaks.
 
+- Asked, then decided against on reflection, then decided in favor of
+  anyway: whether naner should redirect `USERPROFILE` the way it already
+  redirects `HOME`. The concern raised first was real -- unlike `TEMP`
+  (invisible plumbing nothing looks at directly), `USERPROFILE` is what
+  Save/Open dialogs, browser downloads, and Explorer's quick-access list
+  resolve against, so redirecting it changes where things land for any
+  GUI app run from a naner shell. But naner's own vendor catalog *is*
+  meant to be launched exactly that way (Zed, Zen Browser, Obsidian,
+  Inkscape, and more all live on naner's PATH), and native Win32 dialogs
+  mostly don't read the env var at all -- they resolve through the
+  registry-backed Known Folder API, untouched either way. What *does*
+  read `%USERPROFILE%`/`os.homedir()` directly is exactly the kind of
+  thing naner exists to run: Node, Python, Go, git, and most CLI dev
+  tooling. Redirecting it keeps that whole class contained inside naner's
+  own tree instead of scattered across the real Windows profile, for the
+  same reason `HOME` already is. `naner.json` now sets `USERPROFILE` to
+  the same path as `HOME`.
+
+  `TEMP`/`TMP` get the same treatment, redirected to
+  `%NANER_ROOT%\home\.tmp`. Unlike the XDG cache/data directories already
+  redirected here, no spec obligates a tool to create its own `%TEMP%`
+  before writing to it -- a real Windows profile's temp directory is just
+  always there -- so `setup_environment` now creates `home\.tmp`
+  unconditionally at startup, the same way `home\` itself is guaranteed
+  to exist.
+
+  One side effect worth naming: this makes the `Advanced.IsolateEnvironment`
+  + `USERPROFILE` fix from earlier this cycle moot going forward, in a
+  good way. That fix was about *preserving* the host's `USERPROFILE`
+  value through isolation; now `USERPROFILE` is unconditionally
+  naner-owned, regardless of isolation state, so there's no host value
+  left to lose in the first place.
+
 ## v0.9.12 — 2026-08-21
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.11...v0.9.12).

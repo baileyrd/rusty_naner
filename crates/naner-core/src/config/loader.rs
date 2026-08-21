@@ -494,6 +494,32 @@ mod vendor_merge_tests {
         assert_eq!(actual, EXPECTED, "assembled PATH order drifted");
     }
 
+    /// USERPROFILE/TEMP/TMP are redirected into naner's own home tree, same
+    /// as HOME -- keeping every scratch file and profile-dependent tool a
+    /// naner shell touches contained there instead of the host's real
+    /// profile and temp directories.
+    #[test]
+    fn the_shipped_config_redirects_userprofile_and_temp() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .unwrap();
+        let cfg = load_file(&repo.join("dist-assets/config/naner.json")).unwrap();
+        let vars = &cfg.environment.environment_variables;
+        assert_eq!(
+            vars.get("USERPROFILE").map(String::as_str),
+            Some(vars.get("HOME").unwrap().as_str())
+        );
+        assert_eq!(
+            vars.get("TEMP").map(String::as_str),
+            Some("%NANER_ROOT%\\home\\.tmp")
+        );
+        assert_eq!(
+            vars.get("TMP").map(String::as_str),
+            Some("%NANER_ROOT%\\home\\.tmp")
+        );
+    }
+
     /// A vendor switched off contributes nothing at all. Before the split
     /// every entry sat unconditionally in `naner.json`, so a vendor installed
     /// and then disabled kept its directory on PATH and its variables set --

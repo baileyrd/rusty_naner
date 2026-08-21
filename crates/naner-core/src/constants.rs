@@ -51,6 +51,11 @@ pub mod directory_names {
     pub const HOME: &str = "home";
     pub const LOGS: &str = "logs";
     pub const DOWNLOADS: &str = ".downloads";
+    /// TEMP/TMP redirect here (naner.json) so scratch files stay inside
+    /// naner's own tree instead of the host's real temp directory. Unlike
+    /// the XDG dirs, tools aren't obligated to create TEMP themselves
+    /// before using it, so `setup_environment` creates this unconditionally.
+    pub const TEMP: &str = "home/.tmp";
 
     /// First-run "essential" set — note this includes `home`, while root
     /// *discovery* markers are only bin+vendor+config. The asymmetry is
