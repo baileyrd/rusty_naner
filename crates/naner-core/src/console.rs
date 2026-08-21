@@ -92,10 +92,21 @@ pub fn refresh_std_handles() -> bool {
     imp::refresh_std_handles()
 }
 
+/// Read one line via raw console input (`ReadConsoleInputW` against a
+/// freshly fetched `STD_INPUT_HANDLE`), echoing each character and handling
+/// Backspace/Enter itself -- entirely bypassing `std::io::stdin()`, the same
+/// way [`wait_for_keypress`] already does for a single key. `None` means
+/// `STD_INPUT_HANDLE` isn't a real console (piped/redirected stdin, where
+/// the caller should fall back to a normal `stdin` read) or the read failed
+/// outright. Always `None` off Windows.
+pub fn read_line_raw() -> Option<String> {
+    imp::read_line_raw()
+}
+
 #[cfg(windows)]
 mod imp {
     use super::ConsoleState;
-    use std::io::BufRead;
+    use std::io::{BufRead, Write};
     use windows_sys::Win32::Foundation::{
         GENERIC_READ, GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE,
     };
@@ -314,12 +325,99 @@ mod imp {
         unsafe { SetConsoleMode(h, mode) };
         ok
     }
+
+    const VK_RETURN: u16 = 0x0D;
+    const VK_BACK: u16 = 0x08;
+
+    /// Reported live: `naner update`'s "Update now?" prompt could still hang
+    /// forever inside naner's own relaunched console even after
+    /// `refresh_std_handles` -- no warning, no exit, nothing, despite the
+    /// console clearly working (its own text kept rendering fine, and a
+    /// second `naner.exe` process sat there, confirmed alive, in Task
+    /// Manager). `std::io::stdin()`'s buffered line read never saw the
+    /// keystrokes even though `try_read_single_key` above, reading the exact
+    /// same console through raw `ReadConsoleInputW` against a freshly
+    /// fetched handle, has never shown this symptom for "Press any key to
+    /// exit" in the identical relaunched-console scenario. This is that same
+    /// primitive, generalized to a full line instead of one key.
+    pub fn read_line_raw() -> Option<String> {
+        let h = std_handle(STD_INPUT_HANDLE)?;
+        let mut mode = 0u32;
+        // SAFETY: `h` is a live handle; `mode` is a valid out-pointer.
+        if unsafe { GetConsoleMode(h, &mut mode) } == 0 {
+            return None;
+        }
+        // Echo is handled by hand below, one character at a time, as each
+        // key event arrives.
+        let raw_mode = mode & !(ENABLE_LINE_INPUT | ENABLE_ECHO_INPUT);
+        // SAFETY: `h` is a live handle; `raw_mode` is a valid console-mode
+        // bitmask.
+        if unsafe { SetConsoleMode(h, raw_mode) } == 0 {
+            return None;
+        }
+
+        let mut line = String::new();
+        let mut record: INPUT_RECORD = unsafe { std::mem::zeroed() };
+        let mut read = 0u32;
+        let result = loop {
+            // SAFETY: `h` is a live handle; `record`/`read` are valid
+            // out-pointers sized for a single-element read.
+            if unsafe { ReadConsoleInputW(h, &mut record, 1, &mut read) } == 0 || read == 0 {
+                break None;
+            }
+            // SAFETY: `record.EventType` tags the union as a
+            // `KEY_EVENT_RECORD` before `Event.KeyEvent` is read.
+            let key_down = record.EventType as u32 == KEY_EVENT
+                && unsafe { record.Event.KeyEvent.bKeyDown } != 0;
+            if !key_down {
+                continue;
+            }
+            // SAFETY: already confirmed a key-down `KEY_EVENT_RECORD` above.
+            let key_event = unsafe { record.Event.KeyEvent };
+            match key_event.wVirtualKeyCode {
+                VK_RETURN => {
+                    print!("\r\n");
+                    let _ = std::io::stdout().flush();
+                    break Some(());
+                }
+                VK_BACK => {
+                    if line.pop().is_some() {
+                        print!("\u{8} \u{8}");
+                        let _ = std::io::stdout().flush();
+                    }
+                }
+                _ => {
+                    // SAFETY: reading the union's `UnicodeChar` arm on a key
+                    // event is always valid.
+                    let code_unit = unsafe { key_event.uChar.UnicodeChar };
+                    // Printable only: control characters (Tab, Esc, ...)
+                    // carry no glyph naner's own echo can render sensibly.
+                    if code_unit >= 0x20
+                        && let Some(ch) = char::from_u32(code_unit as u32)
+                    {
+                        line.push(ch);
+                        print!("{ch}");
+                        let _ = std::io::stdout().flush();
+                    }
+                }
+            }
+        };
+
+        // SAFETY: `h` is a live handle; `mode` is the value `GetConsoleMode`
+        // reported before this function changed it.
+        unsafe { SetConsoleMode(h, mode) };
+        result.map(|()| line)
+    }
 }
 
 #[cfg(not(windows))]
 mod imp {
     use super::ConsoleState;
     use std::io::BufRead;
+
+    pub fn read_line_raw() -> Option<String> {
+        None
+    }
 
     pub fn setup() -> ConsoleState {
         ConsoleState::Inherited

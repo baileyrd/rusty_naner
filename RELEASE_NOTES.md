@@ -9,6 +9,45 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+- Reported live, back on `naner update`'s long-running "Update now?" prompt
+  issue (#130/#134): even after v0.9.9's broadened `refresh_std_handles`
+  call, the prompt could still hang forever inside naner's own relaunched
+  console -- but this time with neither of v0.9.9's diagnostics firing.
+  No "could not refresh" warning, no "stdin read EOF/failed" warning, no
+  exit at all -- just silence, with the prompt text sitting there exactly
+  as it should. A screenshot of Task Manager settled what was actually
+  happening: two `naner.exe` processes, the relaunched child genuinely
+  alive and blocked, and no second window reachable by Alt+Tab -- so this
+  was the one real, visible console, correctly rendering output, simply
+  never receiving the keystrokes typed into it. That rules out both of
+  v0.9.9's theories (a failed handle reopen, an immediate EOF) and the
+  original "wrong console has focus" theory alike: the read itself was
+  genuinely blocking, not failing.
+
+  The fix looks sideways instead of deeper into the same mechanism.
+  `console::wait_for_keypress` -- what naner-init's "Press any key to
+  exit" pause uses, in this exact relaunched-console scenario -- has
+  never shown this symptom since it shipped, and it reads differently
+  from the Y/n prompt: raw `ReadConsoleInputW` against a freshly fetched
+  handle, bypassing `std::io::stdin()`'s buffered line reader entirely.
+  Added `console::read_line_raw`, that same raw-read primitive
+  generalized from one keypress to a full line (echoing each character
+  and handling Backspace/Enter by hand, since disabling
+  `ENABLE_LINE_INPUT` hands that job to the caller). `prompt_yes` now
+  tries it first whenever it's inside naner's own console, falling back
+  to the original `stdin`-based path -- diagnostics and all -- only when
+  `read_line_raw` reports `STD_INPUT_HANDLE` isn't a real console at all,
+  which is exactly the piped/redirected case the existing EOF-is-no
+  contract depends on and must keep working unchanged.
+
+  This is a genuine fix attempt, not another diagnostics-only release --
+  but it's still unconfirmed on real Windows, the same as every change in
+  this area. If the prompt still hangs after this, the next lead is
+  narrower still: something about how a `CREATE_NEW_CONSOLE`-relaunched,
+  GUI-subsystem child's console interacts with keyboard input at all in
+  this environment, since raw `ReadConsoleInputW` was the one mechanism
+  with no prior report of failing here.
+
 - Reported live: `naner install GitHub CLI`, typed straight out of `naner
   install --list`, failed with `Unknown vendor: GitHub` and `Unknown
   vendor: CLI`. Nothing was wrong with vendor resolution -- `naner install
