@@ -1,3 +1,16 @@
+## [Unreleased]
+### Fixed
+- Reported live: `naner install anaconda` failed every attempt with
+  `Installer exited with code 2`. Anaconda's constructor-based silent
+  installer (`/S /D=<target>`) aborts if its target directory already
+  exists, even empty. `install_vendor` pre-created that directory for
+  every install type before running the extractor, and `run_exe_installer`
+  did the same again, so an `.exe` installer always found its own target
+  already there. Both pre-creations are removed for the exe-installer
+  path -- an installer creates its own destination; archive extractors
+  (zip/tar/msi) already create theirs internally, so only the `binary`
+  install type (a plain file copy) still needs it done ahead of time.
+
 ## [0.9.11] - 2026-08-21
 ### Fixed
 - Reported live: with `Advanced.IsolateEnvironment` on, double-clicking

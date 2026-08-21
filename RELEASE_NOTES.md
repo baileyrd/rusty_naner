@@ -9,7 +9,26 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.11.
+- Reported live: `naner install anaconda` failed every time with
+  `Installer exited with code 2`, right after the download and checksum
+  verification succeeded. Anaconda's own installer (constructor-based
+  NSIS, invoked here as `/S /D=<target>`) refuses to proceed if its
+  destination directory already exists -- interactively it shows a
+  "directory already exists, continue?" prompt, and silent mode has no
+  way to answer that, so it just aborts. Two layers of naner's own code
+  were creating that directory ahead of time without realizing it: the
+  shared staging step in `install_vendor` (`installer.rs`) unconditionally
+  `create_dir_all`'d the staging target for every install type, and
+  `run_exe_installer` (`archives.rs`) did the same again as its first
+  line, in case it was ever called on its own. Between the two, an
+  `.exe`-based installer could never find its own target directory
+  missing. Neither pre-creation was actually needed for this path: every
+  archive extractor (zip/tar.xz/msi) already creates its own destination
+  internally, and an installer `.exe` is expected to create its own
+  install directory the same way it would on a fresh machine -- only the
+  `binary` install type (a plain file copy, no extraction or installer
+  involved) genuinely needs the directory to exist first, so that's the
+  only place still creating it.
 
 ## v0.9.11 — 2026-08-21
 
