@@ -9,6 +9,12 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Nothing merged since v0.9.11.
+
+## v0.9.11 — 2026-08-21
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.10...v0.9.11).
+
 - Reported live right after v0.9.10 shipped: with `Advanced.IsolateEnvironment`
   on, double-clicking `naner.exe` threw `Could not access starting directory
   "C:\tools\naner\%USERPROFILE%"` instead of launching. `naner.json` sets
