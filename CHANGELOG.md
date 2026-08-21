@@ -24,6 +24,23 @@
   parentheses for every name containing a space (11 of the shipped
   vendors), e.g. `GitHub CLI (GitHubCli)`.
 
+### Added
+- `USERPROFILE`/`TEMP`/`TMP` now redirect into naner's own home tree
+  (`naner.json`), same as `HOME` already did: `USERPROFILE` points at
+  `%NANER_ROOT%\home` (a tool reading only `USERPROFILE` -- `os.homedir()`
+  on Windows, `os.path.expanduser`, many Node/Electron/Go tools -- now
+  lands there too, same as everything else); `TEMP`/`TMP` point at
+  `%NANER_ROOT%\home\.tmp`, which `setup_environment` now creates at
+  startup since (unlike the XDG cache/data dirs already redirected here)
+  no spec obligates a tool to create its own TEMP directory before using
+  it. Scoped to processes launched from within a naner shell -- their own
+  children inherit it, the host is untouched -- but that does include any
+  GUI app run from that shell (naner's own vendored ones included), whose
+  own Save/Open dialogs and downloads may now default into naner's home
+  instead of the real Windows profile. Also makes the `Advanced.IsolateEnvironment`
+  + `USERPROFILE` fix from earlier moot going forward: `USERPROFILE` is
+  now always naner-owned, isolated or not.
+
 ## [0.9.12] - 2026-08-21
 ### Fixed
 - Reported live: `naner install anaconda` failed every attempt with

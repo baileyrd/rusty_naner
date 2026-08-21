@@ -276,6 +276,13 @@ fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleS
 
 /// `PathResolver.SetupEnvironment`: NANER_ROOT, NANER_ENVIRONMENT, and (iff
 /// `home/` exists) HOME + NANER_HOME on the process environment.
+///
+/// Also ensures `home/.tmp` exists, unlike the XDG cache/data dirs naner.json
+/// also points into `home/` -- those are created by whichever tool first
+/// writes to them (the XDG spec requires it), but there's no equivalent
+/// contract for TEMP/TMP. A real Windows profile's temp directory always
+/// exists; naner.json now redirects TEMP/TMP into naner's own tree, so
+/// naner itself has to uphold that same guarantee.
 fn setup_environment(naner_root: &Path, environment: &str) {
     // SAFETY: single-threaded launcher flow.
     unsafe {
@@ -285,6 +292,7 @@ fn setup_environment(naner_root: &Path, environment: &str) {
         if home_path.is_dir() {
             std::env::set_var("HOME", &home_path);
             std::env::set_var("NANER_HOME", &home_path);
+            let _ = std::fs::create_dir_all(naner_root.join(constants::directory_names::TEMP));
         }
     }
 }
