@@ -9,7 +9,22 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.12.
+- Reported live: `naner install GitHub CLI`, typed straight out of `naner
+  install --list`, failed with `Unknown vendor: GitHub` and `Unknown
+  vendor: CLI`. Nothing was wrong with vendor resolution -- `naner install
+  <name>` already accepts a vendor's JSON key (`GitHubCli`, no space) as
+  well as its display name, exactly to give a space-free alternative for
+  cases like this. The problem was the shell: an unquoted `GitHub CLI` on
+  the command line is two arguments by the time naner ever sees it, one
+  per word, and neither `GitHub` nor `CLI` alone matches anything. The
+  list itself only ever showed the space-containing display name, so
+  there was no way to know an unquoted alternative even existed short of
+  reading the vendor JSON files directly. 11 of the shipped vendors have
+  multi-word names (`GitHub CLI`, `Oh My Posh`, `Windows Terminal`, `.NET
+  SDK`, and others), so this wasn't a one-vendor problem. `naner install
+  --list` now prints the key in parentheses next to every name that
+  contains a space -- `GitHub CLI (GitHubCli)` -- so the unquoted form is
+  visible right where someone would otherwise copy the name that breaks.
 
 ## v0.9.12 — 2026-08-21
 
