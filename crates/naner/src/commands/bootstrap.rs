@@ -242,12 +242,29 @@ fn offer_add_to_path(_naner_root: &Path) {}
 /// so the diagnostics below only fire inside naner's own relaunched console
 /// (`OWN_CONSOLE_ENV`) -- the one case where an instant EOF is *not*
 /// expected, because that console exists specifically to be interactive.
+///
+/// Reported live, still inside that same relaunched console, even after
+/// `refresh_std_handles` below: the prompt could hang forever instead of
+/// hitting either diagnostic -- no warning, no EOF, nothing, while Task
+/// Manager confirmed the process was genuinely alive and blocked, and the
+/// prompt text above it had rendered correctly. `std::io::stdin()`'s
+/// buffered line read never saw the keystrokes even though
+/// `console::wait_for_keypress` (used for naner-init's "Press any key to
+/// exit", same relaunched console) reads raw via `ReadConsoleInputW`
+/// against a freshly fetched handle and has never shown this symptom. So
+/// `own_console` now tries `console::read_line_raw` -- that same raw
+/// primitive, generalized to a line -- first, falling back to the stdin
+/// path below only when it reports no real console to read from.
 fn prompt_yes(question: &str) -> bool {
     print!("{question}");
     let _ = std::io::stdout().flush();
     let own_console = std::env::var_os(OWN_CONSOLE_ENV).is_some();
     if !console::refresh_std_handles() && own_console {
         logger::warning("  Could not refresh this console's input/output before the prompt above");
+    }
+    if own_console && let Some(line) = console::read_line_raw() {
+        let normalized = line.trim().to_lowercase();
+        return normalized.is_empty() || normalized == "y" || normalized == "yes";
     }
     let mut response = String::new();
     match std::io::stdin().lock().read_line(&mut response) {

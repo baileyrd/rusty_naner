@@ -1,3 +1,20 @@
+## [Unreleased]
+### Fixed
+- Reported live, still unconfirmed on real Windows: `naner update`'s
+  "Update now?" prompt could hang forever inside naner's own relaunched
+  console even after v0.9.9's `refresh_std_handles` -- no warning, no
+  exit, nothing, while Task Manager confirmed the process was genuinely
+  alive and blocked and the prompt text had rendered correctly.
+  `std::io::stdin()`'s buffered line read never saw the keystrokes even
+  though `console::wait_for_keypress` (used for naner-init's "Press any
+  key to exit", the identical relaunched-console scenario) reads raw via
+  `ReadConsoleInputW` against a freshly fetched handle and has never
+  shown this symptom. Added `console::read_line_raw`, that same
+  primitive generalized to a full line; `prompt_yes` now tries it first
+  inside naner's own console, falling back to the old `stdin` path only
+  when it reports no real console to read from (piped/redirected stdin,
+  where EOF-is-no must stay exactly as it was).
+
 ## [0.9.12] - 2026-08-21
 ### Fixed
 - Reported live: `naner install anaconda` failed every attempt with
