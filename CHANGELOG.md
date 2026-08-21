@@ -1,3 +1,16 @@
+## [Unreleased]
+### Fixed
+- Reported live: with `Advanced.IsolateEnvironment` on, double-clicking
+  `naner.exe` threw `Could not access starting directory
+  "C:\tools\naner\%USERPROFILE%"`. `USERPROFILE` was missing from
+  `env_isolation::KEEP_ON_ISOLATE`, so isolation cleared it -- but
+  `naner.json` deliberately leaves `%USERPROFILE%` unexpanded by naner
+  itself (profiles start there; it's the one thing tools that ignore `HOME`
+  still resolve), so it stayed literal and `wt.exe` resolved it relative to
+  its own working directory (`naner_root`) instead. Added `USERPROFILE` to
+  the keep list -- same category as the `ProgramFiles` family: a standard
+  per-user OS variable, not a tool-install indicator.
+
 ## [0.9.10] - 2026-08-20
 ### Fixed
 - Reported live while chasing a false `[OK] Rust` in `naner install --list`:
