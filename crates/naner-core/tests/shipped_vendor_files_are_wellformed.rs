@@ -75,7 +75,7 @@ fn every_file_declares_exactly_one_vendor_named_after_it() {
 fn the_shipped_set_is_intact() {
     let keys: Vec<String> = shipped().into_iter().map(|(stem, _)| stem).collect();
 
-    assert_eq!(keys.len(), 30, "expected 30 vendor files, found {keys:?}");
+    assert_eq!(keys.len(), 32, "expected 32 vendor files, found {keys:?}");
     for essential in ["SevenZip", "PowerShell", "WindowsTerminal", "GitForWindows"] {
         assert!(
             keys.iter().any(|k| k == essential),

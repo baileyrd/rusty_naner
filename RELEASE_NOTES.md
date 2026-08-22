@@ -34,6 +34,20 @@ New optional vendors: **Ruff** and **ty** (Astral's Python linter/formatter
 and type checker), same GitHub-release-plus-`.sha256`-sidecar shape as the
 existing Uv vendor.
 
+Reported live: `naner install zed` failed checksum verification —
+`Zed.json`'s pinned `checksum` didn't match the real, correctly-downloaded
+`v1.16.1` artifact. Its `fallback.version` pin already matched latest, so it
+wasn't drift `refresh-pins` would ever have caught: nothing refreshes a
+static `checksum` on a GitHub-sourced vendor, ever, only the `fallback`
+block. `refresh-pins` now also rewrites `checksum.value` when GitHub's
+release API publishes a `digest` for the resolved asset (present on
+immutable/attested releases) and it disagrees with the pinned one — an
+operator's pin still wins at install time (`resolved_checksum`), refreshing
+the pin file is that operator re-asserting it. A vendor with no `checksum`
+object never gets one added. Same class of bug is latent in `ImageGlass`,
+`Inkscape`, `Obsidian`, `Podman`, and `Zen`; `refresh-pins --dry-run` now
+catches version-unchanged checksum staleness on all of them going forward.
+
 ## v0.9.14 — 2026-08-21
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.13...v0.9.14).

@@ -9,6 +9,18 @@
 //! directory explicitly (this repo's own `dist-assets/config/vendors` when
 //! run from a checkout); default is the discovered root's `config/vendors`.
 //!
+//! Also rewrites a vendor's static top-level `checksum`, when GitHub's
+//! release API publishes a `digest` for the resolved asset. Reported live:
+//! `naner install zed` failed checksum verification on a `checksum` value
+//! that had simply gone stale — nothing had ever refreshed it, and the
+//! `fallback.version` pin already matched latest, so the version-drift check
+//! below wouldn't have caught it either. GitHub's digest is authoritative
+//! for the exact resolved artifact, so it wins here the way an operator's
+//! pin wins over it at install time (`resolved_checksum`) -- refreshing
+//! *is* the operator re-asserting the pin, not upstream overriding it.
+//! Vendors with no static `checksum` are left alone; this never adds one
+//! that wasn't already there.
+//!
 //! Static-URL vendors have no "latest" to resolve — their pinned version IS
 //! the install — so they are reported as manual-only, never rewritten.
 
@@ -171,23 +183,38 @@ fn refresh_one(
         }
     }
 
-    if vendor.fallback_url.as_deref() == Some(info.url.as_str())
-        && row.pinned.as_deref() == Some(latest_version.as_str())
-    {
+    // GitHub's own digest for the resolved asset (when it published one)
+    // wins over a stale pin here -- refreshing the pin file *is* the
+    // operator re-asserting it, the same authority `resolved_checksum` gives
+    // a hand-edited `checksum` at install time.
+    let checksum_update = vendor.checksum.as_ref().and_then(|pinned| {
+        info.checksum
+            .as_ref()
+            .filter(|upstream| !pinned.value.eq_ignore_ascii_case(&upstream.value))
+    });
+
+    let version_current = vendor.fallback_url.as_deref() == Some(info.url.as_str())
+        && row.pinned.as_deref() == Some(latest_version.as_str());
+
+    if version_current && checksum_update.is_none() {
         row.state = "current".into();
         return row;
+    }
+    if checksum_update.is_some() {
+        row.note = format!("{} (checksum)", row.note);
     }
 
     if dry_run {
         row.state = "updated".into();
         return row;
     }
-    match rewrite_fallback(
+    match rewrite_pin(
         &vendors_dir.join(format!("{}.json", vendor.key)),
         &vendor.key,
         &latest_version,
         &info.url,
         &info.file_name,
+        checksum_update.map(|c| c.value.as_str()),
     ) {
         Ok(()) => row.state = "updated".into(),
         Err(e) => {
@@ -198,30 +225,43 @@ fn refresh_one(
     row
 }
 
-/// Rewrite one vendor file's `releaseSource.fallback` in place, preserving
-/// key order (`serde_json` here carries `preserve_order`) and refusing files
-/// whose comments a parse-and-reserialize round trip would silently delete.
-fn rewrite_fallback(
+/// Rewrite one vendor file's `releaseSource.fallback` (always) and its
+/// top-level `checksum.value` (only when `checksum` is `Some`, and only if
+/// the vendor file already has a `checksum` object to update -- this never
+/// adds one that wasn't already there) in place, preserving key order
+/// (`serde_json` here carries `preserve_order`) and refusing files whose
+/// comments a parse-and-reserialize round trip would silently delete.
+fn rewrite_pin(
     path: &Path,
     key: &str,
     version: &str,
     url: &str,
     file_name: &str,
+    checksum: Option<&str>,
 ) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
     if strip_json_comments(&text) != text {
         return Err("file contains comments a rewrite would delete; update it by hand".into());
     }
     let mut root: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    let fallback = root
+    let vendor_obj = root
         .get_mut(key)
-        .and_then(|v| v.get_mut("releaseSource"))
+        .ok_or_else(|| format!("no top-level \"{key}\" object in file"))?;
+
+    let fallback = vendor_obj
+        .get_mut("releaseSource")
         .and_then(|v| v.get_mut("fallback"))
         .and_then(|v| v.as_object_mut())
         .ok_or("no releaseSource.fallback object in file")?;
     fallback.insert("version".into(), json!(version));
     fallback.insert("url".into(), json!(url));
     fallback.insert("fileName".into(), json!(file_name));
+
+    if let Some(digest) = checksum
+        && let Some(checksum_obj) = vendor_obj.get_mut("checksum").and_then(|v| v.as_object_mut())
+    {
+        checksum_obj.insert("value".into(), json!(digest));
+    }
 
     let pretty = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())?;
     std::fs::write(path, pretty + "\n").map_err(|e| e.to_string())
@@ -261,12 +301,13 @@ mod tests {
         let path = tmp.path().join("Tool.json");
         std::fs::write(&path, FILE).unwrap();
 
-        rewrite_fallback(
+        rewrite_pin(
             &path,
             "Tool",
             "2.1.0",
             "https://example.com/2.1.0/tool-win-x64.zip",
             "tool-win-x64.zip",
+            None,
         )
         .unwrap();
 
@@ -294,13 +335,84 @@ mod tests {
         );
     }
 
+    /// The bug this exists for: `naner install zed` failed checksum
+    /// verification on a pin that had simply gone stale, with
+    /// `fallback.version` already matching latest -- the version-drift path
+    /// alone would never have caught it. A vendor with a `checksum` object
+    /// gets its `value` rewritten too, without disturbing `algorithm` or
+    /// `required`.
+    #[test]
+    fn a_stale_checksum_is_rewritten_alongside_the_fallback() {
+        const WITH_CHECKSUM: &str = r#"{
+  "Tool": {
+    "name": "Tool",
+    "extractDir": "tool",
+    "enabled": true,
+    "required": false,
+    "releaseSource": {
+      "type": "github",
+      "repo": "example/tool",
+      "assetPattern": "tool-win-x64.zip",
+      "fallback": {
+        "version": "1.0.0",
+        "url": "https://example.com/1.0.0/tool-win-x64.zip",
+        "fileName": "tool-win-x64.zip",
+        "size": "~10"
+      }
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "required": true
+    }
+  }
+}
+"#;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("Tool.json");
+        std::fs::write(&path, WITH_CHECKSUM).unwrap();
+
+        let fresh_digest = "b".repeat(64);
+        rewrite_pin(
+            &path,
+            "Tool",
+            "1.0.0",
+            "https://example.com/1.0.0/tool-win-x64.zip",
+            "tool-win-x64.zip",
+            Some(&fresh_digest),
+        )
+        .unwrap();
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(parsed["Tool"]["checksum"]["value"], fresh_digest);
+        assert_eq!(parsed["Tool"]["checksum"]["algorithm"], "SHA256");
+        assert_eq!(parsed["Tool"]["checksum"]["required"], true);
+    }
+
+    /// A vendor with no `checksum` object never gets one added — refreshing
+    /// only ever updates a pin that already opted in.
+    #[test]
+    fn no_checksum_object_is_never_added() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("Tool.json");
+        std::fs::write(&path, FILE).unwrap();
+
+        let digest = "c".repeat(64);
+        rewrite_pin(&path, "Tool", "1.0.0", "u", "f", Some(&digest)).unwrap();
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert!(parsed["Tool"].get("checksum").is_none());
+    }
+
     #[test]
     fn a_commented_file_is_refused_not_flattened() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("Tool.json");
         std::fs::write(&path, format!("// hands off\n{FILE}")).unwrap();
 
-        let err = rewrite_fallback(&path, "Tool", "2.0.0", "u", "f").unwrap_err();
+        let err = rewrite_pin(&path, "Tool", "2.0.0", "u", "f", None).unwrap_err();
         assert!(err.contains("comments"), "{err}");
         assert_eq!(
             std::fs::read_to_string(&path).unwrap(),
@@ -318,6 +430,6 @@ mod tests {
             r#"{ "Tool": { "name": "Tool", "releaseSource": { "type": "github" } } }"#,
         )
         .unwrap();
-        assert!(rewrite_fallback(&path, "Tool", "2.0.0", "u", "f").is_err());
+        assert!(rewrite_pin(&path, "Tool", "2.0.0", "u", "f", None).is_err());
     }
 }

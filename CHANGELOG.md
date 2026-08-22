@@ -14,6 +14,14 @@
   and type checker), GitHub-release-sourced with `.sha256` sidecar
   verification, same shape as `Uv`.
 
+### Fixed
+- `Zed.json`'s pinned `checksum` had gone stale (didn't match the real
+  `v1.16.1` asset) with nothing to catch it: `refresh-pins` only ever
+  rewrote `fallback`, never a static `checksum`. It now also rewrites
+  `checksum.value` when GitHub's release API publishes a `digest` for the
+  resolved asset and it disagrees with the pin. Never adds a `checksum`
+  object that wasn't already there.
+
 ## [0.9.14] - 2026-08-21
 ### Fixed
 - `naner install`/`update-vendors` never applied naner.json's home

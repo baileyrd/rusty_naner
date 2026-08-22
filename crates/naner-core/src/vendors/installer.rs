@@ -615,6 +615,11 @@ impl<'a> UnifiedVendorInstaller<'a> {
         struct GitHubAsset {
             name: Option<String>,
             browser_download_url: Option<String>,
+            /// `sha256:<hex>` on releases GitHub attaches a digest to (seen
+            /// live on immutable/attested releases, e.g. zed-industries/zed).
+            /// Absent on older or unattested releases -- `None` there, same
+            /// as before this field existed.
+            digest: Option<String>,
         }
 
         let release: GitHubRelease = serde_json::from_str(&body).map_err(|e| e.to_string())?;
@@ -648,9 +653,15 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 .clone()
                 .unwrap_or_else(|| file_name_of(download_url)),
             version: release.tag_name,
-            // The releases API exposes no digest for older assets; a vendor
-            // can still pin one via `checksum` in vendors.json.
-            checksum: None,
+            // GitHub does not publish a digest for every release (older or
+            // unattested ones have none); a vendor can still pin one via
+            // `checksum` in vendors.json, which `resolved_checksum` prefers
+            // over this anyway.
+            checksum: asset
+                .digest
+                .as_deref()
+                .and_then(|d| d.strip_prefix("sha256:"))
+                .and_then(|hex| upstream_sha256(Some(hex))),
         }))
     }
 

@@ -19,7 +19,7 @@
     },
     "checksum": {
       "algorithm": "SHA256",
-      "value": "cfb4a1d9dd2e7959c4ebe29bb7436487a8766c4c3e086111fde5bb6fcf19766c",
+      "value": "7dbc0b8a5ecb1588ee2ee21afe95a07e2507eabdd138483af1f539c9367273c5",
       "required": true
     },
     "installType": "installer",
