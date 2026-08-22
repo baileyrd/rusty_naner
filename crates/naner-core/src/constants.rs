@@ -57,6 +57,13 @@ pub mod directory_names {
     /// before using it, so `setup_environment` creates this unconditionally.
     pub const TEMP: &str = "home/.tmp";
 
+    /// APPDATA/LOCALAPPDATA redirect here (naner.json), same reasoning and
+    /// same "must exist unconditionally" guarantee as TEMP above: a real
+    /// Windows profile always has both, so `setup_environment` creates them
+    /// too rather than waiting for the first tool that writes under one.
+    pub const APPDATA_ROAMING: &str = "home/AppData/Roaming";
+    pub const APPDATA_LOCAL: &str = "home/AppData/Local";
+
     /// First-run "essential" set — note this includes `home`, while root
     /// *discovery* markers are only bin+vendor+config. The asymmetry is
     /// intentional behavior (MIGRATION_ANALYSIS §1.5).

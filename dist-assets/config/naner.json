@@ -67,6 +67,17 @@
       // at startup so it's never missing when something needs it.
       "TEMP": "%NANER_ROOT%\\home\\.tmp",
       "TMP": "%NANER_ROOT%\\home\\.tmp",
+      // The Windows convention most dev tools actually use for their own
+      // dotfile-equivalent config/cache/data -- not USERPROFILE\.foo, but
+      // %APPDATA%\Tool / %LOCALAPPDATA%\Tool: npm, pip, Docker Desktop, VS
+      // Code, Git Credential Manager, NuGet, `go env -w`, and most Electron
+      // apps all resolve here first. Left unredirected, every one of them
+      // still writes straight into the real Windows profile no matter how
+      // contained everything else above is. Layout mirrors a real profile
+      // (Roaming/Local as siblings) so a tool building %APPDATA%\Sub still
+      // lands somewhere sane.
+      "APPDATA": "%NANER_ROOT%\\home\\AppData\\Roaming",
+      "LOCALAPPDATA": "%NANER_ROOT%\\home\\AppData\\Local",
       "XDG_CONFIG_HOME": "%NANER_ROOT%\\home\\.config",
       "XDG_DATA_HOME": "%NANER_ROOT%\\home\\.local\\share",
       "XDG_CACHE_HOME": "%NANER_ROOT%\\home\\.cache",
