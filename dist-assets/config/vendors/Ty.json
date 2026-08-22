@@ -1,0 +1,32 @@
+{
+  "Ty": {
+    "name": "ty",
+    "description": "Extremely fast Python type checker, written in Rust",
+    "provides": [
+      "ty"
+    ],
+    "extractDir": "ty",
+    "enabled": true,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "astral-sh/ty",
+      "assetPattern": "ty-x86_64-pc-windows-msvc.zip",
+      "fallback": {
+        "version": "0.0.74",
+        "url": "https://github.com/astral-sh/ty/releases/download/0.0.74/ty-x86_64-pc-windows-msvc.zip",
+        "fileName": "ty-x86_64-pc-windows-msvc.zip",
+        "size": "~12"
+      }
+    },
+    "checksumSource": {
+      "type": "sidecar",
+      "suffix": ".sha256"
+    },
+    "pathPriority": 57,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\ty"
+    ]
+  }
+}

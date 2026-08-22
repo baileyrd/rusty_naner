@@ -9,7 +9,30 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.14.
+Reported live: `naner install codex` failed with "response too big for
+into_string". `fetch_npm` resolved npm-published vendors against
+`GET /<package>` — the full packument, carrying every version ever
+published with its own copy of the readme and dependency tree — which for
+an actively-released package like `@openai/codex` blows past ureq's
+`into_string` cap. It now resolves against `GET /<package>/latest`, the
+same lightweight endpoint a bare `npm install` itself uses.
+
+Fixing that surfaced a second, unrelated bug in the same path: once the
+packument was small enough to fetch, `naner install codex` started failing
+silently instead, with no error text at all. The shared HTTP client sent
+`Accept: application/vnd.github+json` on every outbound request —
+GitHub API calls, npm, PyPI, nodejs.org, go.dev, dotnet's channel
+manifest, HTML scrapes, all of it. Every other resolver's server ignored
+the unrecognized media type and served its normal JSON regardless;
+`registry.npmjs.org`'s Fastly frontend does real content negotiation on
+`Accept` and returned `406 Not Acceptable`, which `fetch_npm` read as "no
+release found" and failed without logging why. That header is now sent
+only to `api.github.com`; every other resolver gets a plain
+`application/json` Accept.
+
+New optional vendors: **Ruff** and **ty** (Astral's Python linter/formatter
+and type checker), same GitHub-release-plus-`.sha256`-sidecar shape as the
+existing Uv vendor.
 
 ## v0.9.14 — 2026-08-21
 

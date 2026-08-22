@@ -1,3 +1,19 @@
+## [Unreleased]
+### Fixed
+- `naner install <npm-vendor>` (e.g. `codex`) could fail with "response too
+  big for into_string": `fetch_npm` fetched the full npm packument instead
+  of the `latest`-tag manifest. Now resolves against `GET
+  /<package>/latest`.
+- The shared HTTP client sent a GitHub-specific `Accept` header on every
+  request, including npm/PyPI/other registries. `registry.npmjs.org`
+  rejects it with `406`, which `fetch_npm` silently read as "no release
+  found." That header is now scoped to `api.github.com` only.
+
+### Added
+- New optional vendors: `Ruff` and `Ty` (Astral's Python linter/formatter
+  and type checker), GitHub-release-sourced with `.sha256` sidecar
+  verification, same shape as `Uv`.
+
 ## [0.9.14] - 2026-08-21
 ### Fixed
 - `naner install`/`update-vendors` never applied naner.json's home

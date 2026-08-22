@@ -1,0 +1,35 @@
+{
+  "Ruff": {
+    "name": "Ruff",
+    "description": "Extremely fast Python linter and code formatter, written in Rust",
+    "provides": [
+      "ruff"
+    ],
+    "extractDir": "ruff",
+    "enabled": true,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "astral-sh/ruff",
+      "assetPattern": "ruff-x86_64-pc-windows-msvc.zip",
+      "fallback": {
+        "version": "0.16.4",
+        "url": "https://github.com/astral-sh/ruff/releases/download/0.16.4/ruff-x86_64-pc-windows-msvc.zip",
+        "fileName": "ruff-x86_64-pc-windows-msvc.zip",
+        "size": "~10"
+      }
+    },
+    "checksumSource": {
+      "type": "sidecar",
+      "suffix": ".sha256"
+    },
+    "pathPriority": 56,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\ruff"
+    ],
+    "environmentVariables": {
+      "RUFF_CACHE_DIR": "%NANER_ROOT%\\home\\.cache\\ruff"
+    }
+  }
+}

@@ -485,30 +485,35 @@ impl<'a> UnifiedVendorInstaller<'a> {
     }
 
     /// npm registry resolution for `source_type == Npm`: the `latest`
-    /// dist-tag, plus the tarball URL for the record — npm itself downloads
-    /// the tarball and verifies its integrity, so no checksum flows here.
+    /// dist-tag's own manifest, plus the tarball URL for the record — npm
+    /// itself downloads the tarball and verifies its integrity, so no
+    /// checksum flows here.
+    ///
+    /// Reported live: `naner install codex` failed with "response too big
+    /// for into_string". `GET /<package>` (the full packument) returns
+    /// every version ever published, each carrying its own copy of the
+    /// readme and dependency tree -- for an actively-released package like
+    /// `@openai/codex` that easily exceeds ureq's `into_string` cap.
+    /// `GET /<package>/latest` returns only the single resolved version's
+    /// manifest, the same shape npm itself fetches for a bare `npm install
+    /// <package>`, and is orders of magnitude smaller.
     fn fetch_npm(&self, vendor: &VendorDefinition) -> Result<Option<VendorDownloadInfo>, String> {
         let Some(package) = &vendor.package_name else {
             return Ok(None);
         };
-        let url = format!("https://registry.npmjs.org/{package}");
+        let url = format!("https://registry.npmjs.org/{package}/latest");
         let (status, body) = self.http.get_text(&url)?;
         if !(200..300).contains(&status) {
             return Ok(None);
         }
 
         #[derive(Deserialize)]
-        struct Registry {
-            #[serde(rename = "dist-tags")]
-            dist_tags: Option<DistTags>,
-        }
-        #[derive(Deserialize)]
-        struct DistTags {
-            latest: Option<String>,
+        struct LatestManifest {
+            version: Option<String>,
         }
 
-        let registry: Registry = serde_json::from_str(&body).map_err(|e| e.to_string())?;
-        let Some(version) = registry.dist_tags.and_then(|t| t.latest) else {
+        let manifest: LatestManifest = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        let Some(version) = manifest.version else {
             return Ok(None);
         };
         // Scoped packages publish their tarball under the bare name:
@@ -1753,8 +1758,8 @@ mod tests {
     fn npm_and_pip_resolution_read_the_registry_latest() {
         let mut http = StubHttp::default();
         http.text.insert(
-            "https://registry.npmjs.org/@scope/tool".into(),
-            (200, r#"{"dist-tags":{"latest":"1.2.3"}}"#.into()),
+            "https://registry.npmjs.org/@scope/tool/latest".into(),
+            (200, r#"{"version":"1.2.3"}"#.into()),
         );
         http.text.insert(
             "https://pypi.org/pypi/pytool/json".into(),

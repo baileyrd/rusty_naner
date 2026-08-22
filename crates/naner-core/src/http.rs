@@ -38,10 +38,24 @@ impl UreqHttp {
         }
     }
 
+    /// One shared client resolves every vendor source -- GitHub releases,
+    /// npm/PyPI registries, static JSON feeds (nodejs.org, go.dev, dotnet's
+    /// channel manifest), and HTML scrapes. Reported live: `naner install
+    /// codex` (npm) failed with a bare "Failed to fetch Codex CLI,
+    /// skipping..." and no detail -- `registry.npmjs.org` was returning 406
+    /// Not Acceptable. This client sent `Accept: application/vnd.github+json`
+    /// unconditionally, correct for GitHub's REST API (the only caller that
+    /// actually needs a non-default Accept) but nonsensical everywhere else;
+    /// npmjs.org's Fastly frontend does real content negotiation on it and
+    /// rejects a media type it doesn't recognize, where every other resolver
+    /// happened to ignore it and return normal JSON regardless.
     fn request(&self, url: &str) -> ureq::Request {
-        self.agent
-            .get(url)
-            .set("Accept", "application/vnd.github+json")
+        let accept = if url.starts_with("https://api.github.com/") {
+            "application/vnd.github+json"
+        } else {
+            "application/json"
+        };
+        self.agent.get(url).set("Accept", accept)
     }
 }
 
