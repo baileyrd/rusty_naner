@@ -600,16 +600,12 @@ impl<'a> UnifiedVendorInstaller<'a> {
             return Ok(None);
         };
 
-        let url = format!("https://api.github.com/repos/{owner}/{repo}/releases/latest");
-        let (status, body) = self.http.get_text(&url)?;
-        if !(200..300).contains(&status) {
-            return Ok(None);
-        }
-
         #[derive(Deserialize)]
         struct GitHubRelease {
             tag_name: Option<String>,
             assets: Option<Vec<GitHubAsset>>,
+            #[serde(default)]
+            prerelease: bool,
         }
         #[derive(Deserialize)]
         struct GitHubAsset {
@@ -622,47 +618,84 @@ impl<'a> UnifiedVendorInstaller<'a> {
             digest: Option<String>,
         }
 
-        let release: GitHubRelease = serde_json::from_str(&body).map_err(|e| e.to_string())?;
-        let assets = release.assets.unwrap_or_default();
-
         // B1 fixed: patterns containing `*`/`?` are matched as whole-name
         // globs (case-insensitive), so `*win-x64.zip` from vendors.json now
         // works. Wildcard-free patterns keep the C# substring semantics the
         // built-in defaults rely on (`win-x64.zip`, `Microsoft.WindowsTerminal_`).
-        let matches = |name: &str, pattern: &Option<String>| match pattern {
+        let name_matches = |name: &str, pattern: &Option<String>| match pattern {
             None => true,
             Some(p) if p.is_empty() => true,
             Some(p) if p.contains(['*', '?']) => glob_matches(name, p),
             Some(p) => name.to_lowercase().contains(&p.to_lowercase()),
         };
-        let asset = assets.iter().find(|a| {
-            a.name.as_deref().is_some_and(|name| {
-                matches(name, &vendor.asset_pattern) && matches(name, &vendor.asset_pattern_end)
+        let pick_asset = |assets: &[GitHubAsset]| -> Option<usize> {
+            assets.iter().position(|a| {
+                a.name.as_deref().is_some_and(|name| {
+                    name_matches(name, &vendor.asset_pattern)
+                        && name_matches(name, &vendor.asset_pattern_end)
+                })
             })
-        });
-
-        let Some(asset) = asset else { return Ok(None) };
-        let Some(download_url) = &asset.browser_download_url else {
-            return Ok(None);
+        };
+        let to_info = |release: GitHubRelease, mut assets: Vec<GitHubAsset>, idx: usize| {
+            let asset = assets.swap_remove(idx);
+            let download_url = asset.browser_download_url?;
+            Some(VendorDownloadInfo {
+                file_name: asset
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| file_name_of(&download_url)),
+                version: release.tag_name,
+                // GitHub does not publish a digest for every release (older
+                // or unattested ones have none); a vendor can still pin one
+                // via `checksum` in vendors.json, which `resolved_checksum`
+                // prefers over this anyway.
+                checksum: asset
+                    .digest
+                    .as_deref()
+                    .and_then(|d| d.strip_prefix("sha256:"))
+                    .and_then(|hex| upstream_sha256(Some(hex))),
+                url: download_url,
+            })
         };
 
-        Ok(Some(VendorDownloadInfo {
-            url: download_url.clone(),
-            file_name: asset
-                .name
-                .clone()
-                .unwrap_or_else(|| file_name_of(download_url)),
-            version: release.tag_name,
-            // GitHub does not publish a digest for every release (older or
-            // unattested ones have none); a vendor can still pin one via
-            // `checksum` in vendors.json, which `resolved_checksum` prefers
-            // over this anyway.
-            checksum: asset
-                .digest
-                .as_deref()
-                .and_then(|d| d.strip_prefix("sha256:"))
-                .and_then(|hex| upstream_sha256(Some(hex))),
-        }))
+        let latest_url = format!("https://api.github.com/repos/{owner}/{repo}/releases/latest");
+        let (status, body) = self.http.get_text(&latest_url)?;
+        if (200..300).contains(&status)
+            && let Ok(mut release) = serde_json::from_str::<GitHubRelease>(&body)
+        {
+            let assets = release.assets.take().unwrap_or_default();
+            if let Some(idx) = pick_asset(&assets) {
+                return Ok(to_info(release, assets, idx));
+            }
+        }
+
+        // Reported live: `naner install obsidian` failed with "no matching
+        // release found upstream" even though a Windows build plainly
+        // existed. `obsidianmd/obsidian-releases` interleaves desktop and
+        // mobile-only releases in one repo; GitHub's notion of "latest" is
+        // whichever tag published most recently, which was a mobile-only
+        // release carrying just an `.apk` -- no `assetPattern` here could
+        // ever match it. Fall back to the newest non-prerelease release in
+        // the full list that actually has a matching asset, same principle
+        // `GitHubReleasesClient::get_latest_release` already uses for
+        // naner's own self-update, just keyed on asset presence rather than
+        // request failure.
+        let list_url = format!("https://api.github.com/repos/{owner}/{repo}/releases");
+        let (status, body) = self.http.get_text(&list_url)?;
+        if !(200..300).contains(&status) {
+            return Ok(None);
+        }
+        let releases: Vec<GitHubRelease> = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        for mut release in releases {
+            if release.prerelease {
+                continue;
+            }
+            let assets = release.assets.take().unwrap_or_default();
+            if let Some(idx) = pick_asset(&assets) {
+                return Ok(to_info(release, assets, idx));
+            }
+        }
+        Ok(None)
     }
 
     fn fetch_web_scrape(

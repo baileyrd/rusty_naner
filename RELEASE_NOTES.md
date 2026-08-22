@@ -48,6 +48,17 @@ object never gets one added. Same class of bug is latent in `ImageGlass`,
 `Inkscape`, `Obsidian`, `Podman`, and `Zen`; `refresh-pins --dry-run` now
 catches version-unchanged checksum staleness on all of them going forward.
 
+Reported live: `naner install obsidian` failed with "no matching release
+found upstream" despite a Windows build plainly existing.
+`obsidianmd/obsidian-releases` interleaves desktop and mobile-only releases
+in one repo, and GitHub's `/releases/latest` doesn't care which kind it
+picks — it pointed at a mobile-only release carrying just an `.apk`, which
+`assetPattern: "Obsidian-*.exe"` could never match. `fetch_github` now
+falls back to scanning the full `/releases` list (skipping prereleases) for
+the newest one that actually has a matching asset, when `/releases/latest`
+doesn't. `ImageGlass` was failing the exact same way for the exact same
+reason — fixed for both at once, not vendor-specific.
+
 ## v0.9.14 — 2026-08-21
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.13...v0.9.14).

@@ -21,6 +21,12 @@
   `checksum.value` when GitHub's release API publishes a `digest` for the
   resolved asset and it disagrees with the pin. Never adds a `checksum`
   object that wasn't already there.
+- `naner install obsidian`/`imageglass` failed with "no matching release
+  found upstream": both repos' `/releases/latest` sometimes points at a
+  release with no asset matching `assetPattern` (Obsidian interleaves
+  mobile-only releases with desktop ones in the same repo).
+  `fetch_github` now falls back to the newest non-prerelease release in
+  the full `/releases` list that actually has a matching asset.
 
 ## [0.9.14] - 2026-08-21
 ### Fixed
