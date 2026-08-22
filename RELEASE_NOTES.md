@@ -59,6 +59,19 @@ the newest one that actually has a matching asset, when `/releases/latest`
 doesn't. `ImageGlass` was failing the exact same way for the exact same
 reason — fixed for both at once, not vendor-specific.
 
+`naner install zed` reported success but there was no way to run `zed` from
+a naner-launched terminal: `Zed.json` had no `pathPrecedence`, unlike
+every other CLI-shaped vendor (`Uv`, `Bun`, `NodeJS`, ...), so
+`merge_vendor_environment` had nothing of Zed's to add to the exported
+`PATH`. `postInstallFunction: "Zed.PostInstall"`, present in the vendor
+file, looked like it should have wired this up — it doesn't; that field
+isn't read anywhere in the Rust port at all, dead config left over from
+the original design. Added `pathPrecedence` pointing at
+`vendor\zed\bin` (Zed's actual CLI-launcher directory, distinct from the
+418 MB `Zed.exe` GUI binary at the vendor root) and a `provides: ["zed"]`
+entry. Verified live: `zed --version` now resolves and runs from an
+exported naner environment.
+
 ## v0.9.14 — 2026-08-21
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.13...v0.9.14).

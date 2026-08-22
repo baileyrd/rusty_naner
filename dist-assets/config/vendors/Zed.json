@@ -2,6 +2,9 @@
   "Zed": {
     "name": "Zed",
     "description": "High-performance, multiplayer code editor from the creators of Atom and Tree-sitter",
+    "provides": [
+      "zed"
+    ],
     "extractDir": "zed",
     "enabled": true,
     "required": false,
@@ -28,6 +31,10 @@
       "/NORESTART",
       "/DIR=%TARGETDIR%"
     ],
-    "postInstallFunction": "Zed.PostInstall"
+    "postInstallFunction": "Zed.PostInstall",
+    "pathPriority": 58,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\zed\\bin"
+    ]
   }
 }

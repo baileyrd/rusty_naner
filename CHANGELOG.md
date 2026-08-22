@@ -27,6 +27,12 @@
   mobile-only releases with desktop ones in the same repo).
   `fetch_github` now falls back to the newest non-prerelease release in
   the full `/releases` list that actually has a matching asset.
+- `naner install zed` reported success but `zed` was never runnable from a
+  naner-launched terminal: `Zed.json` had no `pathPrecedence`, unlike every
+  other CLI-shaped vendor. `postInstallFunction`, present on this vendor,
+  looks like it should wire that up but isn't read anywhere in the Rust
+  port at all. Added `pathPrecedence` pointing at `vendor\zed\bin` (the
+  actual CLI-launcher directory) and `provides: ["zed"]`.
 
 ## [0.9.14] - 2026-08-21
 ### Fixed
