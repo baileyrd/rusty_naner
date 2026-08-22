@@ -21,6 +21,7 @@ pub fn extract_archive(
     vendor_name: &str,
     seven_zip_path: Option<&Path>,
     installer_args: Option<&[String]>,
+    naner_root: &Path,
 ) -> bool {
     if !archive_path.is_file() {
         logger::failure(&format!(
@@ -40,7 +41,13 @@ pub fn extract_archive(
     } else if name.ends_with(".msi") {
         extract_msi(archive_path, target_dir)
     } else if name.ends_with(".exe") {
-        run_exe_installer(archive_path, target_dir, vendor_name, installer_args)
+        run_exe_installer(
+            archive_path,
+            target_dir,
+            vendor_name,
+            installer_args,
+            naner_root,
+        )
     } else {
         let extension = archive_path
             .extension()
@@ -319,6 +326,37 @@ fn extract_msi(archive_path: &Path, target_dir: &Path) -> bool {
     }
 }
 
+/// `USERPROFILE`/`HOME`/`APPDATA`/`LOCALAPPDATA`/`TEMP`/`TMP`, pointed into
+/// naner's own home tree -- the same redirect a launched terminal profile
+/// gets from `naner.json`'s `EnvironmentVariables` (see `run_launcher`'s
+/// `setup_environment`), for a subprocess spawned by `naner install`/
+/// `update-vendors` instead. That code path never runs the launcher's
+/// environment setup, so without this a spawned installer or package
+/// manager inherits the host's raw environment and writes any home-relative
+/// dotfile straight into the real Windows profile. Empty when `home/`
+/// doesn't exist yet (a naner root mid-init), which callers treat as "set
+/// nothing" by iterating zero pairs.
+pub(crate) fn home_isolation_envs(naner_root: &Path) -> Vec<(String, String)> {
+    let home = naner_root.join("home");
+    if !home.is_dir() {
+        return Vec::new();
+    }
+    vec![
+        ("USERPROFILE".into(), home.display().to_string()),
+        ("HOME".into(), home.display().to_string()),
+        (
+            "APPDATA".into(),
+            home.join("AppData").join("Roaming").display().to_string(),
+        ),
+        (
+            "LOCALAPPDATA".into(),
+            home.join("AppData").join("Local").display().to_string(),
+        ),
+        ("TEMP".into(), home.join(".tmp").display().to_string()),
+        ("TMP".into(), home.join(".tmp").display().to_string()),
+    ]
+}
+
 /// `ExeInstallerExtractor`: run the installer silently with per-vendor
 /// argument defaults and `%TARGETDIR%`/`$TARGETDIR` substitution.
 ///
@@ -336,6 +374,7 @@ fn run_exe_installer(
     target_dir: &Path,
     vendor_name: &str,
     installer_args: Option<&[String]>,
+    naner_root: &Path,
 ) -> bool {
     let arguments =
         build_installer_arguments(installer_path, target_dir, vendor_name, installer_args);
@@ -351,6 +390,20 @@ fn run_exe_installer(
     let mut command = Command::new(installer_path);
     command.args(&arguments);
 
+    // Every home-relative dotfile an installer might write on its own
+    // initiative -- Anaconda's NSIS installer registers its base env into
+    // `~/.conda/environments.txt` as its very last step, no user action
+    // involved -- must land inside naner's tree, not the real profile.
+    // `naner install`/`update-vendors` run this subprocess outside the
+    // launcher path (`run_launcher`'s `setup_environment` never executes),
+    // so without this override the installer inherits the host's raw
+    // environment and writes there instead, unnoticed until someone goes
+    // looking at `%USERPROFILE%\.conda\environments.txt` and finds every
+    // naner install/reinstall ever run on the box listed in it.
+    for (key, value) in home_isolation_envs(naner_root) {
+        command.env(key, value);
+    }
+
     // rustup needs RUSTUP_HOME/CARGO_HOME pointed into the vendor dir.
     let file_name = installer_path
         .file_name()
@@ -363,7 +416,17 @@ fn run_exe_installer(
         command.env("CARGO_HOME", target_dir.join(".cargo"));
     }
 
-    match command.output() {
+    // A real installer (Anaconda's NSIS installer, `rustup-init.exe`) writes
+    // an Add/Remove Programs entry and, for some, a Start Menu folder,
+    // regardless of the target directory naner gave it -- unlike every
+    // archive-extracted vendor, whose whole footprint is `target_dir`. Snap
+    // both before running it so the diff below can strip exactly what this
+    // run added, on success or failure alike (a failed install can still
+    // have self-registered before it errored out).
+    let registry_before = os_registration::uninstall_keys();
+    let start_menu_before = os_registration::start_menu_entries();
+
+    let result = match command.output() {
         Ok(out) if out.status.success() => true,
         Ok(out) => {
             logger::failure(&format!(
@@ -376,6 +439,152 @@ fn run_exe_installer(
             logger::failure(&format!("    Installer execution failed: {e}"));
             false
         }
+    };
+
+    for key in os_registration::uninstall_keys().difference(&registry_before) {
+        os_registration::delete_uninstall_key(key);
+    }
+    for entry in os_registration::start_menu_entries().difference(&start_menu_before) {
+        let _ = if entry.is_dir() {
+            std::fs::remove_dir_all(entry)
+        } else {
+            std::fs::remove_file(entry)
+        };
+    }
+
+    result
+}
+
+/// OS-level state a real installer `.exe` can register outside the vendor's
+/// own directory tree, diffed before/after rather than guessed by name: an
+/// installer's own Start Menu folder name, or a versioned Add/Remove
+/// Programs display name (e.g. "Anaconda3 2026.07-1 (Python 3.14.6
+/// 64-bit)"), is per-vendor, per-release knowledge that breaks on the next
+/// version bump. "Whatever showed up during this specific run" is not, and
+/// never touches an entry that existed beforehand.
+#[cfg(windows)]
+mod os_registration {
+    use std::collections::HashSet;
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use std::path::{Path, PathBuf};
+
+    use windows_sys::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_ALL_ACCESS, KEY_ENUMERATE_SUB_KEYS, RegCloseKey,
+        RegDeleteKeyW, RegEnumKeyExW, RegOpenKeyExW,
+    };
+
+    use crate::logger;
+
+    const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+
+    fn wide(s: &str) -> Vec<u16> {
+        OsStr::new(s)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect()
+    }
+
+    struct Key(HKEY);
+
+    impl Drop for Key {
+        fn drop(&mut self) {
+            unsafe { RegCloseKey(self.0) };
+        }
+    }
+
+    fn open_uninstall(access: u32) -> Option<Key> {
+        let subkey = wide(UNINSTALL_KEY);
+        let mut handle: HKEY = std::ptr::null_mut();
+        let rc =
+            unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, subkey.as_ptr(), 0, access, &mut handle) };
+        (rc == ERROR_SUCCESS).then(|| Key(handle))
+    }
+
+    /// Current Add/Remove Programs subkey names. Best-effort: any failure to
+    /// open or enumerate the key just yields an empty set, which makes the
+    /// later diff a no-op rather than an error.
+    pub(super) fn uninstall_keys() -> HashSet<String> {
+        let Some(key) = open_uninstall(KEY_ENUMERATE_SUB_KEYS) else {
+            return HashSet::new();
+        };
+        let mut names = HashSet::new();
+        let mut index = 0u32;
+        loop {
+            let mut buf = [0u16; 260];
+            let mut len = buf.len() as u32;
+            let rc = unsafe {
+                RegEnumKeyExW(
+                    key.0,
+                    index,
+                    buf.as_mut_ptr(),
+                    &mut len,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            };
+            if rc != ERROR_SUCCESS {
+                if rc != ERROR_NO_MORE_ITEMS {
+                    logger::debug(
+                        &format!("Uninstall key enumeration stopped early: {rc}"),
+                        false,
+                    );
+                }
+                break;
+            }
+            names.insert(String::from_utf16_lossy(&buf[..len as usize]));
+            index += 1;
+        }
+        names
+    }
+
+    /// Delete one Add/Remove Programs subkey by name. Best-effort, and safe
+    /// to call on a name that no longer exists. These entries carry no
+    /// subkeys of their own (only values), so a plain `RegDeleteKeyW` --
+    /// which refuses to delete a key that still has children -- is enough;
+    /// no recursive `RegDeleteTree` is needed.
+    pub(super) fn delete_uninstall_key(name: &str) {
+        let Some(key) = open_uninstall(KEY_ALL_ACCESS) else {
+            return;
+        };
+        let sub = wide(name);
+        let rc = unsafe { RegDeleteKeyW(key.0, sub.as_ptr()) };
+        if rc != ERROR_SUCCESS {
+            logger::debug(&format!("Could not remove Uninstall\\{name}: {rc}"), false);
+        }
+    }
+
+    /// Current Start Menu top-level entries (files and folders) for this
+    /// user. Best-effort: no `APPDATA` or an unreadable directory just
+    /// yields an empty set.
+    pub(super) fn start_menu_entries() -> HashSet<PathBuf> {
+        let Ok(appdata) = std::env::var("APPDATA") else {
+            return HashSet::new();
+        };
+        let programs = Path::new(&appdata).join(r"Microsoft\Windows\Start Menu\Programs");
+        let Ok(entries) = std::fs::read_dir(&programs) else {
+            return HashSet::new();
+        };
+        entries.filter_map(|e| e.ok()).map(|e| e.path()).collect()
+    }
+}
+
+/// Non-Windows builds (Linux CI) never spawn a real installer `.exe`; every
+/// helper is a no-op so call sites need no `#[cfg(windows)]` of their own.
+#[cfg(not(windows))]
+mod os_registration {
+    use std::collections::HashSet;
+    use std::path::PathBuf;
+
+    pub(super) fn uninstall_keys() -> HashSet<String> {
+        HashSet::new()
+    }
+    pub(super) fn delete_uninstall_key(_name: &str) {}
+    pub(super) fn start_menu_entries() -> HashSet<PathBuf> {
+        HashSet::new()
     }
 }
 
@@ -492,7 +701,14 @@ mod tests {
         ]);
         let out = tempfile::tempdir().unwrap();
         let target = out.path().join("tool");
-        assert!(extract_archive(zip.path(), &target, "Tool", None, None));
+        assert!(extract_archive(
+            zip.path(),
+            &target,
+            "Tool",
+            None,
+            None,
+            out.path()
+        ));
         // Flattened: contents of tool-1.0/ hoisted into tool/.
         assert!(target.join("bin/tool.exe").is_file());
         assert!(target.join("readme.txt").is_file());
@@ -504,7 +720,14 @@ mod tests {
         let zip = make_zip(&[("a.txt", b"a" as &[u8]), ("b/b.txt", b"b")]);
         let out = tempfile::tempdir().unwrap();
         let target = out.path().join("multi");
-        assert!(extract_archive(zip.path(), &target, "Multi", None, None));
+        assert!(extract_archive(
+            zip.path(),
+            &target,
+            "Multi",
+            None,
+            None,
+            out.path()
+        ));
         assert!(target.join("a.txt").is_file());
         assert!(target.join("b/b.txt").is_file());
     }
@@ -532,7 +755,14 @@ mod tests {
         std::fs::write(&archive, &xz_bytes).unwrap();
 
         let target = dir.path().join("pkg");
-        assert!(extract_archive(&archive, &target, "Pkg", None, None));
+        assert!(extract_archive(
+            &archive,
+            &target,
+            "Pkg",
+            None,
+            None,
+            dir.path()
+        ));
         // Single root "pkg/" flattened away.
         assert!(target.join("hello.txt").is_file());
     }
@@ -546,7 +776,8 @@ mod tests {
             &out.path().join("x"),
             "X",
             None,
-            None
+            None,
+            out.path()
         ));
     }
 
@@ -590,7 +821,13 @@ mod tests {
         let target_dir = tmp.path().join("vendor").join(".staging").join("anaconda");
         let missing_installer = tmp.path().join("does-not-exist.exe");
 
-        let ok = run_exe_installer(&missing_installer, &target_dir, "Anaconda", None);
+        let ok = run_exe_installer(
+            &missing_installer,
+            &target_dir,
+            "Anaconda",
+            None,
+            tmp.path(),
+        );
 
         assert!(!ok, "a missing installer binary should fail to spawn");
         assert!(

@@ -293,12 +293,13 @@ fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleS
 /// `PathResolver.SetupEnvironment`: NANER_ROOT, NANER_ENVIRONMENT, and (iff
 /// `home/` exists) HOME + NANER_HOME on the process environment.
 ///
-/// Also ensures `home/.tmp` exists, unlike the XDG cache/data dirs naner.json
-/// also points into `home/` -- those are created by whichever tool first
-/// writes to them (the XDG spec requires it), but there's no equivalent
-/// contract for TEMP/TMP. A real Windows profile's temp directory always
-/// exists; naner.json now redirects TEMP/TMP into naner's own tree, so
-/// naner itself has to uphold that same guarantee.
+/// Also ensures `home/.tmp` and `home/AppData/{Roaming,Local}` exist, unlike
+/// the XDG cache/data dirs naner.json also points into `home/` -- those are
+/// created by whichever tool first writes to them (the XDG spec requires
+/// it), but there's no equivalent contract for TEMP/TMP or APPDATA/
+/// LOCALAPPDATA. A real Windows profile always has all four; naner.json now
+/// redirects them into naner's own tree, so naner itself has to uphold that
+/// same guarantee.
 fn setup_environment(naner_root: &Path, environment: &str) {
     // SAFETY: single-threaded launcher flow.
     unsafe {
@@ -309,6 +310,11 @@ fn setup_environment(naner_root: &Path, environment: &str) {
             std::env::set_var("HOME", &home_path);
             std::env::set_var("NANER_HOME", &home_path);
             let _ = std::fs::create_dir_all(naner_root.join(constants::directory_names::TEMP));
+            let _ = std::fs::create_dir_all(
+                naner_root.join(constants::directory_names::APPDATA_ROAMING),
+            );
+            let _ =
+                std::fs::create_dir_all(naner_root.join(constants::directory_names::APPDATA_LOCAL));
         }
     }
 }

@@ -494,10 +494,12 @@ mod vendor_merge_tests {
         assert_eq!(actual, EXPECTED, "assembled PATH order drifted");
     }
 
-    /// USERPROFILE/TEMP/TMP are redirected into naner's own home tree, same
-    /// as HOME -- keeping every scratch file and profile-dependent tool a
-    /// naner shell touches contained there instead of the host's real
-    /// profile and temp directories.
+    /// USERPROFILE/TEMP/TMP/APPDATA/LOCALAPPDATA are redirected into
+    /// naner's own home tree, same as HOME -- keeping every scratch file,
+    /// profile-dependent tool, and the AppData-style config/cache most
+    /// Windows-native dev tools actually use (npm, pip, Docker, VS Code,
+    /// NuGet, `go env -w`, ...) contained there instead of the host's real
+    /// profile, temp, and AppData directories.
     #[test]
     fn the_shipped_config_redirects_userprofile_and_temp() {
         let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -517,6 +519,14 @@ mod vendor_merge_tests {
         assert_eq!(
             vars.get("TMP").map(String::as_str),
             Some("%NANER_ROOT%\\home\\.tmp")
+        );
+        assert_eq!(
+            vars.get("APPDATA").map(String::as_str),
+            Some("%NANER_ROOT%\\home\\AppData\\Roaming")
+        );
+        assert_eq!(
+            vars.get("LOCALAPPDATA").map(String::as_str),
+            Some("%NANER_ROOT%\\home\\AppData\\Local")
         );
     }
 

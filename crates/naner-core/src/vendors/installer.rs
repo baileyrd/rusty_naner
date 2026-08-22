@@ -200,6 +200,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 &vendor.name,
                 Some(&seven_zip),
                 vendor.installer_args.as_deref(),
+                &self.naner_root,
             )
         };
         if !staged {
@@ -294,6 +295,15 @@ impl<'a> UnifiedVendorInstaller<'a> {
         logger::status(&format!("  Installing {package} via package manager..."));
         let mut command = std::process::Command::new(&program);
         command.args(&args);
+        // General home-relative isolation first (USERPROFILE/HOME/APPDATA/
+        // LOCALAPPDATA/TEMP/TMP) so a package that writes its own dotfile
+        // during install lands in naner's tree; the package-manager-
+        // specific vars below (NPM_CONFIG_*/PYTHONUSERBASE/PIP_CACHE_DIR)
+        // are a disjoint set of names, so order between the two never
+        // matters.
+        for (key, value) in archives::home_isolation_envs(&self.naner_root) {
+            command.env(key, value);
+        }
         for (key, value) in &envs {
             command.env(key, value);
         }

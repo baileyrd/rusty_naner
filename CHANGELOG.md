@@ -1,3 +1,37 @@
+## [0.9.14] - 2026-08-21
+### Fixed
+- `naner install`/`update-vendors` never applied naner.json's home
+  isolation to the installer subprocess it spawns for a vendor whose
+  `releaseSource` runs a real installer `.exe` (Anaconda, `rustup-init.exe`)
+  -- that code path never runs `run_launcher`'s `setup_environment`, so the
+  installer inherited the host's raw environment. Anaconda's installer
+  registers its base env into `~/.conda/environments.txt` as its last step
+  regardless of user action, so every `naner install anaconda` /
+  `update-vendors` wrote a stale entry into the *real* Windows profile's
+  `.conda/environments.txt`, one per install, forever. `run_exe_installer`
+  now sets `USERPROFILE`/`HOME`/`APPDATA`/`LOCALAPPDATA`/`TEMP`/`TMP` on the
+  spawned subprocess, pointed into naner's own home tree; the same set is
+  now also applied ahead of the npm/pip package-manager install path's own
+  `NPM_CONFIG_*`/`PYTHONUSERBASE` vars.
+- The same two installers additionally self-register a Start Menu folder
+  and an Add/Remove Programs registry entry under `HKCU`, independent of
+  the `/D=`/`-o`-style install directory naner gave them -- unlike every
+  archive-extracted vendor, whose whole footprint is its own `target_dir`.
+  Worse, because naner installs into `vendor/.staging/<name>` and only
+  renames into place afterward, Anaconda's registry entry pointed at the
+  now-deleted staging path from the moment install finished. `naner`
+  snapshots both before running an installer `.exe` and removes whatever
+  is new afterward (diffed, not name-matched, since a versioned Add/Remove
+  Programs display name or an installer's own Start Menu folder name is
+  per-release knowledge that breaks on the next version bump).
+- `APPDATA`/`LOCALAPPDATA` were never redirected at all -- the convention
+  most Windows dev tools (npm, pip, Docker Desktop, VS Code, NuGet, Git
+  Credential Manager, `go env -w`) actually use for their own config/cache,
+  not `USERPROFILE\.foo`. Added to `naner.json`'s `EnvironmentVariables`,
+  mirroring a real profile's `Roaming`/`Local` layout; `setup_environment`
+  creates both directories unconditionally on launch, same guarantee it
+  already gave `TEMP`.
+
 ## [0.9.13] - 2026-08-21
 ### Fixed
 - Reported live, still unconfirmed on real Windows: `naner update`'s

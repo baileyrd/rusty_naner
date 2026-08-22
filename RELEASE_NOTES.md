@@ -9,7 +9,47 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
-Nothing merged since v0.9.13.
+Nothing merged since v0.9.14.
+
+## v0.9.14 — 2026-08-21
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.13...v0.9.14).
+
+Real-world validation of the vendor pipeline found naner's containment
+guarantee had a hole big enough to drive Anaconda through: `naner install`
+and `update-vendors` run a vendor's installer subprocess outside the
+launcher path entirely, so a vendor whose `releaseSource` is a real
+installer `.exe` (Anaconda, `rustup-init.exe`) never got naner.json's
+`USERPROFILE`/`HOME`/`APPDATA`/`LOCALAPPDATA`/`TEMP`/`TMP` redirects the
+way a launched terminal profile does. Anaconda's installer registers its
+base environment into `~/.conda/environments.txt` as an unconditional last
+step, so every `naner install anaconda` -- fresh install, reinstall, test
+run -- wrote one more stale entry into the *real* Windows profile's
+`.conda\environments.txt`, discovered live as six of them sitting there
+from a single afternoon's testing. The same two installers also
+self-register a Start Menu folder and an `HKCU` Add/Remove Programs entry
+regardless of the install directory naner gave them, and because naner
+installs into a `vendor/.staging/<name>` directory before renaming it into
+place, Anaconda's own registry entry pointed at a path that no longer
+existed the moment install finished.
+
+`run_exe_installer` now applies the same home-tree redirect a launched
+shell gets to every installer subprocess it spawns (extended to the
+npm/pip package-manager install path too), and snapshots the Start Menu
+folder and Add/Remove Programs key before running an installer, removing
+whatever is new afterward -- diffed against the snapshot rather than
+matched by name, since a versioned display name or an installer's own
+folder name is exactly the kind of per-release detail that breaks on the
+next version bump. Separately, `APPDATA`/`LOCALAPPDATA` -- the convention
+most Windows dev tools actually use for their own config and cache, not
+`USERPROFILE\.foo` -- were never redirected at all; both are now part of
+the same home tree, with the directories guaranteed to exist on launch the
+same way `TEMP` already was.
+
+Verified against real, live installs on Windows, not fixtures: reinstalled
+Anaconda before and after each fix and confirmed the real profile's
+`environments.txt`, Start Menu, and registry stayed untouched, then cleared
+the pollution the earlier, unfixed runs had already left behind.
 
 ## v0.9.13 — 2026-08-21
 
