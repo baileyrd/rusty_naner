@@ -1,19 +1,19 @@
 {
   "OhMyPi": {
     "name": "Oh My Pi",
-    "description": "Enhancement framework for the Pi CLI coding agent - coordinated multi-agent orchestration",
+    "description": "Coding agent CLI with read, bash, edit, write tools and session management (omp) - not the unrelated `oh-my-pi` npm package, which is a small extension for a different, unrelated \"pi\" CLI",
     "provides": [
-      "oh-my-pi"
+      "omp"
     ],
-    "extractDir": "oh-my-pi",
+    "extractDir": "omp",
     "enabled": true,
     "required": false,
     "dependencies": [
-      "NodeJS"
+      "Bun"
     ],
     "releaseSource": {
       "type": "npm",
-      "package": "oh-my-pi"
+      "package": "@oh-my-pi/pi-coding-agent"
     }
   }
 }

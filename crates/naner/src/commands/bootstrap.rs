@@ -259,6 +259,9 @@ fn prompt_yes(question: &str) -> bool {
     print!("{question}");
     let _ = std::io::stdout().flush();
     let own_console = std::env::var_os(OWN_CONSOLE_ENV).is_some();
+    if own_console {
+        console::force_foreground();
+    }
     if !console::refresh_std_handles() && own_console {
         logger::warning("  Could not refresh this console's input/output before the prompt above");
     }
@@ -321,9 +324,19 @@ pub fn reexec_in_own_console_if_racy(state: ConsoleState) -> Option<i32> {
         .args(&args)
         .env(OWN_CONSOLE_ENV, "1")
         .creation_flags(CREATE_NEW_CONSOLE)
-        .status()
+        .spawn()
     {
-        Ok(status) => Some(status.code().unwrap_or(1)),
+        Ok(mut child) => {
+            // Widen the child's foreground-activation eligibility before
+            // waiting -- see `console::allow_foreground` -- so the version
+            // check's blocking network call, which happens next inside the
+            // child, can't cost it the right to foreground its own prompt.
+            console::allow_foreground(child.id());
+            match child.wait() {
+                Ok(status) => Some(status.code().unwrap_or(1)),
+                Err(_) => Some(1),
+            }
+        }
         Err(e) => {
             // Could not spawn: fall through and run inline -- racy beats
             // broken. Silent about *why* would be its own bug: without

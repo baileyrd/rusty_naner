@@ -92,6 +92,32 @@ pub fn refresh_std_handles() -> bool {
     imp::refresh_std_handles()
 }
 
+/// Force this process's console window to the foreground right before an
+/// interactive prompt reads from it. Every prior fix for `naner update`'s
+/// "Update now?" prompt going unanswered addressed *handle* association
+/// (`refresh_std_handles`) or *how* input is read (`read_line_raw`) -- never
+/// window focus. A `CREATE_NEW_CONSOLE`-relaunched, GUI-subsystem child
+/// (`#![windows_subsystem = "windows"]`) only inherits the right to foreground
+/// itself for a short grace period after `CreateProcess` returns; the version
+/// check's blocking GitHub API call sits squarely inside that gap, so by the
+/// time the prompt actually needs a keystroke, the window can have silently
+/// lost eligibility -- it keeps rendering fine (rendering never needed focus)
+/// while keystrokes go to whatever window the user is actually looking at.
+/// A no-op off Windows.
+pub fn force_foreground() {
+    imp::force_foreground();
+}
+
+/// Grant `pid` (a just-spawned child) the right to foreground its own
+/// window regardless of how long it takes to get there, reinforcing
+/// [`force_foreground`] from the parent side. `SetForegroundWindow` alone
+/// still depends on the child having eligibility left when it calls it;
+/// this widens that window instead of leaving it to the few-hundred-
+/// millisecond default. A no-op off Windows.
+pub fn allow_foreground(pid: u32) {
+    imp::allow_foreground(pid);
+}
+
 /// Read one line via raw console input (`ReadConsoleInputW` against a
 /// freshly fetched `STD_INPUT_HANDLE`), echoing each character and handling
 /// Backspace/Enter itself -- entirely bypassing `std::io::stdin()`, the same
@@ -116,9 +142,12 @@ mod imp {
     };
     use windows_sys::Win32::System::Console::{
         ATTACH_PARENT_PROCESS, AllocConsole, AttachConsole, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT,
-        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetStdHandle, INPUT_RECORD, KEY_EVENT,
-        ReadConsoleInputW, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleMode,
-        SetStdHandle,
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetConsoleWindow, GetStdHandle,
+        INPUT_RECORD, KEY_EVENT, ReadConsoleInputW, STD_ERROR_HANDLE, STD_INPUT_HANDLE,
+        STD_OUTPUT_HANDLE, SetConsoleMode, SetStdHandle,
+    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        AllowSetForegroundWindow, SetForegroundWindow,
     };
 
     fn std_handle(which: u32) -> Option<HANDLE> {
@@ -219,6 +248,41 @@ mod imp {
         install_fresh_handle(STD_OUTPUT_HANDLE, "CONOUT$", FILE_SHARE_WRITE);
         install_fresh_handle(STD_ERROR_HANDLE, "CONOUT$", FILE_SHARE_WRITE);
         stdin_ok
+    }
+
+    /// Bring this process's own console window to the foreground. See the
+    /// public doc comment on why: a `CREATE_NEW_CONSOLE`-relaunched child's
+    /// automatic right to foreground itself is time-limited and a blocking
+    /// network call can outlast it, silently. `GetConsoleWindow` returning
+    /// null (no console, or one not yet wired) and `SetForegroundWindow`
+    /// failing (permission already lost) are both left unhandled -- this is
+    /// a best-effort nudge on top of the existing handle plumbing, never the
+    /// only thing standing between the user and the prompt.
+    pub fn force_foreground() {
+        // SAFETY: GetConsoleWindow has no preconditions; a null result (no
+        // console) is checked before use.
+        let hwnd = unsafe { GetConsoleWindow() };
+        if !hwnd.is_null() {
+            // SAFETY: `hwnd` was just validated as non-null; a failed
+            // foreground request is a normal, silently-ignored outcome.
+            unsafe {
+                SetForegroundWindow(hwnd);
+            }
+        }
+    }
+
+    /// From the parent, right after spawning the `CREATE_NEW_CONSOLE` child:
+    /// grant `pid` the right to call `SetForegroundWindow` on demand, not
+    /// just in the brief default grace window. `AllowSetForegroundWindow`
+    /// itself failing (e.g. this process doesn't hold the foreground lock
+    /// either) is left unhandled -- `force_foreground` on the child side
+    /// still has its own default eligibility to fall back on.
+    pub fn allow_foreground(pid: u32) {
+        // SAFETY: AllowSetForegroundWindow has no preconditions beyond a
+        // process id; failure is a normal, silently-ignored outcome.
+        unsafe {
+            AllowSetForegroundWindow(pid);
+        }
     }
 
     /// Enable VT (ANSI escape) processing so the Phase 1 logger's colors work
@@ -430,6 +494,10 @@ mod imp {
     pub fn refresh_std_handles() -> bool {
         true
     }
+
+    pub fn force_foreground() {}
+
+    pub fn allow_foreground(_pid: u32) {}
 }
 
 #[cfg(test)]

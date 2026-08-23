@@ -24,6 +24,20 @@ fn main() {
         .join("vendors");
 
     println!("cargo:rerun-if-changed={}", vendors_dir.display());
+    // The directory watch above only catches files being added or removed
+    // -- Cargo doesn't guarantee a directory's mtime changes when a file
+    // already inside it is merely edited, which is the overwhelmingly more
+    // common case once a vendor exists. Watch every vendor file
+    // individually too, or an in-place edit here can silently build against
+    // a stale `vendors_catalog.json` (confirmed live: it did).
+    if let Ok(entries) = std::fs::read_dir(&vendors_dir) {
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "json") {
+                println!("cargo:rerun-if-changed={}", path.display());
+            }
+        }
+    }
 
     let catalog = build_catalog(&vendors_dir);
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("vendors_catalog.json");

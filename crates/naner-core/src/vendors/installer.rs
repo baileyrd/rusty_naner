@@ -263,6 +263,27 @@ impl<'a> UnifiedVendorInstaller<'a> {
             return false;
         };
         let (program, args, envs) = match vendor.source_type {
+            VendorSourceType::Npm if vendor.dependencies.iter().any(|d| d == "Bun") => {
+                // Some npm-registry-published CLIs (`engines.bun`, no
+                // `engines.node`) are only meant to run under Bun -- `bun
+                // add --global` resolves the same npm registry spec but
+                // installs into `$BUN_INSTALL` (already redirected into the
+                // tree by the `Bun` vendor's own `environmentVariables`)
+                // instead of `home\.npm-global`, and its `dist/cli.js` may
+                // lean on Bun-only APIs a vendored Node couldn't run at all.
+                // A vendor opts into this by depending on `Bun` instead of
+                // `NodeJS`, same as any other dependency declaration.
+                let bun = self.vendor_dir.join("bun").join("bun.exe");
+                if !bun.is_file() {
+                    logger::failure(&format!(
+                        "  {} installs through bun, but {} does not exist - install the Bun vendor first",
+                        vendor.name,
+                        bun.display()
+                    ));
+                    return false;
+                }
+                bun_install_command(&bun, &self.naner_root, package, info.version.as_deref())
+            }
             VendorSourceType::Npm => {
                 let npm = self.vendor_dir.join("nodejs").join("npm.cmd");
                 if !npm.is_file() {
@@ -1314,6 +1335,38 @@ fn npm_install_command(
                 home.join(".npm-cache").display().to_string(),
             ),
         ],
+    )
+}
+
+/// The `Bun` twin of [`npm_install_command`], for npm-registry-published
+/// vendors whose `dependencies` name `Bun` instead of `NodeJS` (an
+/// `engines.bun` CLI with no `engines.node`, unrunnable under a vendored
+/// Node). `bun add --global` resolves the same npm registry spec `npm
+/// install -g` would but writes into `$BUN_INSTALL/install/global` and
+/// links its bin into `$BUN_INSTALL/bin`; `BUN_INSTALL` is pinned into the
+/// tree explicitly here rather than assumed from the `Bun` vendor's own
+/// `environmentVariables`, matching `npm_install_command`/
+/// `pip_install_command`'s existing NPM_CONFIG_*/PYTHONUSERBASE pattern --
+/// none of the three package-manager install paths trust ambient launch-time
+/// environment.
+fn bun_install_command(
+    bun: &Path,
+    naner_root: &Path,
+    package: &str,
+    version: Option<&str>,
+) -> (PathBuf, Vec<String>, Vec<(String, String)>) {
+    let spec = match version {
+        Some(v) if !v.is_empty() => format!("{package}@{v}"),
+        _ => package.to_string(),
+    };
+    let home = naner_root.join("home");
+    (
+        bun.to_path_buf(),
+        vec!["add".into(), "--global".into(), spec],
+        vec![(
+            "BUN_INSTALL".into(),
+            home.join(".bun").display().to_string(),
+        )],
     )
 }
 

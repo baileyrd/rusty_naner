@@ -29,6 +29,7 @@
     "PathPrecedence": [
       "%NANER_ROOT%\\bin",
       "%NANER_ROOT%\\home\\.npm-global",
+      "%NANER_ROOT%\\home\\.bun\\bin",
       "%NANER_ROOT%\\home\\go\\bin",
       "%NANER_ROOT%\\home\\.cargo\\bin",
       "%NANER_ROOT%\\home\\.gem\\bin",

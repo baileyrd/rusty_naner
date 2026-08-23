@@ -1,3 +1,39 @@
+## [0.9.16] - 2026-08-23
+### Fixed
+- `naner update`'s "Update now?" prompt could be accepted (`Y` echoed
+  correctly) and then silently do nothing -- no error, no install, no
+  "Press any key to exit" -- instead of the previously-reported hang.
+  Reproduced live: the `CREATE_NEW_CONSOLE`-relaunched, GUI-subsystem child
+  only inherits the right to foreground its own window for a short default
+  grace period after `CreateProcess` returns, and the version check's
+  blocking GitHub API call, which runs before the prompt, sits squarely
+  inside that gap -- every prior fix touched handle association or how
+  input is read, never window focus. Added `console::force_foreground`
+  (`SetForegroundWindow` right before the interactive read) and
+  `console::allow_foreground` (`AllowSetForegroundWindow` from the parent
+  right after spawning the child, widening its eligibility window instead
+  of leaving it to the default).
+- The `OhMyPi` vendor installed the wrong package: npm's unscoped
+  `oh-my-pi` (an unrelated small extension for a different "pi" CLI,
+  provides `oh-my-pi`) instead of the actual `omp` coding agent CLI
+  (`@oh-my-pi/pi-coding-agent`, npm-provenance-attested, homepage
+  `omp.sh`). The real package only declares `engines.bun`, no
+  `engines.node`, so it can't run under naner's vendored Node at all --
+  `Npm`-type vendors now install through `bun add --global` instead of
+  `npm install -g` when their `dependencies` name `Bun` instead of
+  `NodeJS`. `OhMyPi.json` now points at `@oh-my-pi/pi-coding-agent` and
+  depends on `Bun`.
+- `%NANER_ROOT%\home\.bun\bin` (where `bun add --global` links its bins)
+  was never on `PathPrecedence` -- same class of bug as the `zed`
+  `pathPrecedence` fix in v0.9.15: an npm-via-bun vendor could install
+  cleanly and still not resolve from a naner-launched terminal. Added.
+- `naner-core`'s `build.rs` only emitted `cargo:rerun-if-changed` on the
+  `dist-assets/config/vendors/` directory itself, which Cargo does not
+  reliably re-trigger on for an in-place edit to a file already inside it
+  (only add/remove is guaranteed) -- confirmed live: an edited vendor file
+  built against a stale embedded catalog until forced. Now also watches
+  every vendor file individually.
+
 ## [0.9.15] - 2026-08-23
 ### Fixed
 - `naner update-vendors` only ever refreshed the four hardcoded essential

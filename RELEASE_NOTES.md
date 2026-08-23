@@ -7,6 +7,61 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
+## v0.9.16 — 2026-08-23
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.15...v0.9.16).
+
+Reported live: `naner update`'s "Update now?" prompt was accepted (`Y`
+echoed correctly, right where it was typed) and then did nothing — no
+"Updating Naner" header, no error, no "Press any key to exit", just a
+return to the calling shell's prompt. Reproduced the underlying shape
+independently (a `CREATE_NEW_CONSOLE`-relaunched child alive and blocked,
+invisible to whatever spawned it) via a hub-hosted pty. Every prior fix on
+this bug (v0.9.6 through v0.9.13) touched handle association
+(`refresh_std_handles`) or how input is read (`read_line_raw`) — never
+window focus. A GUI-subsystem child only inherits the right to foreground
+its own window for a short default grace period after `CreateProcess`
+returns, and the version check's blocking GitHub API call, which runs
+*before* the prompt, sits squarely inside that gap — the window keeps
+rendering fine (rendering never needed focus, which is why the prompt text
+and the echoed `Y` looked completely normal) while keystrokes go to
+whatever window actually has focus. Added `console::force_foreground`
+(`SetForegroundWindow`, called right before the interactive read) and
+`console::allow_foreground` (`AllowSetForegroundWindow` from the parent
+right after spawning the child, so the network-call delay can't cost it
+eligibility). Verified the new code paths run without error through the
+same hub repro; verifying the actual focus fix needs a live Windows
+Terminal run.
+
+The `OhMyPi` vendor installed the wrong package. npm's unscoped
+`oh-my-pi` — by a different author, an extension for a different,
+unrelated "pi" CLI — declares a bin named `oh-my-pi`, not `omp`; that's
+what `naner install OhMyPi` had been installing all along. The actual
+`omp` coding agent CLI is `@oh-my-pi/pi-coding-agent` (npm-provenance/SLSA
+attested, homepage `omp.sh`), which only declares `engines.bun` — no
+`engines.node` — so it can't run under naner's vendored Node at all.
+`Npm`-type vendors now install through `bun add --global` instead of
+`npm install -g` when their `dependencies` name `Bun` instead of `NodeJS`;
+`OhMyPi.json` now points at the right package and depends on `Bun`.
+Fixing that surfaced a second bug in the same shape as the `zed`
+`pathPrecedence` gap from v0.9.15: `%NANER_ROOT%\home\.bun\bin`, where
+`bun add --global` links its bins, was never on `PathPrecedence` — an
+npm-via-bun vendor could install cleanly and still never resolve from a
+naner-launched terminal. Verified end-to-end live: `bun add --global
+@oh-my-pi/pi-coding-agent` installed `omp.exe`, and it runs
+(`omp/18.0.3`).
+
+Chasing that fix down surfaced a third, smaller bug: `naner-core`'s
+`build.rs` only watched the `dist-assets/config/vendors/` directory for
+`cargo:rerun-if-changed`, which Cargo does not reliably re-trigger on for
+an in-place edit to a file already inside it — only entries being added or
+removed are guaranteed to bump a directory's own mtime. Confirmed live:
+editing `OhMyPi.json` and rebuilding kept shipping the stale embedded
+catalog until the build script itself was touched by hand. `build.rs` now
+also emits `cargo:rerun-if-changed` for every vendor file individually.
+
+---
+
 ## v0.9.15 — 2026-08-23
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.14...v0.9.15).
