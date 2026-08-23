@@ -53,7 +53,7 @@ pub fn execute_update(args: &[String]) -> i32 {
     let (_args, quiet) = strip_quiet(args);
     logger::set_quiet(quiet);
 
-    logger::header("Updating Essential Vendors");
+    logger::header("Updating Vendors");
     logger::newline();
 
     let Some(naner_root) = find_root_or_explain() else {
@@ -63,11 +63,12 @@ pub fn execute_update(args: &[String]) -> i32 {
     logger::info(&format!("Naner Root: {}", naner_root.display()));
     logger::newline();
 
-    // C# uses the hardcoded factory set for update-vendors (not vendors.json),
-    // but honours the manifest's `enabled` -- see below.
-    let vendors = enabled_essential_vendors(&VendorConfigurationLoader::new(&naner_root));
+    let vendors = vendors_to_update(&VendorConfigurationLoader::new(&naner_root));
     if vendors.is_empty() {
-        logger::warning("Every essential vendor is disabled in vendors.json; nothing to update.");
+        logger::warning(
+            "Every essential vendor is disabled in vendors.json and no optional vendor is \
+             installed; nothing to update.",
+        );
         return 0;
     }
     let http = UreqHttp::new();
@@ -185,6 +186,29 @@ fn enabled_essential_vendors(loader: &VendorConfigurationLoader) -> Vec<VendorDe
         ));
     }
     keep
+}
+
+/// The full set `update-vendors` refreshes: every enabled essential vendor
+/// (see [`enabled_essential_vendors`]) plus every *optional* vendor that is
+/// both enabled and actually installed. Optional vendors have no hardcoded
+/// fallback definitions the way essentials do -- `Node.js`, `Ruby`, `Go` and
+/// the rest only exist in `vendors.json` -- so those come straight from the
+/// loader, filtered to what is on disk. Updating an optional vendor nobody
+/// installed would silently turn "update what I have" into "install
+/// everything available", which is what `install --all` is for.
+fn vendors_to_update(loader: &VendorConfigurationLoader) -> Vec<VendorDefinition> {
+    let essential = enabled_essential_vendors(loader);
+    let essential_keys: std::collections::HashSet<String> =
+        essential.iter().map(|v| v.key.to_lowercase()).collect();
+
+    let installed_optional = loader
+        .load_vendors()
+        .into_iter()
+        .filter(|v| !v.required)
+        .filter(|v| !essential_keys.contains(&v.key.to_lowercase()))
+        .filter(|v| loader.is_vendor_installed(v));
+
+    essential.into_iter().chain(installed_optional).collect()
 }
 
 fn strip_quiet(args: &[String]) -> (Vec<String>, bool) {
@@ -521,7 +545,9 @@ fn show_install_help(optional: &[&VendorDefinition]) {
 
 #[cfg(test)]
 mod tests {
-    use super::{enabled_essential_vendors, restart_hint_applies, vendor_list_label};
+    use super::{
+        enabled_essential_vendors, restart_hint_applies, vendor_list_label, vendors_to_update,
+    };
     use naner_core::vendors::{VendorConfigurationLoader, essential_vendor_definitions};
 
     /// The bug: a checksum mismatch aborted the only install, and naner still
@@ -662,5 +688,65 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let kept = enabled_essential_vendors(&VendorConfigurationLoader::new(dir.path()));
         assert_eq!(kept.len(), essential_vendor_definitions().len());
+    }
+
+    /// `update-vendors` used to skip every optional vendor -- Node.js,
+    /// Ruby, Go and the rest never got updated no matter how many were
+    /// installed, because only the hardcoded essential set was refreshed.
+    /// An installed, enabled optional vendor must be included; a merely
+    /// *available* one must not, or `update-vendors` would quietly install
+    /// things nobody asked for.
+    #[test]
+    fn an_installed_optional_vendor_is_updated_but_an_uninstalled_one_is_not() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        let vendors = config.join("vendors");
+        std::fs::create_dir_all(&vendors).unwrap();
+        for (key, definition) in [
+            (
+                "NodeJS",
+                r#"{"name":"Node.js","extractDir":"nodejs","enabled":true,"required":false}"#,
+            ),
+            (
+                "Ruby",
+                r#"{"name":"Ruby","extractDir":"ruby","enabled":true,"required":false}"#,
+            ),
+            (
+                "Rush",
+                r#"{"name":"Rush","extractDir":"rush","enabled":false,"required":false}"#,
+            ),
+        ] {
+            std::fs::write(
+                vendors.join(format!("{key}.json")),
+                format!(r#"{{"{key}":{definition}}}"#),
+            )
+            .unwrap();
+        }
+        std::fs::create_dir_all(dir.path().join("vendor/nodejs")).unwrap();
+        std::fs::write(dir.path().join("vendor/nodejs/marker"), "x").unwrap();
+
+        let loader = VendorConfigurationLoader::new(dir.path());
+        let updated = vendors_to_update(&loader);
+        let keys: Vec<&str> = updated.iter().map(|v| v.key.as_str()).collect();
+
+        assert!(
+            keys.contains(&"NodeJS"),
+            "installed optional vendor missing"
+        );
+        assert!(
+            !keys.contains(&"Ruby"),
+            "uninstalled optional vendor should not be updated"
+        );
+        assert!(!keys.contains(&"Rush"), "disabled vendor was updated");
+        // Essentials are still covered even though this manifest never
+        // mentions them.
+        assert!(keys.contains(&"PowerShell"));
+        // No duplicates: essential keys are excluded from the optional pass.
+        assert_eq!(
+            keys.iter().filter(|k| **k == "PowerShell").count(),
+            1,
+            "essential vendor listed twice"
+        );
     }
 }

@@ -1,5 +1,10 @@
-## [Unreleased]
+## [0.9.15] - 2026-08-23
 ### Fixed
+- `naner update-vendors` only ever refreshed the four hardcoded essential
+  vendors, silently skipping every optional vendor (`nodejs`, `ruby`, `go`,
+  ...) the user had actually installed with `naner install`. It now also
+  updates every installed, enabled optional vendor; an available-but-not-
+  installed vendor is still left alone.
 - `naner install <npm-vendor>` (e.g. `codex`) could fail with "response too
   big for into_string": `fetch_npm` fetched the full npm packument instead
   of the `latest`-tag manifest. Now resolves against `GET
