@@ -7,7 +7,18 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
-## Unreleased
+## v0.9.15 — 2026-08-23
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.14...v0.9.15).
+
+`naner update-vendors` only ever refreshed the four hardcoded essential
+vendors (7-Zip, PowerShell, Windows Terminal, Git for Windows) — every
+optional vendor a user actually installed with `naner install` (Node.js,
+Ruby, Go, Ruff, ...) was silently skipped no matter how many were on disk.
+It now also updates every *installed, enabled* optional vendor, resolved
+from `vendors.json` the same way `install --list` reports them; an
+optional vendor that is merely available but never installed is still
+left alone, so this doesn't turn into `install --all`.
 
 Reported live: `naner install codex` failed with "response too big for
 into_string". `fetch_npm` resolved npm-published vendors against

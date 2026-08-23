@@ -685,7 +685,8 @@ impl<'a> UnifiedVendorInstaller<'a> {
         if !(200..300).contains(&status) {
             return Ok(None);
         }
-        let releases: Vec<GitHubRelease> = serde_json::from_str(&body).map_err(|e| e.to_string())?;
+        let releases: Vec<GitHubRelease> =
+            serde_json::from_str(&body).map_err(|e| e.to_string())?;
         for mut release in releases {
             if release.prerelease {
                 continue;
