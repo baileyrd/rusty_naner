@@ -258,7 +258,9 @@ fn rewrite_pin(
     fallback.insert("fileName".into(), json!(file_name));
 
     if let Some(digest) = checksum
-        && let Some(checksum_obj) = vendor_obj.get_mut("checksum").and_then(|v| v.as_object_mut())
+        && let Some(checksum_obj) = vendor_obj
+            .get_mut("checksum")
+            .and_then(|v| v.as_object_mut())
     {
         checksum_obj.insert("value".into(), json!(digest));
     }
