@@ -1,0 +1,34 @@
+{
+  "MsvcBuildTools": {
+    "name": "MSVC Build Tools",
+    "description": "Portable MSVC compiler/linker and Windows SDK for the x86_64-pc-windows-msvc target, fetched and extracted directly (no admin-only vs_buildtools.exe installer)",
+    "provides": [
+      "cl",
+      "link",
+      "lib",
+      "nmake",
+      "rc",
+      "mt"
+    ],
+    "extractDir": "msvc-build-tools",
+    "enabled": true,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://aka.ms/vs/17/release/channel",
+      "version": "VS 17.14.39 (VC 14.44.35207 / Windows SDK 10.0.26100.0)",
+      "fileName": "msvc-build-tools.marker",
+      "size": "~230"
+    },
+    "pathPriority": 22,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\msvc-build-tools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64",
+      "%NANER_ROOT%\\vendor\\msvc-build-tools\\Windows Kits\\10\\bin\\10.0.26100.0\\x64"
+    ],
+    "environmentVariables": {
+      "INCLUDE": "%NANER_ROOT%\\vendor\\msvc-build-tools\\VC\\Tools\\MSVC\\14.44.35207\\include;%NANER_ROOT%\\vendor\\msvc-build-tools\\Windows Kits\\10\\Include\\10.0.26100.0\\ucrt;%NANER_ROOT%\\vendor\\msvc-build-tools\\Windows Kits\\10\\Include\\10.0.26100.0\\shared;%NANER_ROOT%\\vendor\\msvc-build-tools\\Windows Kits\\10\\Include\\10.0.26100.0\\um",
+      "LIB": "%NANER_ROOT%\\vendor\\msvc-build-tools\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x64;%NANER_ROOT%\\vendor\\msvc-build-tools\\Windows Kits\\10\\Lib\\10.0.26100.0\\ucrt\\x64;%NANER_ROOT%\\vendor\\msvc-build-tools\\Windows Kits\\10\\Lib\\10.0.26100.0\\um\\x64"
+    }
+  }
+}

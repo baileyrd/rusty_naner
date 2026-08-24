@@ -16,10 +16,15 @@
 //! the merge possible at all on that upgrade path: the new `naner.exe`
 //! always knows its own current defaults, regardless of what is on disk.
 //!
-//! Three kinds of change:
-//! - A `VendorPaths`/`Profiles` key entirely missing from the user's file is
-//!   always added. A missing key cannot be a customization; there is nothing
-//!   to protect by leaving it out.
+//! Four kinds of change:
+//! - A `VendorPaths`/`Profiles`/`Environment.EnvironmentVariables` key
+//!   entirely missing from the user's file is always added. A missing key
+//!   cannot be a customization; there is nothing to protect by leaving it
+//!   out. This is also what closes dotfolder leaks (`.codex`/`.gemini`) for
+//!   a tree that first ran before the redirecting variable
+//!   shipped -- a bare `naner.exe` swap never touched `config/naner.json`
+//!   before, so a variable added to the shipped defaults reached only
+//!   brand-new installs until this key kind existed.
 //! - A handful of specific fields changed by a config-shape migration (right
 //!   now, just #64) are refreshed *only* when the user's current value still
 //!   matches exactly what naner itself last shipped there. Any other value
@@ -142,6 +147,13 @@ pub fn merge_shipped_naner_defaults(
         &shipped,
         "/Profiles",
         "Profiles.",
+        &mut added,
+    );
+    add_missing_object_keys(
+        &mut existing,
+        &shipped,
+        "/Environment/EnvironmentVariables",
+        "Environment.EnvironmentVariables.",
         &mut added,
     );
 
@@ -448,6 +460,60 @@ mod tests {
         let updated: Value =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert!(updated["VendorPaths"]["Bun"].is_string());
+    }
+
+    /// The concrete regression this was built for: a tree from before
+    /// `USERPROFILE`/`TEMP`/`TMP` (v0.9.14) existed in the shipped config
+    /// never picked them up on a bare `naner.exe` swap otherwise, and
+    /// dotfolders kept leaking into the real Windows profile forever.
+    #[test]
+    fn a_pre_redirect_tree_gets_new_environment_variables_added() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = write(
+            dir.path(),
+            "naner.json",
+            r#"{
+                "VendorPaths": {},
+                "Profiles": {},
+                "Environment": {
+                    "EnvironmentVariables": {
+                        "NANER_ROOT": "%NANER_ROOT%",
+                        "HOME": "%NANER_ROOT%\\home"
+                    }
+                }
+            }"#,
+        );
+
+        let outcome = merge_shipped_naner_defaults(&path).unwrap();
+        let NanerConfigMergeOutcome::Merged { added, .. } = outcome else {
+            panic!("expected new keys to be added, got {outcome:?}");
+        };
+        assert!(
+            added
+                .iter()
+                .any(|k| k == "Environment.EnvironmentVariables.USERPROFILE")
+        );
+        assert!(
+            added
+                .iter()
+                .any(|k| k == "Environment.EnvironmentVariables.TEMP")
+        );
+
+        let updated: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(
+            updated["Environment"]["EnvironmentVariables"]["USERPROFILE"],
+            "%NANER_ROOT%\\home"
+        );
+        assert_eq!(
+            updated["Environment"]["EnvironmentVariables"]["TEMP"],
+            "%NANER_ROOT%\\home\\.tmp"
+        );
+        // A variable the user already had must survive untouched.
+        assert_eq!(
+            updated["Environment"]["EnvironmentVariables"]["HOME"],
+            "%NANER_ROOT%\\home"
+        );
     }
 
     /// The concrete regression this was built for: a tree from before

@@ -406,7 +406,7 @@ mod vendor_merge_tests {
     /// real shipped vendor directory, so a priority typo fails here.
     #[test]
     fn the_shipped_config_reproduces_the_original_path_order() {
-        const EXPECTED: [&str; 32] = [
+        const EXPECTED: [&str; 34] = [
             "bin",
             "home/.npm-global",
             "home/.bun/bin",
@@ -418,6 +418,8 @@ mod vendor_merge_tests {
             "vendor/bin",
             "vendor/go/bin",
             "vendor/rust/.cargo/bin",
+            "vendor/msvc-build-tools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64",
+            "vendor/msvc-build-tools/Windows Kits/10/bin/10.0.26100.0/x64",
             "vendor/ruby/bin",
             "vendor/anaconda",
             "vendor/anaconda/Scripts",
