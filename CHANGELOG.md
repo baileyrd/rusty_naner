@@ -1,3 +1,27 @@
+## [0.9.19] - 2026-08-24
+### Fixed
+- Reported live: `naner update-vendors` reinstalled `RustyTerm` (an
+  "Experimental Rust-based terminal emulator") and `Rush` on every run,
+  regardless of whether either was ever installed -- and once installed
+  that way, launching `RustyTerm` failed with a GPU-related error. Root
+  cause: the hardcoded fallback vendor list
+  (`essential_vendor_definitions`) bundles `RustyTerm`/`Rush` alongside the
+  four true bootstrap essentials (`SevenZip`/`PowerShell`/
+  `WindowsTerminal`/`GitForWindows`) as a safety net for a broken
+  `vendors.json`, but none of the six had `required` set (all silently
+  defaulted to `false`) -- and `update-vendors`' essential-vendor selection
+  treated "is in this list at all" as "always keep current", not "is
+  actually required". `RustyTerm`/`Rush` ship `"enabled": true` (like
+  every optional vendor) but `"required": false`, so this force-installed
+  them regardless of whether the user ever asked for either. The four true
+  essentials now carry `required: true` in the hardcoded list too, and
+  vendor selection reads `required` off the real, loaded config (falling
+  back to the hardcoded value only when a vendor is entirely absent from
+  it) instead of blind list membership. Same root cause silently broke
+  `naner repair`'s essential-vendor recovery, which already checked this
+  same (always-`false`) flag and could never actually re-bootstrap a
+  missing essential vendor -- now fixed too.
+
 ## [0.9.18] - 2026-08-24
 ### Fixed
 - `naner update`/`naner self-update` (the binary swap) never called the

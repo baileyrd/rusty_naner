@@ -7,6 +7,33 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
+## v0.9.19 — 2026-08-24
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.18...v0.9.19).
+
+Reported live: `naner update-vendors` reinstalled `RustyTerm` and `Rush` on
+every run whether or not either was ever installed, and the freshly
+force-installed `RustyTerm` then failed to launch with a GPU-related error.
+Root cause: the hardcoded fallback vendor list
+(`essential_vendor_definitions`, used both when `vendors.json` is entirely
+broken and as `update-vendors`' "always keep current" set) carries six
+entries, not four -- `RustyTerm`/`Rush` ride along as a safety net so a
+broken config doesn't lose every optional terminal-adjacent tool at once --
+but none of the six ever set `required`, so it silently defaulted to
+`false` for all of them, including the four genuine bootstrap essentials.
+`update-vendors`' essential-vendor selection treated "present in this
+list" as "always keep current" rather than checking `required`, so
+`RustyTerm` (`"enabled": true` like every other optional vendor, but
+`"required": false` in its real shipped JSON) got force-installed on every
+run for users who never asked for it. Fixed both ends: the four true
+essentials (`SevenZip`/`PowerShell`/`WindowsTerminal`/`GitForWindows`) now
+carry `required: true` in the hardcoded list, and vendor selection reads
+`required` off the real, loaded config -- falling back to the hardcoded
+value only for a vendor that config never mentions at all, so a totally
+broken `vendors.json` still bootstraps correctly. The always-`false` flag
+silently broke `naner repair`'s essential-vendor recovery too (it already
+gated re-bootstrapping on this exact flag); fixed as the same change.
+
 ## v0.9.18 — 2026-08-24
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.17...v0.9.18).

@@ -184,11 +184,21 @@ pub enum ChecksumSource {
     Scrape { url: String, pattern: String },
 }
 
-/// `VendorDefinitionFactory`: the hardcoded essential set used when
+/// `VendorDefinitionFactory`: the hardcoded bootstrap set used when
 /// vendors.json is missing/invalid, 7-Zip deliberately first (it unblocks
 /// the other extractions).
-/// The built-in fallback set, used by `update-vendors` and whenever
-/// `vendors.json` is missing, empty or unparseable.
+///
+/// Six definitions, not four: alongside the true bootstrap essentials
+/// (`SevenZip`/`PowerShell`/`WindowsTerminal`/`GitForWindows`, all
+/// `required: true` here, matching their real shipped JSON) this also
+/// carries `RustyTerm`/`Rush` -- optional (`required: false`, same as
+/// their real shipped JSON) but still needed here so a tree whose
+/// `vendors.json` is entirely broken can still resolve *something* for
+/// them rather than losing every optional vendor at once. `update-vendors`
+/// (`enabled_essential_vendors`) reads `required` off the real, loaded
+/// config -- not "is this vendor in this list at all" -- specifically so
+/// `RustyTerm`/`Rush` being present here does not silently force-install
+/// an "Experimental" terminal nobody asked for on every update.
 ///
 /// Every entry must set `key`, and the key must match the one `vendors.json`
 /// uses for the same vendor. `naner.lock` is keyed by it: six definitions
@@ -203,6 +213,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
             name: constants::vendor_names::SEVEN_ZIP.into(),
             key: "SevenZip".into(),
             extract_dir: "7zip".into(),
+            required: true,
             // 7-zip.org moved its binaries to GitHub releases; the old
             // download.html scrape now yields a mangled URL. GitHub source
             // with a glob (works since the B1 fix) is the real path.
@@ -217,6 +228,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
             name: constants::vendor_names::POWERSHELL.into(),
             key: "PowerShell".into(),
             extract_dir: "powershell".into(),
+            required: true,
             source_type: VendorSourceType::GitHub,
             github_owner: Some("PowerShell".into()),
             github_repo: Some("PowerShell".into()),
@@ -231,6 +243,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
             name: constants::vendor_names::WINDOWS_TERMINAL.into(),
             key: "WindowsTerminal".into(),
             extract_dir: "terminal".into(),
+            required: true,
             source_type: VendorSourceType::GitHub,
             github_owner: Some("microsoft".into()),
             github_repo: Some("terminal".into()),
@@ -246,6 +259,7 @@ pub fn essential_vendor_definitions() -> Vec<VendorDefinition> {
             name: constants::vendor_names::GIT_FOR_WINDOWS.into(),
             key: "GitForWindows".into(),
             extract_dir: "git".into(),
+            required: true,
             source_type: VendorSourceType::GitHub,
             github_owner: Some("git-for-windows".into()),
             github_repo: Some("git".into()),
