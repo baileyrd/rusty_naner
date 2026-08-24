@@ -7,6 +7,45 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
+## v0.9.17 — 2026-08-24
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.16...v0.9.17).
+
+New vendor: `MsvcBuildTools`, a portable MSVC compiler/linker (VC++ Tools
+14.44.35207) and Windows SDK (10.0.26100.0) — the exact toolset
+`x86_64-pc-windows-msvc` builds need, installed without the admin-only
+`vs_buildtools.exe` bootstrapper. That installer needs admin no matter what
+`--installPath` is given, since it registers itself with the VS Installer
+service and writes MSI-based state machine-wide regardless of where the
+toolset itself lands. Instead this fetches the individual payloads that
+bootstrapper would fetch — VC++ Tools as plain-zip VSIX, Windows SDK
+components as MSI + external CAB — and extracts them directly, the same
+no-admin technique `mmozeiko/portable-msvc` and
+`Data-Oriented-House/PortableBuildTools` use. VC++ Tools packages carry
+their own published SHA-256 in the VS 17.14 channel manifest
+(`aka.ms/vs/17/release/channel`); the Windows SDK's packages don't
+(`Win11SDK_10.0.26100` publishes 229 anonymous content-hashed `.cab` files
+with no names attached) — those pins came from extracting the Burn
+manifest embedded inside `winsdksetup.exe` itself and matching its named
+`MsiPackage` entries (`Windows SDK Desktop Headers x64`, ...) to the
+hashed files the channel manifest actually serves. Dispatched by vendor
+key in the installer, bypassing the generic single-artifact resolver
+entirely — this vendor's shape (many payloads merging into one tree)
+doesn't fit it — and not pinned by `naner.lock`, since there is no
+upstream "latest" to compare a hardcoded pin table against.
+
+Also: `naner update`'s config merge only ever added missing
+`VendorPaths`/`Profiles` keys and appended `PathPrecedence` entries, never
+new `Environment.EnvironmentVariables` keys. An already-initialized tree
+never picked up a redirecting variable added after it was first created —
+`USERPROFILE`/`TEMP`/`TMP`/`APPDATA`/`LOCALAPPDATA` (v0.9.14), the XDG
+trio, `CLAUDE_CONFIG_DIR` — so dotfolders kept leaking into the real
+Windows profile on those trees forever, on every bare `naner.exe` swap,
+even after the shipped default had long since closed the leak for a
+brand-new install. The merge now adds missing
+`Environment.EnvironmentVariables` keys the same way it already does for
+`VendorPaths`/`Profiles`.
+
 ## v0.9.16 — 2026-08-23
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.15...v0.9.16).

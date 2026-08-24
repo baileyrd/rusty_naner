@@ -1,3 +1,38 @@
+## [0.9.17] - 2026-08-24
+### Added
+- New vendor: `MsvcBuildTools` — a portable MSVC compiler/linker (VC++
+  Tools 14.44.35207) and Windows SDK (10.0.26100.0), for the
+  `x86_64-pc-windows-msvc` target `naner` itself ships against. The
+  standard `vs_buildtools.exe` bootstrapper needs admin no matter what
+  `--installPath` is given — it registers with the VS Installer service
+  and writes MSI-based state machine-wide regardless of where the toolset
+  lands — so instead this fetches the individual VSIX/MSI payloads that
+  bootstrapper would fetch and extracts them directly (the same technique
+  `mmozeiko/portable-msvc` and `Data-Oriented-House/PortableBuildTools`
+  use). VC++ Tools packages carry their own SHA-256 in the VS 17.14
+  channel manifest; the Windows SDK's packages don't (`Win11SDK_10.0.26100`
+  is 229 anonymous hashed `.cab`s) — those pins came from extracting the
+  Burn manifest embedded in `winsdksetup.exe` itself, matching named MSI
+  packages (`Windows SDK Desktop Headers x64`, ...) to the hashed files the
+  channel manifest actually publishes. Dispatched by vendor key, bypassing
+  the generic single-artifact resolver/installer entirely (many payloads
+  merge into one tree); not pinned by `naner.lock` since there is no
+  upstream "latest" to compare a hardcoded pin table against. `enabled:
+  true` like every other optional vendor.
+
+### Fixed
+- A tree that first ran before a new `Environment.EnvironmentVariables` key
+  shipped (`USERPROFILE`/`TEMP`/`TMP`/`APPDATA`/`LOCALAPPDATA` in v0.9.14,
+  the XDG trio, `CLAUDE_CONFIG_DIR`, ...) never picked it up: `naner
+  update`'s config merge only ever added missing `VendorPaths`/`Profiles`
+  keys and appended `PathPrecedence` entries, never new
+  `Environment.EnvironmentVariables` keys — so an already-initialized tree
+  kept leaking `.codex`/`.gemini`/etc. into the real Windows profile
+  forever on a bare `naner.exe` swap, even after the shipped default
+  closed the leak for a brand-new install. The merge now adds missing
+  `Environment.EnvironmentVariables` keys the same way it already does for
+  `VendorPaths`/`Profiles`.
+
 ## [0.9.16] - 2026-08-23
 ### Fixed
 - `naner update`'s "Update now?" prompt could be accepted (`Y` echoed

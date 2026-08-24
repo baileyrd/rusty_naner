@@ -5,6 +5,7 @@
 mod config_merge;
 mod installer;
 mod loader;
+mod msvc_build_tools;
 mod wt_config;
 
 pub use config_merge::{VendorsMergeOutcome, merge_shipped_vendor_defaults};

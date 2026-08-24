@@ -86,6 +86,32 @@ impl<'a> UnifiedVendorInstaller<'a> {
             return true;
         }
 
+        // MsvcBuildTools has no single artifact to resolve/download/extract
+        // -- many VC++ Tools/Windows SDK payloads merge into one tree (see
+        // `msvc_build_tools`) -- and is never pinned by `naner.lock`: there
+        // is no upstream "latest" to compare a pin against, since the pins
+        // *are* the hardcoded payload table. Dispatched by vendor key, the
+        // same "one documented exception" shape
+        // `archives::run_exe_installer`'s `RUSTUP_HOME`/`CARGO_HOME` special
+        // case already established for a vendor whose install shape the
+        // generic pipeline cannot express.
+        if vendor.key.eq_ignore_ascii_case("MsvcBuildTools") {
+            logger::status(&format!("Fetching {}...", vendor.name));
+            if std::fs::create_dir_all(&self.download_dir).is_err() {
+                logger::warning(&format!("Failed to install {}, skipping...", vendor.name));
+                return false;
+            }
+            let ok = super::msvc_build_tools::install(self.http, &self.download_dir, &target_dir);
+            if ok {
+                let _ = std::fs::write(target_dir.join(VENDOR_VERSION_FILE), "pinned");
+                logger::success(&format!("  Installed {}", vendor.name));
+            } else {
+                logger::warning(&format!("Failed to install {}, skipping...", vendor.name));
+                let _ = std::fs::remove_dir_all(&target_dir);
+            }
+            return ok;
+        }
+
         let pinned = use_lock
             .then(|| NanerLockfile::load(&self.naner_root))
             .flatten()

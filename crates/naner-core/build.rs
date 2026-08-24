@@ -4,7 +4,7 @@
 //! The catalog has to be compiled in: a bare `naner.exe` swap has no bundle
 //! to read a vendors file from, and merging new vendor definitions into an
 //! existing tree is exactly what that path is for. `include_str!` takes one
-//! file, so the 22 authored files are concatenated here into one generated
+//! file, so the 33 authored files are concatenated here into one generated
 //! file in `OUT_DIR` rather than being embedded individually.
 //!
 //! Authoring contract, enforced below: one file per vendor, holding exactly
