@@ -328,10 +328,10 @@ fn extract_msi_component(msi_path: &Path, sdk_root: &Path, marker: &str) -> bool
         return false;
     }
 
-    let ok = if sdk_root.join(marker).is_dir() {
+    let ok = if join_backslash_path(sdk_root, marker).is_dir() {
         true
     } else if let Some(found) = find_dir_named(&scratch, marker) {
-        let dest = sdk_root.join(marker);
+        let dest = join_backslash_path(sdk_root, marker);
         merge_tree(&found, &dest).is_ok()
     } else {
         logger::failure(&format!(
@@ -344,15 +344,24 @@ fn extract_msi_component(msi_path: &Path, sdk_root: &Path, marker: &str) -> bool
     ok
 }
 
-/// Depth-first search for a directory ending in `marker` (a
-/// `\`-separated relative path such as `Include\10.0.26100.0\ucrt`) --
-/// Windows accepts embedded `\` in a single `Path::join` argument as a
-/// multi-component relative path, same as every other literal path string
-/// in this codebase.
+/// Join a `\`-separated relative path (e.g. `Include\10.0.26100.0\ucrt`)
+/// onto `base`, one component at a time -- `\` is only a path separator on
+/// Windows, and this runs in the crate's cross-platform test suite too
+/// (`ci.yml` also tests on `ubuntu-latest`), where a single `Path::join`
+/// call with an embedded `\` produces one component literally named
+/// `Include\10.0.26100.0\ucrt` instead of three nested ones.
+fn join_backslash_path(base: &Path, marker: &str) -> PathBuf {
+    marker
+        .split('\\')
+        .fold(base.to_path_buf(), |acc, part| acc.join(part))
+}
+
+/// Depth-first search for a directory ending in `marker` (see
+/// [`join_backslash_path`]).
 fn find_dir_named(root: &Path, marker: &str) -> Option<PathBuf> {
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        let candidate = dir.join(marker);
+        let candidate = join_backslash_path(&dir, marker);
         if candidate.is_dir() {
             return Some(candidate);
         }

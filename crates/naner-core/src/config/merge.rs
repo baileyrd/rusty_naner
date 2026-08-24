@@ -463,9 +463,9 @@ mod tests {
     }
 
     /// The concrete regression this was built for: a tree from before
-    /// `CODEX_HOME`/`GEMINI_CLI_HOME` existed in the shipped config never
-    /// picks them up on a bare `naner.exe` swap otherwise, and `.codex`/
-    /// `.gemini` keep leaking into the real Windows profile forever.
+    /// `USERPROFILE`/`TEMP`/`TMP` (v0.9.14) existed in the shipped config
+    /// never picked them up on a bare `naner.exe` swap otherwise, and
+    /// dotfolders kept leaking into the real Windows profile forever.
     #[test]
     fn a_pre_redirect_tree_gets_new_environment_variables_added() {
         let dir = tempfile::tempdir().unwrap();
@@ -491,23 +491,23 @@ mod tests {
         assert!(
             added
                 .iter()
-                .any(|k| k == "Environment.EnvironmentVariables.CODEX_HOME")
+                .any(|k| k == "Environment.EnvironmentVariables.USERPROFILE")
         );
         assert!(
             added
                 .iter()
-                .any(|k| k == "Environment.EnvironmentVariables.GEMINI_CLI_HOME")
+                .any(|k| k == "Environment.EnvironmentVariables.TEMP")
         );
 
         let updated: Value =
             serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(
-            updated["Environment"]["EnvironmentVariables"]["CODEX_HOME"],
-            "%NANER_ROOT%\\home\\.codex"
+            updated["Environment"]["EnvironmentVariables"]["USERPROFILE"],
+            "%NANER_ROOT%\\home"
         );
         assert_eq!(
-            updated["Environment"]["EnvironmentVariables"]["GEMINI_CLI_HOME"],
-            "%NANER_ROOT%\\home"
+            updated["Environment"]["EnvironmentVariables"]["TEMP"],
+            "%NANER_ROOT%\\home\\.tmp"
         );
         // A variable the user already had must survive untouched.
         assert_eq!(
