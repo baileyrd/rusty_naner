@@ -151,29 +151,55 @@ pub(crate) fn merge_config_defaults(naner_root: &std::path::Path) {
     }
 }
 
-/// The built-in essential set, minus anything `vendors.json` switches off.
+/// The truly-required subset of the built-in hardcoded set, minus anything
+/// `vendors.json` switches off.
 ///
-/// `update-vendors` deliberately maintains a fixed set of *definitions* rather
-/// than reading them from the manifest: those carry sources, asset globs and
-/// fallback URLs that a user's `vendors.json` may be older than. But `enabled`
-/// is the user's decision about what belongs on their machine, and a flag
-/// honoured by `install` and ignored by `update-vendors` means nothing -- a
-/// vendor switched off comes straight back on the next update, silently.
+/// `update-vendors` deliberately maintains a fixed set of *definitions*
+/// (`essential_vendor_definitions`) rather than reading them from the
+/// manifest: those carry sources, asset globs and fallback URLs that a
+/// user's `vendors.json` may be older than. But that hardcoded set has six
+/// entries, not four -- alongside the true bootstrap essentials it also
+/// carries `RustyTerm`/`Rush` as a fallback for a broken `vendors.json`.
+/// Treating "is in that list at all" as "essential" force-installed
+/// `RustyTerm` (an "Experimental" terminal emulator, its own shipped JSON
+/// says `required: false`) on every `update-vendors` run for a user who
+/// never asked for it. `required` is read from the *real*, loaded config
+/// instead -- accurate for a healthy `vendors.json`, and still correct in
+/// the broken-config fallback case since `essential_vendor_definitions`'s
+/// own four essentials are marked `required: true` there too.
+///
+/// `enabled` is a separate, independent decision: honoured by `install` and
+/// ignored by `update-vendors` would mean nothing -- a required vendor
+/// switched off comes straight back on the next update, silently.
 ///
 /// A manifest that cannot be read disables nothing. `load_all_vendors` falls
-/// back to this same set when the file is missing, empty or unparseable, so
-/// there is nothing to filter against; failing closed there would quietly stop
-/// maintaining vendors the user actually has.
+/// back to this same hardcoded set when the file is missing, empty or
+/// unparseable, so there is nothing to filter against; failing closed there
+/// would quietly stop maintaining vendors the user actually has.
 fn enabled_essential_vendors(loader: &VendorConfigurationLoader) -> Vec<VendorDefinition> {
-    let disabled: Vec<String> = loader
-        .load_all_vendors()
-        .into_iter()
+    let real = loader.load_all_vendors();
+    let disabled: Vec<String> = real
+        .iter()
         .filter(|v| !v.enabled)
         .map(|v| v.key.to_lowercase())
+        .collect();
+    // `required`, keyed by the real config -- a hardcoded entry the real
+    // config never mentions at all (e.g. a totally broken `vendors.json`,
+    // or a fixture that only writes the vendors it cares about) falls back
+    // to that entry's own hardcoded `required` flag, the same
+    // "absence is not a decision" rule the `disabled` check above already
+    // follows.
+    let required_override: std::collections::HashMap<String, bool> = real
+        .iter()
+        .map(|v| (v.key.to_lowercase(), v.required))
         .collect();
 
     let (keep, skip): (Vec<_>, Vec<_>) = essential_vendor_definitions()
         .into_iter()
+        .filter(|v| {
+            let key = v.key.to_lowercase();
+            *required_override.get(&key).unwrap_or(&v.required)
+        })
         .partition(|v| !disabled.contains(&v.key.to_lowercase()));
 
     // Say what was skipped. Silently doing less than asked is the same class of
@@ -651,7 +677,7 @@ mod tests {
         for (key, definition) in [
             (
                 "SevenZip",
-                r#"{"name":"7-Zip","extractDir":"7zip","enabled":true}"#,
+                r#"{"name":"7-Zip","extractDir":"7zip","enabled":true,"required":true}"#,
             ),
             (
                 "RustyTerm",
@@ -683,11 +709,54 @@ mod tests {
     /// An unreadable manifest disables nothing. `load_all_vendors` falls back
     /// to this same built-in set, so there is nothing to filter against, and
     /// failing closed would silently stop maintaining vendors the user has.
+    /// Only 4 of its 6 entries are truly required (`SevenZip`/`PowerShell`/
+    /// `WindowsTerminal`/`GitForWindows`) -- `RustyTerm`/`Rush` are in the
+    /// hardcoded set only as a fallback, not because `update-vendors`
+    /// should always force-install them.
     #[test]
     fn an_unreadable_manifest_disables_nothing() {
         let dir = tempfile::tempdir().unwrap();
         let kept = enabled_essential_vendors(&VendorConfigurationLoader::new(dir.path()));
-        assert_eq!(kept.len(), essential_vendor_definitions().len());
+        let keys: Vec<&str> = kept.iter().map(|v| v.key.as_str()).collect();
+        assert_eq!(
+            kept.len(),
+            4,
+            "expected only the 4 true essentials: {keys:?}"
+        );
+        for essential in ["SevenZip", "PowerShell", "WindowsTerminal", "GitForWindows"] {
+            assert!(keys.contains(&essential), "{essential} missing: {keys:?}");
+        }
+    }
+
+    /// The concrete regression this was built for: `RustyTerm` ships
+    /// `"enabled": true` by default (same as every other optional vendor)
+    /// but `"required": false` -- an installed-nowhere, never-requested
+    /// "Experimental" terminal must not be force-installed by every
+    /// `update-vendors` run just because it happens to share a hardcoded
+    /// fallback list with the true essentials.
+    #[test]
+    fn an_enabled_but_never_installed_rustyterm_is_not_force_installed() {
+        let dir = tempfile::tempdir().unwrap();
+        let config = dir.path().join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        let vendors = config.join("vendors");
+        std::fs::create_dir_all(&vendors).unwrap();
+        std::fs::write(
+            vendors.join("RustyTerm.json"),
+            r#"{"RustyTerm":{"name":"Rusty Term","extractDir":"rusty_term","enabled":true,"required":false}}"#,
+        )
+        .unwrap();
+
+        let loader = VendorConfigurationLoader::new(dir.path());
+        let updated = vendors_to_update(&loader);
+        let keys: Vec<&str> = updated.iter().map(|v| v.key.as_str()).collect();
+        assert!(
+            !keys.contains(&"RustyTerm"),
+            "enabled-but-uninstalled RustyTerm was force-installed: {keys:?}"
+        );
+        // The true essentials are still covered, falling back to the
+        // hardcoded set since this manifest never mentions them.
+        assert!(keys.contains(&"PowerShell"));
     }
 
     /// `update-vendors` used to skip every optional vendor -- Node.js,
