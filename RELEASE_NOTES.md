@@ -7,6 +7,43 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
+## v0.9.23 — 2026-08-24
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.22...v0.9.23).
+
+Reported live: `claude --version` (after `naner install claudecode`)
+failed with Windows' generic "This version of ... claude.exe is not
+compatible with the version of Windows you're running" -- which is
+Windows' loader trying to execute a shell script as if it were a PE
+binary. `@anthropic-ai/claude-code`'s own `bin/claude.exe` is a tiny
+500-byte placeholder script (`echo "Error: claude native binary not
+installed."`) the package ships in place of the real ~330 MB
+platform-native binary, meant to be overwritten by its own `postinstall`
+script (`node install.cjs`, which links in the binary from a per-platform
+optional dependency) during install.
+
+npm's own log explained why that never happened: recent npm versions gate
+install-time lifecycle scripts behind an `allowScripts` allowlist by
+default, and `npm_install_command` never passed one -- `"1 package had
+install scripts blocked because they are not covered by allowScripts"` --
+silently leaving the placeholder script as the "installed" `claude.exe`.
+Confirmed this is a real npm behavior change rather than a one-off: an
+*earlier* install of the exact same package, captured in the same npm
+cache's own logs before npm itself had been self-updated
+(`npm install -g npm@latest`, also naner-driven), ran the postinstall
+script fine.
+
+Every `Npm`-type vendor install now passes `--allow-scripts=<package>` --
+npm's own suggested remedy, scoped to exactly the package being installed
+rather than a blanket allowlist for every install script naner might ever
+run. Harmless no-op for a package with no lifecycle scripts to gate
+(`codex`, unaffected by this bug in the first place, keeps working
+identically).
+
+Verified live: reinstalling `@anthropic-ai/claude-code` with the fix
+replaced the 500-byte stub with the real 337,745,056-byte binary, and
+`claude --version` now reports `2.1.241 (Claude Code)`.
+
 ## v0.9.22 — 2026-08-24
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.21...v0.9.22).
