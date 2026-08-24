@@ -41,6 +41,34 @@ use crate::checksum::{self, ChecksumInfo};
 use crate::http::Http;
 use crate::logger;
 
+/// Append `PROPERTY=value` to `msiexec`'s command line, quoting only the
+/// *value* half.
+///
+/// `Command::arg` always quotes (or doesn't) the *entire* token it's given;
+/// it has no way to quote just part of one. That is fine for every other
+/// Windows program, which expects `CommandLineToArgvW`-style whole-token
+/// quoting -- but msiexec's own parser rejects a whole-token-quoted
+/// `"PROPERTY=value"` outright with ERROR_INVALID_COMMAND_LINE (1639) and
+/// only accepts `PROPERTY="value"`. `raw_arg` bypasses `Command::arg`'s
+/// quoting so the value can be quoted correctly by hand; a trailing
+/// backslash is doubled first since it would otherwise escape the closing
+/// quote instead of terminating it (`KITSROOT`'s value always ends in one).
+#[cfg(windows)]
+fn push_msi_property(command: &mut Command, property: &str, value: &str) {
+    use std::os::windows::process::CommandExt;
+    let escaped = if let Some(stripped) = value.strip_suffix('\\') {
+        format!("{stripped}\\\\")
+    } else {
+        value.to_string()
+    };
+    command.raw_arg(format!("{property}=\"{escaped}\""));
+}
+
+#[cfg(not(windows))]
+fn push_msi_property(command: &mut Command, property: &str, value: &str) {
+    command.arg(format!("{property}={value}"));
+}
+
 /// One downloadable file: a VC++ Tools VSIX (plain zip) or a Windows SDK
 /// MSI/external-CAB payload. `sha256` is the digest Microsoft's own
 /// manifest publishes for this exact file.
@@ -52,8 +80,8 @@ struct Payload {
 
 /// A Windows SDK component: one MSI plus the external `.cab` files its
 /// Media table references. `msiexec /a` resolves those relative to the
-/// MSI's own directory, so they must be downloaded into an `Installers\`
-/// subfolder next to it.
+/// MSI's own directory, so they must be downloaded flat alongside it (see
+/// `fetch_msi_component`).
 struct MsiComponent {
     label: &'static str,
     msi: Payload,
@@ -222,16 +250,24 @@ const SDK_UCRT: MsiComponent = MsiComponent {
 };
 
 /// Download every payload for one MSI component into `<downloads>/<label>/`
-/// (cabs under an `Installers\` subfolder, matching what `msiexec /a`
-/// expects next to the MSI), verifying each against its pinned SHA-256.
+/// (msi and cabs sitting flat in that same directory), verifying each
+/// against its pinned SHA-256.
+///
+/// Reported live: `msiexec /a` failed every attempt with `Error 1311.
+/// Source file not found (cabinet): <dir>\<hash>.cab`, per its own verbose
+/// log (`/lv`) -- for this MSI's `/a` admin install, the Media table's
+/// external cabinet is resolved directly beside the `.msi`, not under an
+/// `Installers\` subfolder as this function used to place it (a stale
+/// assumption this vendor was never actually exercised against, since
+/// nothing here can build until `MsvcBuildTools` itself installs
+/// successfully once).
 fn fetch_msi_component(
     http: &dyn Http,
     downloads: &Path,
     component: &MsiComponent,
 ) -> Option<PathBuf> {
     let dir = downloads.join(sanitize(component.label));
-    let installers_dir = dir.join("Installers");
-    if fs::create_dir_all(&installers_dir).is_err() {
+    if fs::create_dir_all(&dir).is_err() {
         logger::failure(&format!(
             "    Could not create download dir for {}",
             component.label
@@ -244,7 +280,7 @@ fn fetch_msi_component(
         return None;
     }
     for cab in component.cabs {
-        let cab_path = installers_dir.join(cab.file_name);
+        let cab_path = dir.join(cab.file_name);
         if !fetch_and_verify(http, cab, &cab_path) {
             return None;
         }
@@ -287,7 +323,7 @@ fn fetch_and_verify(http: &dyn Http, payload: &Payload, dest: &Path) -> bool {
     true
 }
 
-/// `msiexec /a "<msi>" /qn KITSROOT="<merged>\Windows Kits\10\" TARGETDIR="<scratch>"`.
+/// `msiexec /a "<msi>" /qn KITSROOT="<merged>\Windows Kits\10\\" TARGETDIR="<scratch>"`.
 ///
 /// `KITSROOT` is the public MSI property every Windows SDK Desktop/UCRT
 /// package roots its Include/Lib/bin Directory-table entries under (visible
@@ -295,6 +331,19 @@ fn fetch_and_verify(http: &dyn Http, payload: &Payload, dest: &Path) -> bool {
 /// -- Burn forwards its own resolved value through unchanged). Passing it
 /// explicitly redirects the SDK's own install layout directly into the
 /// merged tree without needing a per-package hoist.
+///
+/// `KITSROOT` always contains a space (`Windows Kits`), which forces
+/// `Command::arg`'s automatic Windows quoting to wrap the *entire*
+/// `KITSROOT=...` token in one outer pair of quotes. Reported live:
+/// msiexec then aborted every attempt with ERROR_INVALID_COMMAND_LINE
+/// (1639) before writing a single log line -- unlike every other Windows
+/// program, msiexec's own command-line parser only accepts a quoted
+/// *value* half (`PROPERTY="value"`), not a quoted whole token
+/// (`"PROPERTY=value"`). `Command::arg` has no way to express that split
+/// (it quotes, or doesn't, the whole argument it's given), so
+/// `push_msi_property` appends the raw text itself via `raw_arg`, quoting
+/// only the value and doubling a trailing backslash the same way
+/// `Command::arg`'s own escaping would have.
 ///
 /// Defensive because this cannot be exercised against every SDK release:
 /// if nothing landed directly under `sdk_root` (`KITSROOT` not honoured, or
@@ -311,13 +360,11 @@ fn extract_msi_component(msi_path: &Path, sdk_root: &Path, marker: &str) -> bool
         return false;
     }
 
-    let status = Command::new("msiexec.exe")
-        .arg("/a")
-        .arg(msi_path)
-        .arg("/qn")
-        .arg(format!("KITSROOT={}\\", sdk_root.display()))
-        .arg(format!("TARGETDIR={}", scratch.display()))
-        .status();
+    let mut command = Command::new("msiexec.exe");
+    command.arg("/a").arg(msi_path).arg("/qn");
+    push_msi_property(&mut command, "KITSROOT", &format!("{}\\", sdk_root.display()));
+    push_msi_property(&mut command, "TARGETDIR", &scratch.display().to_string());
+    let status = command.status();
     let ran = matches!(status, Ok(s) if s.success());
     if !ran {
         logger::failure(&format!(

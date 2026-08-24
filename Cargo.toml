@@ -6,7 +6,7 @@ members = ["crates/naner-core", "crates/naner"]
 # The release workflow enforces tag == this version (MIGRATION_ANALYSIS §4.2):
 # deployed naner-init.exe installations look up the GitHub release whose tag
 # matches their embedded version, so the two must never drift.
-version = "0.9.20"
+version = "0.9.21"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/baileyrd/rusty_naner"
@@ -19,6 +19,7 @@ version = "0.59"
 features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_Security_Authentication_Identity",
     "Win32_System_Console",
     "Win32_System_SystemInformation",
     "Win32_Storage_FileSystem",
