@@ -574,7 +574,7 @@ mod tests {
     use super::{
         enabled_essential_vendors, restart_hint_applies, vendor_list_label, vendors_to_update,
     };
-    use naner_core::vendors::{VendorConfigurationLoader, essential_vendor_definitions};
+    use naner_core::vendors::VendorConfigurationLoader;
 
     /// The bug: a checksum mismatch aborted the only install, and naner still
     /// said "Restart your terminal to use the newly installed tools." Nothing
