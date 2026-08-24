@@ -1,3 +1,21 @@
+## [0.9.20] - 2026-08-24
+### Fixed
+- The v0.9.18 fix (self-update also reconciling `config/naner.json`/
+  `config/vendors/`) didn't actually reach anyone updating *from* a
+  pre-fix version: `updater::update_from_release` only replaces the
+  binary file on disk -- the process performing that swap keeps executing
+  its own, now-superseded, in-memory code (Windows has no way to hot-swap
+  a running exe's code section), so a v0.9.17 process self-updating to
+  v0.9.19 ran the reconciliation using v0.9.17's own compiled-in vendor
+  catalog, not the one actually just installed. Confirmed live: updating
+  straight from v0.9.17 landed the v0.9.19 binary correctly but still did
+  not add `MsvcBuildTools` to `config/vendors/`. `naner update` now
+  re-invokes the freshly-installed binary (as `update-vendors
+  --sync-config-only`, a new undocumented flag that runs only the
+  config/vendor-defaults merge, never the full vendor-reinstall pass) so
+  the reconciliation always runs with the code that was actually just
+  shipped.
+
 ## [0.9.19] - 2026-08-24
 ### Fixed
 - Reported live: `naner update-vendors` reinstalled `RustyTerm` (an
