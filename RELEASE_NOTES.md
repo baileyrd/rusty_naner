@@ -7,6 +7,58 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
+## v0.9.22 — 2026-08-24
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.21...v0.9.22).
+
+Follow-up to [#154](https://github.com/baileyrd/rusty_naner/issues/154):
+even after v0.9.21 fixed `naner install MsvcBuildTools`'s two `msiexec`
+bugs, a full install still could not produce a working compiler --
+`cargo build`/`cargo check` failed linking every binary and build script
+with `LNK1181: cannot open input file 'kernel32.lib'`.
+
+Not a stale pin: fetched Microsoft's live `aka.ms/vs/17/release/channel`
+manifest and confirmed the pinned `Windows SDK Desktop Libs x64` MSI's
+SHA-256 matches exactly what's currently served. That package genuinely
+never shipped `kernel32.lib`, `ntdll.lib`, `user32.lib`, `advapi32.lib`,
+`ws2_32.lib`, or `userenv.lib`, confirmed by querying its own File table
+(366 rows, zero matches) via the `WindowsInstaller.Installer` COM object
+directly. Found the real owner the way the module's own doc comment
+already describes: extracted `winsdksetup.exe` as a cabinet (its unnamed
+first member is `BurnManifest.xml`), enumerated every `<MsiPackage>`, and
+queried each fundamental-lib candidate's own File table -- all six live in
+"Windows SDK for Windows Store Apps Libs" instead, despite the
+Desktop-suggestive name on the package naner already fetches. New
+`SDK_STORE_LIBS` component (msi + 6 external cabs) fetches it.
+
+`msvcrt.lib` -- which rustc's MSVC linking always requests via
+`/defaultlib:msvcrt` -- turned out to be missing for the exact same class
+of reason one layer up: VC++ Tools' "Desktop" CRT package doesn't carry
+it, only the parallel "Store" one does
+(`Microsoft.VC.14.44.17.14.CRT.x64.Store.base.vsix`, added as a 5th
+`VC_PACKAGES` entry, same plain-zip merge path every other VSIX already
+uses).
+
+Fixing the first gap exposed a real, separate correctness bug rather than
+just a missing pin: `SDK_STORE_LIBS` and the pre-existing `SDK_LIBS` both
+extract into the same `Lib\<ver>\um\x64` marker directory.
+`extract_msi_component`'s "already there" check looked at that shared
+`sdk_root` target *before* the current run's own fresh `scratch` output --
+so by the time `SDK_STORE_LIBS` ran, `SDK_LIBS`'s prior merge (moments
+earlier, same `install()` call) had already made the marker directory
+exist, and the check read that as "nothing to do," silently skipping the
+merge of `SDK_STORE_LIBS`'s own kernel32.lib/etc. entirely. Now checks
+`scratch` first: it's wiped at the top of every call, so it only ever
+reflects what *this* invocation's `msiexec` actually produced, regardless
+of what a sibling component left in `sdk_root` beforehand.
+
+Verified end-to-end, not just per-component: a full `cargo build --release
+--workspace` and `cargo test --workspace` (231 tests, 0 failures) against
+the fully-assembled toolchain both pass clean, `cargo clippy --workspace
+--all-targets -- -D warnings` is silent, and the resulting `naner.exe`
+runs and reports its own version correctly -- the first time this
+environment has been able to build itself from source.
+
 ## v0.9.21 — 2026-08-24
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.20...v0.9.21).
