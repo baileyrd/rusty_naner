@@ -362,7 +362,11 @@ fn extract_msi_component(msi_path: &Path, sdk_root: &Path, marker: &str) -> bool
 
     let mut command = Command::new("msiexec.exe");
     command.arg("/a").arg(msi_path).arg("/qn");
-    push_msi_property(&mut command, "KITSROOT", &format!("{}\\", sdk_root.display()));
+    push_msi_property(
+        &mut command,
+        "KITSROOT",
+        &format!("{}\\", sdk_root.display()),
+    );
     push_msi_property(&mut command, "TARGETDIR", &scratch.display().to_string());
     let status = command.status();
     let ran = matches!(status, Ok(s) if s.success());
