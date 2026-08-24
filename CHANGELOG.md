@@ -1,3 +1,13 @@
+## [0.9.18] - 2026-08-24
+### Fixed
+- `naner update`/`naner self-update` (the binary swap) never called the
+  `config/naner.json`/`config/vendors/` reconciliation that `naner
+  update-vendors` already ran — so a newly shipped vendor (`MsvcBuildTools`
+  in v0.9.17) never reached an already-initialized tree's `config/vendors/`
+  after self-updating; it only appeared once the separate,
+  easy-to-forget `update-vendors` command was also run. The self-update
+  path now reconciles both, same as `update-vendors` already did.
+
 ## [0.9.17] - 2026-08-24
 ### Added
 - New vendor: `MsvcBuildTools` — a portable MSVC compiler/linker (VC++

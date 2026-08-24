@@ -7,6 +7,21 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
+## v0.9.18 — 2026-08-24
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.17...v0.9.18).
+
+Reported live: `MsvcBuildTools` (new in v0.9.17) didn't show up in `naner
+install --list` after running `naner update`. Root cause: `naner update`/
+`naner self-update` only ever swaps the `naner.exe` binary itself —
+`updater::update_from_release` never touches `config/naner.json` or
+`config/vendors/`. The reconciliation that brings a newly shipped vendor
+definition into an already-initialized tree (`merge_config_defaults`,
+originally added for #72 — "a bare naner.exe-swap upgrade never otherwise
+touching either file") was wired into `naner update-vendors` only, not
+into the actual bare-binary-swap command the doc comment describes. Now
+called from both.
+
 ## v0.9.17 — 2026-08-24
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.16...v0.9.17).
