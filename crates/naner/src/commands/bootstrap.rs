@@ -139,15 +139,29 @@ pub fn execute_update(state: ConsoleState) -> i32 {
         return 1;
     };
     let code = if updater.update_from_release(&release, &self_path) {
-        // The binary swap above never touches config/naner.json or
-        // config/vendors/ -- reconcile them here too, not just on
-        // `naner update-vendors`, or a new vendor this release ships
-        // (MsvcBuildTools, say) never reaches an already-initialized tree
-        // until the user separately remembers to run that command (#72's
-        // "bare naner.exe-swap" scenario, minus the actual swap that
-        // triggers it).
+        // The binary swap above only replaces the file on disk -- this
+        // process keeps executing its own, now-superseded, in-memory code
+        // (Windows has no way to hot-swap a running exe's code section), so
+        // calling the config/vendor-defaults merge directly here would use
+        // *this* process's stale embedded catalog, not the one just
+        // installed. Re-invoke the now-on-disk binary instead (as
+        // `update-vendors --sync-config-only`, which does only the merge,
+        // never the full, slow vendor-reinstall pass) so a vendor this
+        // release ships (`MsvcBuildTools`, say) actually reaches an
+        // already-initialized tree -- not just brand-new ones -- instead
+        // of waiting for the user to separately remember `naner
+        // update-vendors` afterward (#72's "bare naner.exe-swap" scenario,
+        // minus the actual swap that triggers it).
         logger::newline();
-        super::vendors::merge_config_defaults(&naner_root);
+        let synced = std::process::Command::new(&self_path)
+            .args(["update-vendors", "--sync-config-only"])
+            .status();
+        if let Err(e) = synced {
+            logger::warning(&format!(
+                "  Could not reconcile config/vendors/ after update: {e}"
+            ));
+            logger::warning("  Run 'naner update-vendors' to pick up any newly shipped vendor.");
+        }
         0
     } else {
         1

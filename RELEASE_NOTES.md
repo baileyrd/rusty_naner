@@ -7,6 +7,31 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
+## v0.9.20 — 2026-08-24
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.19...v0.9.20).
+
+The v0.9.18 fix (self-update also reconciling `config/naner.json`/
+`config/vendors/`, closing the exact gap that stopped `MsvcBuildTools` from
+reaching an already-initialized tree) turned out not to reach anyone
+*updating from* a pre-fix version -- confirmed live: updating straight
+from v0.9.17 correctly landed the v0.9.19 binary, but `MsvcBuildTools`
+still never showed up in `naner install --list`. Root cause:
+`updater::update_from_release` only ever replaces the binary file on disk
+-- the process performing that swap keeps executing its own,
+now-superseded, in-memory code, because Windows has no way to hot-swap a
+running exe's code section. A v0.9.17 process self-updating to v0.9.19
+therefore ran the post-update reconciliation using v0.9.17's own
+compiled-in vendor catalog (`SHIPPED_VENDORS_JSON`, an `include_str!`
+baked in at compile time), not the one the update had just installed. The
+fix landed in v0.9.18 was real and necessary, but by itself only helps
+someone updating from v0.9.18 or later. `naner update` now re-invokes the
+freshly-installed binary after the swap -- as `update-vendors
+--sync-config-only`, a new undocumented flag that runs only the
+config/vendor-defaults merge and never the full, slow vendor-reinstall
+pass -- so the reconciliation always executes with the code that was
+genuinely just shipped, regardless of how old the updating process was.
+
 ## v0.9.19 — 2026-08-24
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.18...v0.9.19).

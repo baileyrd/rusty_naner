@@ -48,17 +48,40 @@ pub fn execute_install(args: &[String]) -> i32 {
     }
 }
 
+/// Internal, undocumented flag: spawned by `naner update`'s self-update
+/// path (see `bootstrap::execute_update`) right after swapping the binary,
+/// to run *only* the `config/naner.json`/`config/vendors/` reconciliation
+/// -- never the full vendor reinstall pass below, which downloading and
+/// reinstalling every essential/installed vendor on every self-update
+/// would make painfully slow and is not what anyone asked for.
+const SYNC_CONFIG_ONLY_FLAG: &str = "--sync-config-only";
+
 /// `naner update-vendors`
 pub fn execute_update(args: &[String]) -> i32 {
-    let (_args, quiet) = strip_quiet(args);
+    let (args, quiet) = strip_quiet(args);
     logger::set_quiet(quiet);
-
-    logger::header("Updating Vendors");
-    logger::newline();
 
     let Some(naner_root) = find_root_or_explain() else {
         return 1;
     };
+
+    // The binary swap in `updater::update_from_release` only replaces the
+    // file on disk -- the process performing it keeps executing its own,
+    // now-superseded, in-memory code (Windows has no way to hot-swap a
+    // running exe's code section), so it can never know about a vendor
+    // added in the version it just installed:
+    // `config_merge::SHIPPED_VENDORS_JSON` is `include_str!`-baked in at
+    // compile time, from whatever was compiled into *this* process, not
+    // the file that now sits on disk under the same name. Re-invoking that
+    // now-on-disk binary is the only way to reconcile `config/vendors/`
+    // against what was genuinely just shipped.
+    if args.iter().any(|a| a == SYNC_CONFIG_ONLY_FLAG) {
+        merge_config_defaults(&naner_root);
+        return 0;
+    }
+
+    logger::header("Updating Vendors");
+    logger::newline();
 
     logger::info(&format!("Naner Root: {}", naner_root.display()));
     logger::newline();
