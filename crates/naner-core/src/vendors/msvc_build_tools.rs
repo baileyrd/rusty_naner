@@ -128,6 +128,19 @@ const VC_PACKAGES: &[Payload] = &[
         url: "https://download.visualstudio.microsoft.com/download/pr/67cf767c-5e71-47c2-a54a-cd5631e28942/f01f701a7bcd9587a340898c851424f6a52bb913a70c185ff0d5bf0288c5831a/Microsoft.VC.14.44.17.14.CRT.x64.Desktop.base.vsix",
         sha256: "f01f701a7bcd9587a340898c851424f6a52bb913a70c185ff0d5bf0288c5831a",
     },
+    // msvcrt.lib -- absent from the Desktop CRT package above (Microsoft
+    // ships it only in the Store-flavoured package despite `msvcrt.lib`
+    // itself having nothing to do with UWP/Store apps); rustc's MSVC
+    // linking always requests `/defaultlib:msvcrt`, so without this every
+    // build script and binary fails `LNK1104: cannot open file
+    // 'msvcrt.lib'`. Same `Contents\VC\Tools\MSVC\<ver>\` layout as every
+    // other VC_PACKAGES entry, so `fetch_and_merge_vc_package` needs no
+    // changes to pick it up.
+    Payload {
+        file_name: "Microsoft.VC.14.44.17.14.CRT.x64.Store.base.vsix",
+        url: "https://download.visualstudio.microsoft.com/download/pr/67cf767c-5e71-47c2-a54a-cd5631e28942/9135b03c0df53c7a0aa9bef7230a1c2ff4263a0ee7baa7e419d034f484f6bb56/Microsoft.VC.14.44.17.14.CRT.x64.Store.base.vsix",
+        sha256: "9135b03c0df53c7a0aa9bef7230a1c2ff4263a0ee7baa7e419d034f484f6bb56",
+    },
 ];
 
 /// SDK headers (windows.h, ...)
@@ -145,7 +158,12 @@ const SDK_HEADERS: MsiComponent = MsiComponent {
     }],
 };
 
-/// SDK import libs (kernel32.lib, user32.lib, ...)
+/// SDK import libs -- gdi32.lib, comctl32.lib, and most other `um\x64`
+/// import libs, but *not* the fundamental Win32 ones (kernel32.lib,
+/// ntdll.lib, user32.lib, advapi32.lib, ws2_32.lib, userenv.lib):
+/// confirmed absent from this MSI's own File table (366 rows, zero
+/// matches) despite the misleadingly Desktop-suggestive name -- see
+/// `SDK_STORE_LIBS`, which actually ships them.
 const SDK_LIBS: MsiComponent = MsiComponent {
     label: "Windows SDK Desktop Libs x64",
     msi: Payload {
@@ -249,6 +267,61 @@ const SDK_UCRT: MsiComponent = MsiComponent {
     ],
 };
 
+/// The fundamental Win32 import libs -- kernel32.lib, ntdll.lib,
+/// user32.lib, advapi32.lib, ws2_32.lib, userenv.lib -- absent from
+/// `SDK_LIBS` above despite its name. Reported live: even a fully
+/// successful install of every other component here still failed every
+/// `cargo build`/link with `LNK1181: cannot open input file
+/// 'kernel32.lib'`. Found by extracting `winsdksetup.exe` as a cabinet
+/// (its unnamed first member is `BurnManifest.xml`) and querying each
+/// candidate MSI's own File table via the `WindowsInstaller.Installer`
+/// COM object -- confirmed these six live only in "Windows SDK for
+/// Windows Store Apps Libs", not the "Desktop"-named package one would
+/// expect (Microsoft's package split shares this one file set across
+/// Desktop and UWP/Store rather than duplicating it). Same `um\x64`
+/// target directory as `SDK_LIBS`; see `extract_msi_component`'s scratch-
+/// first check for why that sharing is safe.
+const SDK_STORE_LIBS: MsiComponent = MsiComponent {
+    label: "Windows SDK for Windows Store Apps Libs",
+    msi: Payload {
+        file_name: "Windows SDK for Windows Store Apps Libs-x86_en-us.msi",
+        url: "https://download.visualstudio.microsoft.com/download/pr/6452c1f1-dc1e-413c-8b19-991b61870a8b/079ca63878193e064d8aa000670f0db3/windows%20sdk%20for%20windows%20store%20apps%20libs-x86_en-us.msi",
+        sha256: "1381535D2F6B1894A092DA67F8A8FB048A4DFE8060CE75B3275AFFA81B02586E",
+    },
+    cabs: &[
+        Payload {
+            file_name: "05047a45609f311645eebcac2739fc4c.cab",
+            url: "https://download.visualstudio.microsoft.com/download/pr/6452c1f1-dc1e-413c-8b19-991b61870a8b/67a9b258981565b78c46484efbed6945/05047a45609f311645eebcac2739fc4c.cab",
+            sha256: "902003E4976C7BC4BCDA9F31F1D835B8072235532412770F66B0BC9F0882CB7E",
+        },
+        Payload {
+            file_name: "13d68b8a7b6678a368e2d13ff4027521.cab",
+            url: "https://download.visualstudio.microsoft.com/download/pr/6452c1f1-dc1e-413c-8b19-991b61870a8b/2160d8b73fe2e4fea3e2097084a081cd/13d68b8a7b6678a368e2d13ff4027521.cab",
+            sha256: "0B26EDE2D22EA531D921269DFFFCD14CC71D6932CAC0F2720FCEC37079286643",
+        },
+        Payload {
+            file_name: "f9b24c8280986c0683fbceca5326d806.cab",
+            url: "https://download.visualstudio.microsoft.com/download/pr/6452c1f1-dc1e-413c-8b19-991b61870a8b/66f36d1686d2dde0cfa99a5160a9571d/f9b24c8280986c0683fbceca5326d806.cab",
+            sha256: "154F4A24EC22EA0C932709F0E1A2C443946B42C14291A49A280AB4EA0EAA504D",
+        },
+        Payload {
+            file_name: "e10768bb6e9d0ea730280336b697da66.cab",
+            url: "https://download.visualstudio.microsoft.com/download/pr/6452c1f1-dc1e-413c-8b19-991b61870a8b/b2915dcb648d1087f4a5ef20f17c9825/e10768bb6e9d0ea730280336b697da66.cab",
+            sha256: "46E21578A4CFCE3BD6E4EACC10B92121A825CE443CC2F6CCE84B07E37B9D21BC",
+        },
+        Payload {
+            file_name: "463ad1b0783ebda908fd6c16a4abfe93.cab",
+            url: "https://download.visualstudio.microsoft.com/download/pr/6452c1f1-dc1e-413c-8b19-991b61870a8b/637a623c788980d4a7edf6d84e34ed70/463ad1b0783ebda908fd6c16a4abfe93.cab",
+            sha256: "43C40559098A2C1EFBEF6AF16F97A44FD80B3BB9FE8AE117C4E6F9F3F852B8E8",
+        },
+        Payload {
+            file_name: "5a22e5cde814b041749fb271547f4dd5.cab",
+            url: "https://download.visualstudio.microsoft.com/download/pr/6452c1f1-dc1e-413c-8b19-991b61870a8b/03cfd7ea3b3116d5d32d11df101dea24/5a22e5cde814b041749fb271547f4dd5.cab",
+            sha256: "57E7E309413D05B781AE76D1B5C54DC7AFF350B6A460920F1F358E8003AABDFB",
+        },
+    ],
+};
+
 /// Download every payload for one MSI component into `<downloads>/<label>/`
 /// (msi and cabs sitting flat in that same directory), verifying each
 /// against its pinned SHA-256.
@@ -346,10 +419,18 @@ fn fetch_and_verify(http: &dyn Http, payload: &Payload, dest: &Path) -> bool {
 /// `Command::arg`'s own escaping would have.
 ///
 /// Defensive because this cannot be exercised against every SDK release:
-/// if nothing landed directly under `sdk_root` (`KITSROOT` not honoured, or
-/// nested one level deeper than expected), search `scratch` for the same
-/// marker and merge it up instead of silently reporting success on an
-/// empty tree.
+/// if nothing landed in `scratch` (`KITSROOT` was honoured directly this
+/// run), fall back to `sdk_root` already having the marker instead of
+/// silently reporting success on an empty tree.
+///
+/// Checks `scratch` -- this run's own fresh output -- before `sdk_root`,
+/// not after: `SDK_LIBS` and `SDK_STORE_LIBS` both extract into the same
+/// `Lib\<ver>\um\x64` marker directory, so by the time `SDK_STORE_LIBS`
+/// runs, `sdk_root`'s copy already exists from `SDK_LIBS`'s own merge
+/// moments earlier. Checking `sdk_root` first would read that as "already
+/// done" and skip merging `SDK_STORE_LIBS`'s own kernel32.lib/etc.
+/// entirely -- `scratch` is wiped at the top of every call, so it only
+/// ever reflects what *this* invocation's `msiexec` just produced.
 fn extract_msi_component(msi_path: &Path, sdk_root: &Path, marker: &str) -> bool {
     let scratch = msi_path
         .parent()
@@ -379,11 +460,11 @@ fn extract_msi_component(msi_path: &Path, sdk_root: &Path, marker: &str) -> bool
         return false;
     }
 
-    let ok = if join_backslash_path(sdk_root, marker).is_dir() {
-        true
-    } else if let Some(found) = find_dir_named(&scratch, marker) {
+    let ok = if let Some(found) = find_dir_named(&scratch, marker) {
         let dest = join_backslash_path(sdk_root, marker);
         merge_tree(&found, &dest).is_ok()
+    } else if join_backslash_path(sdk_root, marker).is_dir() {
+        true
     } else {
         logger::failure(&format!(
             "    {} did not produce the expected {marker}",
@@ -515,6 +596,7 @@ pub(crate) fn install(http: &dyn Http, downloads: &Path, target: &Path) -> bool 
     let markers: Vec<(&MsiComponent, String)> = vec![
         (&SDK_HEADERS, format!("Include\\{SDK_VERSION}\\um")),
         (&SDK_LIBS, format!("Lib\\{SDK_VERSION}\\um\\x64")),
+        (&SDK_STORE_LIBS, format!("Lib\\{SDK_VERSION}\\um\\x64")),
         (&SDK_TOOLS, format!("bin\\{SDK_VERSION}\\x64")),
         (&SDK_UCRT, format!("Include\\{SDK_VERSION}\\ucrt")),
     ];
@@ -549,7 +631,7 @@ mod tests {
 
     #[test]
     fn every_vc_package_has_a_valid_pinned_sha256() {
-        assert_eq!(VC_PACKAGES.len(), 4);
+        assert_eq!(VC_PACKAGES.len(), 5);
         for package in VC_PACKAGES {
             assert!(
                 is_sha256(package.sha256),
@@ -563,7 +645,13 @@ mod tests {
 
     #[test]
     fn every_sdk_component_and_its_cabs_have_valid_pinned_sha256() {
-        for component in [&SDK_HEADERS, &SDK_LIBS, &SDK_TOOLS, &SDK_UCRT] {
+        for component in [
+            &SDK_HEADERS,
+            &SDK_LIBS,
+            &SDK_STORE_LIBS,
+            &SDK_TOOLS,
+            &SDK_UCRT,
+        ] {
             assert!(
                 is_sha256(component.msi.sha256),
                 "{} msi has a malformed sha256",

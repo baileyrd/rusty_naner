@@ -1,3 +1,33 @@
+## [0.9.22] - 2026-08-24
+### Fixed
+- Follow-up to #154: even after v0.9.21 fixed `naner install
+  MsvcBuildTools`'s `msiexec` bugs, a full install still could not
+  produce a working compiler -- `cargo build` failed linking with `LNK1181:
+  cannot open input file 'kernel32.lib'`. Confirmed against Microsoft's
+  live channel manifest that the pinned `Windows SDK Desktop Libs x64`
+  package is current, not stale -- it genuinely never shipped
+  kernel32.lib, ntdll.lib, user32.lib, advapi32.lib, ws2_32.lib, or
+  userenv.lib, despite the name. Found the real owner by extracting
+  `winsdksetup.exe` as a cabinet (its unnamed first member is
+  `BurnManifest.xml`) and querying each candidate MSI's own File table via
+  `WindowsInstaller.Installer`: all six live in "Windows SDK for Windows
+  Store Apps Libs" instead. New `SDK_STORE_LIBS` component fetches it.
+  `msvcrt.lib` (which rustc's MSVC linking always requests via
+  `/defaultlib:msvcrt`) was missing for the same reason one level up: the
+  VC++ Tools "Desktop" CRT package doesn't carry it, only the "Store" one
+  does (`Microsoft.VC.14.44.17.14.CRT.x64.Store.base.vsix`, added as a 5th
+  `VC_PACKAGES` entry). Fixing the first gap exposed a real, separate bug:
+  `SDK_STORE_LIBS` and the pre-existing `SDK_LIBS` both extract into the
+  same `Lib\<ver>\um\x64` marker directory, and `extract_msi_component`'s
+  "already there" check looked at the shared target directory before the
+  current run's own fresh output -- so by the time `SDK_STORE_LIBS` ran,
+  `SDK_LIBS`'s prior merge had already made the marker directory exist,
+  and `SDK_STORE_LIBS`'s own kernel32.lib/etc. were silently never merged
+  in. Now checks the current run's `scratch` output first. Verified
+  end-to-end: a full `cargo build --release --workspace` and `cargo test
+  --workspace` (231 tests) against the assembled toolchain both pass
+  clean, and the resulting `naner.exe` runs.
+
 ## [0.9.21] - 2026-08-24
 ### Fixed
 - Reported live: `naner install anaconda` failed every attempt with
