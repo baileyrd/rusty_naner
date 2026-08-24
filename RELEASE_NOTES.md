@@ -7,6 +7,50 @@ PR until it is tagged. Terse per-category entries live in
 
 ---
 
+## v0.9.21 — 2026-08-24
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.20...v0.9.21).
+
+Two installer vendors that had never actually completed a real install --
+`Anaconda` and the newly-added `MsvcBuildTools` -- both failed on every
+attempt, for unrelated reasons, both root-caused by reproducing the exact
+failure against the real installer binaries rather than guessing from the
+error text alone.
+
+`naner install anaconda` failed every time with `Failed to extract
+packages` (exit code 2). Anaconda's constructor-built installer hardens
+`$INSTDIR` against CVE-2025-64343 by revoking write access for
+Authenticated Users/BUILTIN Users immediately after creating it, then
+compensates for a non-elevated run by granting `FullAccess` back to
+`$USERDOMAIN\$USERNAME` -- read from the environment, not queried from
+Windows. Whenever the process launching the installer never had those two
+variables set, the compensating grant silently targets an empty
+principal, and every subsequent package write fails. Confirmed by
+launching the real installer directly with `USERDOMAIN`/`USERNAME`
+explicitly set: a full, successful install, `Failed`-free. `naner`'s
+`run_exe_installer` now sources both from `GetUserNameExW
+(NameSamCompatible)` -- the actual token identity -- instead of trusting
+whatever the parent process happened to hand it.
+
+`naner install MsvcBuildTools` failed every attempt extracting the
+Windows SDK with `msiexec extraction failed`
+(`ERROR_INVALID_COMMAND_LINE`, 1639) before writing a single log line.
+`KITSROOT`'s value always contains a space (`Windows Kits`), so
+`Command::arg`'s automatic quoting wrapped the *entire* `KITSROOT=...`
+token in one outer pair of quotes -- but msiexec's own command-line
+parser, unlike most Windows programs, only accepts a quoted *value* half
+(`PROPERTY="value"`) and rejects a quoted whole token outright. Fixed by
+building that argument with `raw_arg`, quoting only the value. A second,
+previously-masked bug sat right underneath: `fetch_msi_component`
+downloaded each component's external `.cab` into an `Installers\`
+subfolder beside the `.msi`, but `msiexec /a`'s admin install for this
+package resolves the cab flat, directly beside the `.msi` -- confirmed via
+`/lv` verbose logging (`Error 1311. Source file not found (cabinet)`).
+Cabs are now downloaded flat alongside their `.msi`. Verified end-to-end
+by hand against the real `Windows SDK Desktop Headers x64` MSI + cab:
+`msiexec /a` now exits 0 and the SDK headers land under `Windows
+Kits\10\Include\...\um` as expected.
+
 ## v0.9.20 — 2026-08-24
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.19...v0.9.20).

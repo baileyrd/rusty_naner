@@ -357,6 +357,60 @@ pub(crate) fn home_isolation_envs(naner_root: &Path) -> Vec<(String, String)> {
     ]
 }
 
+/// `USERNAME`/`USERDOMAIN`, resolved directly from the process token via
+/// `GetUserNameExW` rather than trusted from the inherited environment.
+///
+/// Reported live: Anaconda's silent installer (`/S /D=<target>`) exited
+/// with code 2 on every attempt, `install.log` showing `CreateDirectory:
+/// can't create "$INSTDIR\tmp" (err=5)` -- ACCESS_DENIED -- immediately
+/// after `$INSTDIR` itself was created, before a single package was
+/// written. Constructor-built installers (Anaconda/Miniconda) hardened
+/// against CVE-2025-64343 by revoking generic write on `$INSTDIR` for
+/// Authenticated Users/BUILTIN Users/Domain Users right after creating it
+/// (`main.nsi.tmpl`'s `AccessControl::RevokeOnFile`/`SetOnFile ...
+/// "GenericRead + GenericExecute"`), then compensate for a non-elevated
+/// run by granting `FullAccess` back to `$USERDOMAIN\$USERNAME` --
+/// read from the environment with `ReadEnvStr`, not queried from Windows.
+/// A process tree that never had those two variables set (observed here:
+/// present env had `USERPROFILE` but no `USERNAME`/`USERDOMAIN` at all) or
+/// which lost them somewhere upstream ends up compensating an empty
+/// principal, and every write under `$INSTDIR` fails from that point on --
+/// reproduced identically running the installer directly, bypassing naner
+/// entirely, confirming the gap is in the ambient environment naner (or
+/// whatever launched it) handed the subprocess, not in `naner`'s own
+/// argument construction. `GetUserNameExW(NameSamCompatible)` returns
+/// `DOMAIN\username` (or `COMPUTER\username` for a local account) from the
+/// actual token regardless of what the parent process's environment
+/// carried, so the compensating grant always targets a real, resolvable
+/// principal. Empty when the call fails, which callers treat as "set
+/// nothing" the same way `home_isolation_envs` does for a missing `home/`.
+#[cfg(windows)]
+fn identity_envs() -> Vec<(String, String)> {
+    use windows_sys::Win32::Security::Authentication::Identity::{
+        GetUserNameExW, NameSamCompatible,
+    };
+
+    let mut buf = [0u16; 512];
+    let mut len = buf.len() as u32;
+    let ok = unsafe { GetUserNameExW(NameSamCompatible, buf.as_mut_ptr(), &mut len) };
+    if ok == 0 {
+        return Vec::new();
+    }
+    let sam = String::from_utf16_lossy(&buf[..len as usize]);
+    match sam.split_once('\\') {
+        Some((domain, user)) if !domain.is_empty() && !user.is_empty() => vec![
+            ("USERDOMAIN".into(), domain.to_string()),
+            ("USERNAME".into(), user.to_string()),
+        ],
+        _ => Vec::new(),
+    }
+}
+
+#[cfg(not(windows))]
+fn identity_envs() -> Vec<(String, String)> {
+    Vec::new()
+}
+
 /// `ExeInstallerExtractor`: run the installer silently with per-vendor
 /// argument defaults and `%TARGETDIR%`/`$TARGETDIR` substitution.
 ///
@@ -401,6 +455,15 @@ fn run_exe_installer(
     // looking at `%USERPROFILE%\.conda\environments.txt` and finds every
     // naner install/reinstall ever run on the box listed in it.
     for (key, value) in home_isolation_envs(naner_root) {
+        command.env(key, value);
+    }
+
+    // See `identity_envs`: a constructor-built installer (Anaconda,
+    // Miniconda) needs a real `USERDOMAIN`/`USERNAME` to grant itself
+    // write access back after its own CVE-2025-64343 hardening revokes it;
+    // an inherited environment that lacks (or lost) those two variables
+    // silently breaks every subsequent package write.
+    for (key, value) in identity_envs() {
         command.env(key, value);
     }
 

@@ -1,3 +1,36 @@
+## [0.9.21] - 2026-08-24
+### Fixed
+- Reported live: `naner install anaconda` failed every attempt with
+  `Failed to extract packages` (installer exit code 2), `install.log`
+  showing `CreateDirectory: can't create "$INSTDIR\tmp" (err=5)` --
+  ACCESS_DENIED -- immediately after `$INSTDIR` was created, before a
+  single file was written. Anaconda's constructor-built installer hardens
+  against CVE-2025-64343 by revoking write access on `$INSTDIR` for
+  Authenticated Users/BUILTIN Users right after creating it, then
+  compensates for a non-elevated run by granting `FullAccess` back to
+  `$USERDOMAIN\$USERNAME` -- read via `ReadEnvStr`, not queried from
+  Windows. A launching process whose environment never had those two
+  variables set ends up compensating an empty principal, and every write
+  under `$INSTDIR` fails from that point on. `run_exe_installer` now also
+  sets `USERDOMAIN`/`USERNAME` from `GetUserNameExW(NameSamCompatible)` --
+  the real token identity, regardless of what the parent process handed
+  it -- so the compensating grant always targets a resolvable principal.
+- Reported live: `naner install MsvcBuildTools` failed every attempt
+  extracting the Windows SDK with `msiexec extraction failed`
+  (`ERROR_INVALID_COMMAND_LINE`, 1639), before writing any log. `KITSROOT`'s
+  value always contains a space (`Windows Kits`), which forced
+  `Command::arg`'s automatic Windows quoting to wrap the *entire*
+  `KITSROOT=...` token in one outer pair of quotes -- but unlike most
+  Windows programs, msiexec's own command-line parser only accepts a
+  quoted *value* half (`PROPERTY="value"`), rejecting a quoted whole
+  token outright. `extract_msi_component` now builds that argument with
+  `raw_arg`, quoting only the value. Underneath that: `fetch_msi_component`
+  downloaded each component's external `.cab` into an `Installers\`
+  subfolder next to the `.msi`; `msiexec /a`'s admin install actually
+  resolves it flat, directly beside the `.msi` (confirmed via `/lv`
+  verbose logging: `Error 1311. Source file not found (cabinet)`) -- cabs
+  are now downloaded flat alongside their `.msi`.
+
 ## [0.9.20] - 2026-08-24
 ### Fixed
 - The v0.9.18 fix (self-update also reconciling `config/naner.json`/
