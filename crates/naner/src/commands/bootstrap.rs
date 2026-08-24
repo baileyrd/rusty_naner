@@ -139,6 +139,15 @@ pub fn execute_update(state: ConsoleState) -> i32 {
         return 1;
     };
     let code = if updater.update_from_release(&release, &self_path) {
+        // The binary swap above never touches config/naner.json or
+        // config/vendors/ -- reconcile them here too, not just on
+        // `naner update-vendors`, or a new vendor this release ships
+        // (MsvcBuildTools, say) never reaches an already-initialized tree
+        // until the user separately remembers to run that command (#72's
+        // "bare naner.exe-swap" scenario, minus the actual swap that
+        // triggers it).
+        logger::newline();
+        super::vendors::merge_config_defaults(&naner_root);
         0
     } else {
         1

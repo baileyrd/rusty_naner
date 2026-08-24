@@ -89,7 +89,7 @@ pub fn execute_update(args: &[String]) -> i32 {
 /// `settings.json` merge, which already runs whenever Windows Terminal
 /// itself gets installed or updated. This is the fix for a bare
 /// `naner.exe`-swap upgrade never otherwise touching either file (#72).
-fn merge_config_defaults(naner_root: &std::path::Path) {
+pub(crate) fn merge_config_defaults(naner_root: &std::path::Path) {
     use naner_core::config::{
         NanerConfigMergeOutcome, find_configuration_file, merge_shipped_naner_defaults,
     };
