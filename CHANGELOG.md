@@ -1,3 +1,27 @@
+## [0.9.23] - 2026-08-24
+### Fixed
+- Reported live: `claude --version` failed with Windows' generic "This
+  version of ... claude.exe is not compatible with the version of Windows
+  you're running" -- the loader trying to run a shell script as a PE
+  image. `@anthropic-ai/claude-code`'s own `bin/claude.exe` is a tiny
+  placeholder (`echo "Error: claude native binary not installed."`, 500
+  bytes) that ships in place of the real ~330 MB native binary until its
+  `postinstall` script (`node install.cjs`) links the actual one in from
+  its per-platform optional dependency. npm's own log showed why it never
+  ran: recent npm versions gate install-time lifecycle scripts behind an
+  `allowScripts` allowlist by default, and `npm_install_command` never
+  passed one, so npm silently blocked it -- "1 package had install
+  scripts blocked because they are not covered by allowScripts" -- and
+  left the placeholder in place as the "installed" binary. An *earlier*
+  install of the same package, before npm itself had been self-updated,
+  ran the postinstall fine, confirming this is a real npm behavior
+  change, not a one-off fluke. Every `Npm`-type vendor install now passes
+  `--allow-scripts=<package>`, npm's own suggested remedy, scoped to
+  exactly the package this call installs -- inert for a package with no
+  lifecycle scripts to gate. Verified live: reinstalling replaced the
+  500-byte stub with the real 337,745,056-byte binary and `claude
+  --version` now reports `2.1.241 (Claude Code)`.
+
 ## [0.9.22] - 2026-08-24
 ### Fixed
 - Follow-up to #154: even after v0.9.21 fixed `naner install

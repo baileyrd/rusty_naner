@@ -1337,6 +1337,25 @@ fn with_v_prefix(version: &str) -> String {
 /// even when `naner install` runs from a shell without the exported
 /// environment. A resolved version is pinned in the spec; without one the
 /// registry's `latest` is npm's own default.
+///
+/// Reported live: `naner install claudecode` left `claude.exe` as the
+/// package's own placeholder shell script ("claude native binary not
+/// installed... run the postinstall manually"), not a real binary --
+/// `claude --version` failed with Windows' generic "not compatible with
+/// the version of Windows you're running" (the loader trying to run a
+/// shell script as a PE image). npm's own log showed why: recent npm
+/// versions gate install-time lifecycle scripts behind an `allowScripts`
+/// allowlist by default, and `@anthropic-ai/claude-code`'s `postinstall`
+/// (which downloads and links in the real per-platform binary from its
+/// optional dependency) was silently blocked -- "1 package had install
+/// scripts blocked because they are not covered by allowScripts" --
+/// leaving the npm package's own no-op fallback script in place instead.
+/// An *earlier* install of the same package, before npm itself had been
+/// self-updated, ran the postinstall fine; this is a real npm behavior
+/// change, not a one-off fluke. `--allow-scripts=<package>` explicitly
+/// allowlists exactly the package this call installs (npm's own suggested
+/// remedy), never every install script naner might ever run -- inert
+/// no-op for a package with no lifecycle scripts to gate.
 fn npm_install_command(
     npm: &Path,
     naner_root: &Path,
@@ -1350,7 +1369,12 @@ fn npm_install_command(
     let home = naner_root.join("home");
     (
         npm.to_path_buf(),
-        vec!["install".into(), "-g".into(), spec],
+        vec![
+            "install".into(),
+            "-g".into(),
+            format!("--allow-scripts={package}"),
+            spec,
+        ],
         vec![
             (
                 "NPM_CONFIG_PREFIX".into(),
@@ -1936,7 +1960,15 @@ mod tests {
             Some("1.2.3"),
         );
         assert!(program.ends_with("npm.cmd"));
-        assert_eq!(args, vec!["install", "-g", "@scope/tool@1.2.3"]);
+        assert_eq!(
+            args,
+            vec![
+                "install",
+                "-g",
+                "--allow-scripts=@scope/tool",
+                "@scope/tool@1.2.3"
+            ]
+        );
         assert!(
             envs.iter()
                 .any(|(k, v)| k == "NPM_CONFIG_PREFIX" && v.contains(".npm-global"))
