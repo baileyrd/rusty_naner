@@ -320,6 +320,18 @@ impl<'a> UnifiedVendorInstaller<'a> {
                     ));
                     return false;
                 }
+                // `--allow-scripts=<package>` below only reaches npm
+                // invocations naner itself makes. Claude Code's own
+                // self-updater (`claude update`) shells out to `npm install
+                // -g` directly, with none of naner's CLI flags, and hit the
+                // exact same gate: `claude --version` broke again after an
+                // in-app update with the same "not a valid application for
+                // this OS platform" symptom, `bin/claude.exe` back to the
+                // 500-byte placeholder script. Persisting the allowlist into
+                // `home/.npmrc` (npm's own userconfig, since naner points
+                // HOME/USERPROFILE at `home/`) covers every future npm
+                // invocation for this package regardless of who starts it.
+                ensure_npmrc_allow_scripts(&self.naner_root, package);
                 npm_install_command(&npm, &self.naner_root, package, info.version.as_deref())
             }
             VendorSourceType::Pip => {
@@ -1388,6 +1400,66 @@ fn npm_install_command(
     )
 }
 
+/// Persist `package` into `home/.npmrc`'s `allow-scripts` value -- a
+/// comma-separated list, per npm's own parsing
+/// (`@npmcli/config/lib/parse-allow-scripts-list.js`) -- so npm's
+/// install-script gate stays open for this package no matter what invokes
+/// npm later, not only the `--allow-scripts=<package>` flag
+/// [`npm_install_command`] passes on *this* install. Idempotent: a package
+/// already present in an existing `allow-scripts=` line is left untouched
+/// (no rewrite, no duplicate); every other line in the file is preserved
+/// verbatim and in place. Best-effort, like [`Self::record_lock_entry`]: a
+/// naner tree with no writable `home/` must not fail an otherwise-
+/// successful install over this.
+fn ensure_npmrc_allow_scripts(naner_root: &Path, package: &str) {
+    let npmrc = naner_root.join("home").join(".npmrc");
+    let existing = std::fs::read_to_string(&npmrc).unwrap_or_default();
+    let mut found_line = false;
+    let mut changed = false;
+    let mut lines: Vec<String> = existing
+        .lines()
+        .map(|line| {
+            let Some(value) = line.strip_prefix("allow-scripts=") else {
+                return line.to_string();
+            };
+            found_line = true;
+            let mut packages: Vec<&str> = value
+                .split(',')
+                .map(str::trim)
+                .filter(|p| !p.is_empty())
+                .collect();
+            if packages.contains(&package) {
+                return line.to_string();
+            }
+            changed = true;
+            packages.push(package);
+            format!("allow-scripts={}", packages.join(","))
+        })
+        .collect();
+    if !found_line {
+        changed = true;
+        lines.push(format!("allow-scripts={package}"));
+    }
+    if !changed {
+        return;
+    }
+    let Some(parent) = npmrc.parent() else {
+        return;
+    };
+    if std::fs::create_dir_all(parent).is_err() {
+        logger::debug(&format!("Could not create {}", parent.display()), false);
+        return;
+    }
+    let mut contents = lines.join("\n");
+    contents.push('\n');
+    if crate::fs_atomic::write_atomic(&npmrc, &contents).is_err() {
+        logger::debug(
+            &format!("Could not persist allow-scripts to {}", npmrc.display()),
+            false,
+        );
+    }
+}
+
 /// The `Bun` twin of [`npm_install_command`], for npm-registry-published
 /// vendors whose `dependencies` name `Bun` instead of `NodeJS` (an
 /// `engines.bun` CLI with no `engines.node`, unrunnable under a vendored
@@ -1988,6 +2060,57 @@ mod tests {
                 .any(|(k, v)| k == "PYTHONUSERBASE" && v.contains(".local"))
         );
         assert!(envs.iter().any(|(k, _)| k == "PIP_CACHE_DIR"));
+    }
+
+    /// A tree with no `home/.npmrc` yet gets one, with exactly the
+    /// `allow-scripts=<package>` line -- covers a fresh naner tree whose
+    /// first `Npm`-type vendor install is the one adding this file.
+    #[test]
+    fn npmrc_allow_scripts_creates_a_fresh_file() {
+        let root = tempfile::tempdir().unwrap();
+        ensure_npmrc_allow_scripts(root.path(), "@anthropic-ai/claude-code");
+        let contents = std::fs::read_to_string(root.path().join("home/.npmrc")).unwrap();
+        assert_eq!(contents, "allow-scripts=@anthropic-ai/claude-code\n");
+    }
+
+    /// A second `Npm`-type vendor's install appends to the existing
+    /// comma-separated list rather than clobbering the first vendor's
+    /// entry, and every unrelated line already in `.npmrc` (something the
+    /// user or another tool wrote) survives untouched and in place.
+    #[test]
+    fn npmrc_allow_scripts_appends_and_preserves_other_lines() {
+        let root = tempfile::tempdir().unwrap();
+        let npmrc = root.path().join("home/.npmrc");
+        std::fs::create_dir_all(npmrc.parent().unwrap()).unwrap();
+        std::fs::write(
+            &npmrc,
+            "registry=https://registry.npmjs.org/\nallow-scripts=@anthropic-ai/claude-code\n",
+        )
+        .unwrap();
+
+        ensure_npmrc_allow_scripts(root.path(), "@scope/other-tool");
+
+        let contents = std::fs::read_to_string(&npmrc).unwrap();
+        assert_eq!(
+            contents,
+            "registry=https://registry.npmjs.org/\nallow-scripts=@anthropic-ai/claude-code,@scope/other-tool\n"
+        );
+    }
+
+    /// A package already allowlisted is a no-op: no rewrite, no duplicate
+    /// entry -- every `naner install`/`update-vendors` re-run of the same
+    /// vendor must not grow the list or touch the file's mtime for nothing.
+    #[test]
+    fn npmrc_allow_scripts_is_idempotent() {
+        let root = tempfile::tempdir().unwrap();
+        let npmrc = root.path().join("home/.npmrc");
+        std::fs::create_dir_all(npmrc.parent().unwrap()).unwrap();
+        std::fs::write(&npmrc, "allow-scripts=@anthropic-ai/claude-code\n").unwrap();
+
+        ensure_npmrc_allow_scripts(root.path(), "@anthropic-ai/claude-code");
+
+        let contents = std::fs::read_to_string(&npmrc).unwrap();
+        assert_eq!(contents, "allow-scripts=@anthropic-ai/claude-code\n");
     }
 
     /// `installType: "binary"`: the verified download is placed as-is under
