@@ -13,7 +13,7 @@ use zip::write::SimpleFileOptions;
 /// What a distribution actually consists of. Anything absent is skipped and
 /// reported rather than silently producing a thinner bundle than the name
 /// implies.
-const BUNDLED: [&str; 4] = ["bin", "config", "home", "icons"];
+const BUNDLED: [&str; 5] = ["bin", "config", "home", "icons", "scripts"];
 
 /// Never bundle transient working files: vendor staging, in-flight downloads,
 /// or the timestamped backups `migrate` and `profile import` leave behind. A

@@ -158,7 +158,7 @@ Expand-Archive naner-bundle.zip -DestinationPath zipcheck -Force
 Get-ChildItem zipcheck -Recurse -File
 ```
 
-Expect `bin/`, `config/`, `home/` and `icons/`, and **no `.bak` or
+Expect `bin/`, `config/`, `home/`, `icons/` and `scripts/`, and **no `.bak` or
 `.tmp`** — you have a `.bak` in `config\` from the migrate step, so this is a
 live test of the exclusion.
 

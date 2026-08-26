@@ -180,7 +180,7 @@ that cross-publish has been removed. Phases 0–5 done:
 - **`naner diff [profile]`**: Compares host environment variables against target profile environment definitions.
 - **`naner bench [profile]`**: Startup latency profiler measuring execution timings for root discovery, config loading, profile resolution, and PATH assembly in milliseconds.
 - **`naner migrate [--dry-run]`**: Rewrites the configuration file in canonical JSON form. Keeps a timestamped backup, preserves top-level keys the model does not own (`$schema` among them), and writes via a temp file so an interrupted run cannot truncate the config. Comments cannot survive the round-trip and it says so before proceeding.
-- **`naner pack [dir] --out bundle.zip`**: Bundles a naner installation (`bin/`, `config/`, `home/`, `icons/`) into a portable zip, skipping transient files. Defaults to the discovered root; `[dir]` overrides it.
+- **`naner pack [dir] --out bundle.zip`**: Bundles a naner installation (`bin/`, `config/`, `home/`, `icons/`, `scripts/`) into a portable zip, skipping transient files. Defaults to the discovered root; `[dir]` overrides it.
 - **`naner update` / `naner self-update`**: Updates naner itself to the latest release in place. `naner.exe` cannot be *overwritten* while running, but Windows will rename a running exe — so the update renames the live binary aside, installs the new one under its name, and sweeps the `.old` leftover on the next launch.
 - **`naner lock [--refresh [vendor...]] [--porcelain]`**: Inspects `naner.lock`, the pin of exactly which vendor artifacts this environment installs, and drops pins so the next install re-resolves.
 
