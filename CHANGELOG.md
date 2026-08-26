@@ -1,3 +1,46 @@
+## [Unreleased]
+### Added
+- `dist-assets/scripts/` -- a fifth bundled/packed directory (alongside
+  `bin/`, `config/`, `home/`, `icons/`) for user-owned scripts, ported back
+  from a live installation's own convention. `naner pack`'s `BUNDLED` list
+  now includes it.
+- Default PowerShell profile (`home/.config/powershell/profile.ps1`)
+  improvements ported back from the same live installation: guarded
+  `posh-git`/`Terminal-Icons`/`z` module imports (only loaded if already
+  present -- none of the three are naner-vendored), persistent UTF-8
+  console output for Nerd Font glyphs, `....` and `~` navigation
+  shortcuts, a `Get-EnvVars` helper (`env` alias), and a guarded
+  `oh-my-posh init` prompt (only runs if the optional `OhMyPosh` vendor is
+  installed) replacing the hand-rolled `prompt` function -- naner already
+  vendors oh-my-posh but the shipped default profile never used it.
+
+### Fixed
+- The shipped default PowerShell profile aliased `ll` to `Get-ChildItem`
+  (line ~85) and then defined a `function ll` with fancier formatting
+  (line ~147) further down -- PowerShell resolves an alias before a
+  function of the same name, so the fancier `ll` was silently dead code
+  since the profile was first written. Renamed the alias to `l`, freeing
+  `ll` to reach the function. Also stopped aliasing `grep` to
+  `Select-String`: naner vendors a real `grep.exe` (Git for
+  Windows/MSYS2) on the same PATH, with entirely different flag syntax --
+  the alias silently shadowed it for anyone who typed `grep` expecting
+  the real thing.
+- Follow-up to 0.9.23's `--allow-scripts=<package>` fix: that flag only
+  reaches npm invocations naner itself makes (`naner install`,
+  `update-vendors`). Reported live again -- `claude update` (Claude Code's
+  own self-updater, which shells out to `npm install -g` directly with
+  none of naner's CLI flags) hit the identical gate and put the 500-byte
+  `bin/claude.exe` placeholder back in place, breaking `claude` with the
+  same "not a valid application for this OS platform" symptom. Every
+  `Npm`-type vendor install now also persists `allow-scripts=<package>`
+  into `home/.npmrc` (npm's own userconfig, since naner points
+  HOME/USERPROFILE at `home/`) -- npm parses it as a comma-separated list
+  (`@npmcli/config/lib/parse-allow-scripts-list.js`), so a second vendor's
+  entry appends rather than clobbers, an already-listed package is a
+  no-op, and every other line in an existing `.npmrc` is preserved
+  untouched. Covers any future npm invocation for the package, including
+  ones naner never mediates.
+
 ## [0.9.23] - 2026-08-24
 ### Fixed
 - Reported live: `claude --version` failed with Windows' generic "This

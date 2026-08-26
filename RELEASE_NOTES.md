@@ -5,6 +5,75 @@ behind each change rather than just the diff. Unreleased work is listed by merge
 PR until it is tagged. Terse per-category entries live in
 [CHANGELOG.md](./CHANGELOG.md); this file is the narrative one.
 
+## Unreleased
+
+Ported two changes back from a live, in-use naner installation to the
+default bundle:
+
+A `scripts/` directory joins `bin/`, `config/`, `home/`, `icons/` as a
+fifth top-level bundled/packed directory -- a place for a user's own
+scripts that survives `naner pack`/re-extraction the same way the other
+four do. Shipped empty (`.gitkeep`), same as `bin/`; naner doesn't
+populate it or put it on `PATH` itself.
+
+The default PowerShell profile (`home/.config/powershell/profile.ps1`)
+picked up several general-purpose improvements noticed by diffing
+against the same live installation, filtered down to what's actually
+reusable -- machine-specific bits (a `C:\dev`/`C:\tools` shortcut, a
+function tied to one unrelated project) were left out:
+
+- Guarded imports for `posh-git`/`Terminal-Icons`/`z` -- loaded only if
+  already present, since naner doesn't vendor any of the three.
+- Persistent UTF-8 console output, needed for Nerd Font glyphs.
+- `....` and `~` navigation shortcuts, and a `Get-EnvVars` helper
+  (`env` alias).
+- The hand-rolled `prompt` function is gone, replaced by a guarded
+  `oh-my-posh init pwsh --config "jandedobbeleer" | Invoke-Expression`
+  -- naner has vendored `oh-my-posh` since it was added as an optional
+  vendor, but the shipped default profile never actually used it. Guarded
+  on `Get-Command oh-my-posh` (unlike the live version) so a shell
+  launched before `naner install ohmyposh` still gets a working, if
+  plainer, prompt instead of an error on every startup.
+
+Diffing also surfaced a real, unrelated bug in the profile as shipped: it
+aliased `ll` to `Get-ChildItem` and *separately* defined a `function ll`
+with nicer `Format-Table` output further down. PowerShell resolves an
+alias before a same-named function, so the nicer `ll` has been dead code
+since the file was first written -- fixed by renaming the alias to `l`.
+`grep` is no longer aliased to `Select-String` either, for the same
+shadowing reason: naner vendors a real `grep.exe` (Git for
+Windows/MSYS2) on the same `PATH`, with unrelated flag syntax.
+
+---
+
+Follow-up to v0.9.23's `--allow-scripts=<package>` fix, which stopped
+npm's install-script gate from leaving `@anthropic-ai/claude-code`'s
+500-byte `bin/claude.exe` placeholder in place of the real ~330 MB native
+binary -- but only for npm invocations naner itself makes
+(`naner install`, `naner update-vendors`).
+
+Reported live again: `claude update` (Claude Code's own self-updater)
+broke the exact same way. It shells out to `npm install -g` directly,
+with none of naner's CLI flags, so the earlier fix never reached it --
+npm's log showed the identical "1 package had install scripts blocked
+because they are not covered by allowScripts", and `claude --version`
+failed again with Windows' generic "not a valid application for this OS
+platform" (the loader trying to run the placeholder shell script as a PE
+image).
+
+`--allow-scripts` also reads from `.npmrc`, comma-separated
+(`@npmcli/config/lib/parse-allow-scripts-list.js`), so every `Npm`-type
+vendor install now also persists `allow-scripts=<package>` into
+`home/.npmrc` -- npm's own userconfig location, since naner points
+HOME/USERPROFILE at `home/` for every vendored tool. This covers any
+future npm invocation for the package, not just the one naner is making
+right now: a second vendor's entry appends to the existing list rather
+than overwriting it, a package already listed is a no-op, and unrelated
+lines already in `.npmrc` are left in place. Verified: a clean reinstall
+writes `home/.npmrc` with `allow-scripts=@anthropic-ai/claude-code`, and
+a subsequent `claude update` run outside naner no longer regresses
+`bin/claude.exe` to the placeholder.
+
 ---
 
 ## v0.9.23 — 2026-08-24

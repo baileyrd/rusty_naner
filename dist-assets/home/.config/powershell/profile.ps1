@@ -42,6 +42,18 @@ if ($ShowNanerBanner) {
 }
 
 # ============================================================================
+# Module Imports
+# ============================================================================
+
+# Optional shell-experience modules -- not vendored by naner, so only loaded
+# when the user has installed them separately (e.g. via `Install-Module`).
+foreach ($module in 'posh-git', 'Terminal-Icons', 'z') {
+    if (Get-Module -ListAvailable -Name $module) {
+        Import-Module $module -ErrorAction SilentlyContinue
+    }
+}
+
+# ============================================================================
 # Environment Setup
 # ============================================================================
 
@@ -61,16 +73,22 @@ if (Get-Module -ListAvailable -Name PSReadLine) {
     Set-PSReadLineKeyHandler -Key DownArrow -Function HistorySearchForward -ErrorAction SilentlyContinue
 }
 
+# Persistent UTF-8 -- needed for Nerd Font glyphs (prompt + Terminal-Icons).
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 # ============================================================================
 # Aliases and Functions
 # ============================================================================
 
 # Common Unix-like aliases
-Set-Alias -Name ll -Value Get-ChildItem -ErrorAction SilentlyContinue
+Set-Alias -Name l -Value Get-ChildItem -ErrorAction SilentlyContinue
 Set-Alias -Name ls -Value Get-ChildItem -ErrorAction SilentlyContinue
-Set-Alias -Name grep -Value Select-String -ErrorAction SilentlyContinue
+# `grep` deliberately left unaliased: naner vendors a real grep.exe (Git for
+# Windows/MSYS2) on PATH, and Select-String's flags don't match its syntax.
 Set-Alias -Name vim -Value nvim -ErrorAction SilentlyContinue
 Set-Alias -Name which -Value Get-Command -ErrorAction SilentlyContinue
+Set-Alias -Name env -Value Get-EnvVars -ErrorAction SilentlyContinue
 
 # Git shortcuts (if git is available)
 function gs { git status }
@@ -84,6 +102,7 @@ function gd { git diff $args }
 function .. { Set-Location .. }
 function ... { Set-Location ..\.. }
 function .... { Set-Location ..\..\.. }
+function ~ { Set-Location $env:USERPROFILE }
 
 # Create and enter directory
 function mkcd {
@@ -119,6 +138,11 @@ function Show-Path {
     $env:PATH -split ';' | ForEach-Object { Write-Host $_ }
 }
 
+# Show all environment variables
+function Get-EnvVars {
+    Get-ChildItem Env:
+}
+
 # List directory with colors and details
 function ll {
     param([string]$Path = ".")
@@ -133,40 +157,15 @@ function Find-File {
 Set-Alias -Name ff -Value Find-File -ErrorAction SilentlyContinue
 
 # ============================================================================
-# Custom Prompt
+# Prompt (oh-my-posh, if installed)
 # ============================================================================
 
-function prompt {
-    $location = Get-Location
-
-    # Show username and computer (optional)
-    # Write-Host "$env:USERNAME" -NoNewline -ForegroundColor Yellow
-    # Write-Host "@" -NoNewline -ForegroundColor DarkGray
-    # Write-Host "$env:COMPUTERNAME" -NoNewline -ForegroundColor Yellow
-    # Write-Host " " -NoNewline
-
-    # Show current directory
-    # Shorten path if too long
-    $path = $location.Path
-    if ($path.StartsWith($env:USERPROFILE)) {
-        $path = "~" + $path.Substring($env:USERPROFILE.Length)
-    }
-
-    Write-Host "$path" -NoNewline -ForegroundColor Blue
-
-    # Git status (if in a git repo)
-    if (Get-Command git -ErrorAction SilentlyContinue) {
-        $gitBranch = git rev-parse --abbrev-ref HEAD 2>$null
-        if ($gitBranch) {
-            Write-Host " " -NoNewline
-            Write-Host "($gitBranch)" -NoNewline -ForegroundColor Yellow
-        }
-    }
-
-    # Prompt character
-    Write-Host ""
-    Write-Host ">" -NoNewline -ForegroundColor Green
-    return " "
+# OhMyPosh is an optional vendor (`naner install ohmyposh`), not part of the
+# essential bootstrap -- guarded so a shell launched before it's installed
+# still gets a working (plain) prompt instead of an import error on every
+# startup.
+if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {
+    oh-my-posh init pwsh --config "jandedobbeleer" | Invoke-Expression
 }
 
 # ============================================================================
