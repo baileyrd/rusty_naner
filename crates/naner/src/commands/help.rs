@@ -63,7 +63,7 @@ pub fn execute() -> i32 {
     println!("  naner.exe --export-env -f cmd      # Output CMD SET commands");
     println!();
     println!("  # PowerShell: Source Naner environment");
-    println!("  Invoke-Expression (naner.exe --export-env)");
+    println!("  naner.exe --export-env | Invoke-Expression");
     println!();
     println!("  # Bash: Source Naner environment");
     println!("  eval \"$(naner.exe --export-env -f bash)\"");

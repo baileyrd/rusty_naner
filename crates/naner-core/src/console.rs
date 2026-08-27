@@ -129,6 +129,36 @@ pub fn read_line_raw() -> Option<String> {
     imp::read_line_raw()
 }
 
+/// Write `text` to stdout verbatim, swallowing any write failure instead of
+/// letting `print!`/`println!`'s panic-on-error propagate.
+///
+/// Needed for a GUI-subsystem (`#![windows_subsystem = "windows"]`) binary
+/// specifically: PowerShell's native-command handling for a
+/// `/SUBSYSTEM:WINDOWS` process does not reliably wait for it before tearing
+/// down whatever it redirected stdout to -- confirmed live against
+/// `Invoke-Expression (naner --export-env)` (a subexpression capture) and
+/// PowerShell's own `>` file redirection, both of which lose the race
+/// deterministically (PowerShell/PowerShell#25875 documents the same
+/// behavior for `>`). `naner --export-env | Invoke-Expression` (a real pipe,
+/// what `setup_shell.rs` actually installs) and bash's `eval "$(...)"` are
+/// unaffected -- PowerShell only tears the handle down early for the
+/// subexpression/redirection forms, not while it is actively consuming a
+/// pipeline stage.
+///
+/// When that race is lost, the write fails with "The pipe is being closed."
+/// (raw OS error 232). Rust's `print!` treats any stdout write failure as
+/// fatal and panics; on Unix that path is normally unreachable (rustc resets
+/// `SIGPIPE` to its default disposition, so the process dies cleanly via
+/// signal before a write error can even surface), but Windows has no such
+/// mechanism. There is nothing this process can do about a reader that is
+/// already gone, so this exits as cleanly as the Unix default does, instead
+/// of crashing with a visible panic over a caller that simply stopped
+/// listening.
+pub fn write_stdout_best_effort(text: &str) {
+    use std::io::Write;
+    let _ = std::io::stdout().write_all(text.as_bytes());
+}
+
 #[cfg(windows)]
 mod imp {
     use super::ConsoleState;
