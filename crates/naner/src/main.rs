@@ -366,7 +366,7 @@ fn handle_export_env(
         isolated_vars,
         &naner_core::timestamp::now_local(),
     );
-    print!("{}", output.trim_end());
+    console::write_stdout_best_effort(output.trim_end());
     0
 }
 

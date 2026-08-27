@@ -15,6 +15,24 @@
   vendors oh-my-posh but the shipped default profile never used it.
 
 ### Fixed
+- `naner --export-env` crashed with a visible Rust panic (`failed printing
+  to stdout: The pipe is being closed. (os error 232)`) when invoked as
+  `Invoke-Expression (naner.exe --export-env)` -- the exact form naner's own
+  `--help` documented. Root cause is on PowerShell's side and confirmed
+  against `PowerShell/PowerShell#25875`: for a `/SUBSYSTEM:WINDOWS` process
+  (naner.exe, deliberately, to avoid a console flash), PowerShell's
+  subexpression-capture and native `>` redirection do not reliably wait for
+  the process before tearing down the handle they gave it, racing naner's own
+  write. That race can't be won from naner's side, but naner doesn't need to
+  crash losing it: `handle_export_env` (and `naner root`, the other
+  documented pipeline-composable primitive) now write stdout via a new
+  `console::write_stdout_best_effort`, which swallows a write failure instead
+  of letting `print!`'s panic-on-error propagate -- matching Unix's default
+  `SIGPIPE` disposition, which already makes this a non-issue there. The
+  reliable forms (`naner --export-env | Invoke-Expression`, what
+  `setup_shell.rs` actually installs, and bash's `eval "$(naner --export-env)"`)
+  were never affected; `--help`'s PowerShell example now shows the
+  pipe form instead of the broken subexpression one.
 - The shipped default PowerShell profile aliased `ll` to `Get-ChildItem`
   (line ~85) and then defined a `function ll` with fancier formatting
   (line ~147) further down -- PowerShell resolves an alias before a
