@@ -1,4 +1,6 @@
 ## [Unreleased]
+
+## [0.9.24] - 2026-08-27
 ### Added
 - `dist-assets/scripts/` -- a fifth bundled/packed directory (alongside
   `bin/`, `config/`, `home/`, `icons/`) for user-owned scripts, ported back

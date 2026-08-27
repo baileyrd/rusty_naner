@@ -7,6 +7,52 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.24 — 2026-08-27
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.23...v0.9.24).
+
+Reported live: `naner --help`'s own documented PowerShell one-liner,
+`Invoke-Expression (naner.exe --export-env)`, crashed every time with a
+visible Rust panic -- `failed printing to stdout: The pipe is being
+closed. (os error 232)`.
+
+Root cause is on PowerShell's side, confirmed against
+[PowerShell/PowerShell#25875](https://github.com/PowerShell/PowerShell/discussions/25875):
+for a `/SUBSYSTEM:WINDOWS` process -- `naner.exe` is deliberately
+GUI-subsystem, to avoid a console flash on double-click -- PowerShell's
+subexpression-capture (`(...)`/`$(...)`) and native `>` redirection do
+not reliably wait for the process before tearing down the handle they
+redirected stdout to. naner loses that race and its `print!` panicked on
+the resulting write failure. `console::is_stdout_captured` was already
+correctly detecting the redirected case and leaving the console alone --
+the crash happened after that, on the write itself, and can't be fixed by
+any handle-management trick on naner's side.
+
+What naner *can* control is not crashing when it loses an unwinnable
+race: `handle_export_env` and `naner root` (the other documented
+pipeline-composable primitive, `cd $(naner root)`) now write stdout
+through a new `console::write_stdout_best_effort`, which swallows a write
+failure instead of letting `print!`'s panic-on-error propagate -- the
+same outcome Unix gets for free from the default `SIGPIPE` disposition.
+`--help`'s PowerShell example now shows the reliable piped form
+(`naner --export-env | Invoke-Expression`, what `setup_shell.rs` actually
+installs into a user's profile) instead of the broken subexpression one.
+
+Verified live on Windows: the exact panicking invocation now exits
+cleanly, 3/3 runs, instead of crashing. The three working forms -- piped
+`| Invoke-Expression`, `cmd.exe`'s `>` redirection, and bash's
+`eval "$(naner --export-env)"` -- are unaffected.
+
+**Known limitation**: the underlying PowerShell defect is not fixed by
+this change and can't be fixed from naner's side at all -- PowerShell's
+subexpression-capture and native `>` redirection remain unreliable for
+any GUI-subsystem executable, naner included. `Invoke-Expression (naner
+--export-env)` and `naner --export-env > file` in PowerShell will keep
+silently doing nothing (no longer crashing, but no longer working
+either); use the piped form or `cmd.exe` instead.
+
+---
+
 Ported two changes back from a live, in-use naner installation to the
 default bundle:
 
