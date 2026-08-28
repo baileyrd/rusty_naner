@@ -401,6 +401,31 @@ Real gaps, already understood. Confirm they have not got worse; do not re-file.
   `schema config`, because `VendorJsonEntry` is private to `naner-core`.
 - **`cargo-deny` treats `unmaintained` as a warning**, not an error. Known
   vulnerabilities and yanked versions do fail.
+- **`~/.claude.json` still lands in the real Windows profile, not
+  `%NANER_ROOT%\home`.** `CLAUDE_CONFIG_DIR` only redirects paths *under*
+  `~/.claude/` (Anthropic's own docs: "every `~/.claude` path... lives under
+  that instead") — `.claude.json` is a sibling *file* of `.claude/`, not a
+  path under it, and Claude Code ships no override for it
+  (anthropics/claude-code#24479, #33857, both open). The general
+  `USERPROFILE` redirect that covers every other `os.homedir()`-reading tool
+  doesn't reach it either: Claude Code's CLI is a Bun-compiled binary, and
+  Bun's own environment-variable handling on Windows is known to diverge
+  from Node's in other ways too (e.g. it ignores `HTTP_PROXY`/`HTTPS_PROXY`
+  the way Node does) — confirmed live, `.claude.json` keeps receiving writes
+  in the real profile from a naner-launched shell. Nothing to redirect
+  without an override Claude itself doesn't provide.
+- **Google Antigravity's bundled Gemini agent is not redirected at all.**
+  `Antigravity` is a closed-source GUI IDE (a static `.exe`, no `provides`,
+  no `environmentVariables`) with an embedded Gemini-powered agent that
+  writes its own dotfolder outside naner's tree. Unlike the standalone
+  `Gemini` vendor (`@google/gemini-cli`, which *is* redirected — it's a
+  plain Node CLI covered by the existing `USERPROFILE` redirect once
+  installed through naner), Antigravity's bundled copy is opaque: no
+  published environment-variable override, and — being a GUI app most users
+  launch from a shortcut rather than typing into a naner-launched shell
+  every time — no guarantee it ever inherits naner's redirected environment
+  in the first place, even before asking whether its runtime honors
+  `USERPROFILE` the way Node does.
 
 ## History
 
