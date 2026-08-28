@@ -102,7 +102,7 @@ its own `--help` text; the full reference is also in
 
 ## Status
 
-Migration complete: `v0.9.23` is the Latest release on this repo
+Migration complete: `v0.9.25` is the Latest release on this repo
 ([baileyrd/rusty_naner](https://github.com/baileyrd/rusty_naner)), published
 through the Phase 5 release workflow. Releases through `v0.6.4` were
 published to [baileyrd/naner](https://github.com/baileyrd/naner) instead;

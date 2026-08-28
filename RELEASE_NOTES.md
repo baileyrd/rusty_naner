@@ -7,6 +7,10 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.25 — 2026-08-28
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.24...v0.9.25).
+
 `naner reclaim [--dry-run]` is a new command: for the leaks the previous
 entry below couldn't close with an environment variable (Claude's
 `.claude.json`, and anything relying only on `USERPROFILE` when
@@ -62,6 +66,15 @@ it's a Node CLI that reads `os.homedir()` like everything else the
 (`@google/gemini-cli`) so installing and running it goes through naner's
 tree like `ClaudeCode`/`Codex` already do -- the existing `USERPROFILE`
 redirect does the rest.
+
+Verified on CI: `cargo fmt --all --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, and `cargo test --workspace` all green on
+both `ubuntu-latest` and `windows-latest`, including new tests that
+exercise the real `mklink /J` junction creation and idempotency on the
+Windows runner. The full `docs/VALIDATION.md` interactive checklist
+(console window behavior, first-run prompts, and the rest of what only a
+live GUI session can show) was not re-run against this release on a
+physical Windows box -- flagged here rather than silently assumed.
 
 ## v0.9.24 — 2026-08-27
 

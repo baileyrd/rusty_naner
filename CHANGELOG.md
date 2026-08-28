@@ -1,4 +1,6 @@
 ## [Unreleased]
+
+## [0.9.25] - 2026-08-28
 ### Added
 - New command: `naner reclaim [--dry-run]` -- sweeps `.claude/`,
   `.claude.json` (+ its `.backup.*` siblings), `.codex/`, and `.gemini/`
