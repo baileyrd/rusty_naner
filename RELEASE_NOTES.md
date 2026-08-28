@@ -7,6 +7,38 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Reported live: Claude Code, Codex CLI, and Gemini CLI all still leaving
+dotfolders in the real Windows profile from a naner-launched shell, well
+after the `CLAUDE_CONFIG_DIR`/`USERPROFILE` fixes in earlier releases.
+
+Two separate causes, one per remaining tool (Claude's own leak stayed
+fixed):
+
+Codex CLI is the odd one out among naner's agentic-CLI vendors: it's a
+native Rust binary shipped through npm, not a Node script, and it
+resolves its home directory via the OS known-folder API rather than
+reading `USERPROFILE` the way Node/Python/Go tools do. The `USERPROFILE`
+redirect that already contains Claude, git, and everything else with only
+an `os.homedir()`-style lookup simply never reaches it. Codex does
+document its own override, though -- `CODEX_HOME` -- so the fix is the
+same shape as `CLAUDE_CONFIG_DIR`: one more entry in the shipped
+`Environment.EnvironmentVariables`, pointed at
+`%NANER_ROOT%\home\.codex`.
+
+Gemini CLI's leak had a different, more basic cause: naner never vendored
+it at all. Unlike `ClaudeCode` and `Codex`, there was no `Gemini.json`, so
+`naner install` couldn't put it in the tree's own `home\.npm-global`, and
+anyone who wanted it had installed it with whatever `npm` and shell they
+had lying around -- possibly never touching naner's redirected
+environment in the first place. Gemini CLI itself has no config-dir
+override upstream to plug in even if it had been a vendor
+(`google-gemini/gemini-cli#2815` is still open), but it doesn't need one:
+it's a Node CLI that reads `os.homedir()` like everything else the
+`USERPROFILE` redirect already covers. Added the `Gemini` vendor
+(`@google/gemini-cli`) so installing and running it goes through naner's
+tree like `ClaudeCode`/`Codex` already do -- the existing `USERPROFILE`
+redirect does the rest.
+
 ## v0.9.24 — 2026-08-27
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.23...v0.9.24).

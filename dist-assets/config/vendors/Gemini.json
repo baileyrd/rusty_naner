@@ -1,0 +1,19 @@
+{
+  "Gemini": {
+    "name": "Gemini CLI",
+    "description": "Google's agentic coding CLI",
+    "provides": [
+      "gemini"
+    ],
+    "extractDir": "gemini",
+    "enabled": true,
+    "required": false,
+    "dependencies": [
+      "NodeJS"
+    ],
+    "releaseSource": {
+      "type": "npm",
+      "package": "@google/gemini-cli"
+    }
+  }
+}
