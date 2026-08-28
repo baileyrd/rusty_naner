@@ -1,4 +1,28 @@
 ## [Unreleased]
+### Added
+- New vendor: `Gemini` (`@google/gemini-cli`, npm) — Google's agentic
+  coding CLI, alongside the existing `ClaudeCode`/`Codex` vendors. Not
+  naner-managed before, so its `npm install -g` (and every subsequent
+  invocation) ran wherever the ambient shell's `npm`/`gemini` resolved,
+  outside naner's controlled `home\.npm-global` and outside the
+  redirected environment entirely when installed globally from a
+  non-naner shell.
+
+### Fixed
+- Reported live: Claude Code, Codex CLI, and Gemini CLI dotfolders all
+  leaking into the real Windows profile from naner-launched shells.
+  Codex is a native Rust binary (unlike the npm-installed Claude/Gemini)
+  that resolves its home directory through the OS known-folder API, not
+  by reading `USERPROFILE` -- the existing `USERPROFILE` redirect that
+  covers every Node/Python/Go tool never reached it. Added `CODEX_HOME`
+  (Codex's own documented override, same pattern as `CLAUDE_CONFIG_DIR`)
+  to the shipped `Environment.EnvironmentVariables`. Gemini CLI has no
+  config-dir override of its own upstream
+  (`google-gemini/gemini-cli#2815`, unresolved) and reads `os.homedir()`
+  like Node tools generally do, so the existing `USERPROFILE` redirect
+  already covers it once it runs through a naner-managed install --
+  closed by adding the `Gemini` vendor above rather than a new
+  environment variable.
 
 ## [0.9.24] - 2026-08-27
 ### Added

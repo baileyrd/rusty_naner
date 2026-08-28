@@ -59,7 +59,10 @@
       // Windows profile -- an accepted tradeoff for a fully self-contained
       // environment. The XDG trio catches every XDG-aware CLI wholesale;
       // tools with only a private override get one entry each
-      // (CLAUDE_CONFIG_DIR here, BUN_INSTALL in Bun's own vendor file).
+      // (CLAUDE_CONFIG_DIR/CODEX_HOME here, BUN_INSTALL in Bun's own vendor
+      // file). Gemini CLI hardcodes `.gemini` under os.homedir() with no
+      // override of its own (google-gemini/gemini-cli#2815, unresolved
+      // upstream), so USERPROFILE above is the only lever available for it.
       "USERPROFILE": "%NANER_ROOT%\\home",
       // Redirected for the same reason as USERPROFILE above: contained
       // within naner rather than mixed into the host's real scratch space.
@@ -82,7 +85,13 @@
       "XDG_CONFIG_HOME": "%NANER_ROOT%\\home\\.config",
       "XDG_DATA_HOME": "%NANER_ROOT%\\home\\.local\\share",
       "XDG_CACHE_HOME": "%NANER_ROOT%\\home\\.cache",
-      "CLAUDE_CONFIG_DIR": "%NANER_ROOT%\\home\\.claude"
+      "CLAUDE_CONFIG_DIR": "%NANER_ROOT%\\home\\.claude",
+      // Codex CLI is a native Rust binary (unlike the other npm-installed
+      // agentic CLIs here) that resolves its home directory via the OS
+      // known-folder API rather than reading USERPROFILE, so the USERPROFILE
+      // redirect above never reaches it -- CODEX_HOME is codex's own
+      // documented override and the only thing that actually redirects it.
+      "CODEX_HOME": "%NANER_ROOT%\\home\\.codex"
     }
   },
   "DefaultProfile": "Unified",
