@@ -7,6 +7,30 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+`naner reclaim [--dry-run]` is a new command: for the leaks the previous
+entry below couldn't close with an environment variable (Claude's
+`.claude.json`, and anything relying only on `USERPROFILE` when
+Antigravity's bundled Gemini agent or a pre-`CODEX_HOME` Codex has
+already left real data behind), it sweeps whatever already leaked into
+`%NANER_ROOT%\home` and bridges the original real-profile location back
+to it -- a directory junction for `.codex/`/`.gemini/`/`.claude/` (no
+privilege needed, the same mechanism `Advanced.HomeJunctions` already
+uses), a real symlink for the single-file `.claude.json` (NTFS reparse
+points only redirect directories, so this one needs Developer Mode or
+Administrator -- a failure there is reported, not fatal, since the move
+itself already succeeded). Resolves the *real* profile directory via
+`SHGetKnownFolderPath(FOLDERID_Profile)` rather than `USERPROFILE`,
+which is unreliable here specifically because it may already be naner's
+own redirected value if `naner reclaim` is run from inside an
+already-launched naner shell. Never overwrites: a leaked copy that
+conflicts with one naner's home already has is preserved under a
+timestamped name, not discarded.
+
+This is a mitigation, not a source fix: it plants a filesystem entry at
+a real-profile path, a deliberate, opt-in exception to naner's "nothing
+written outside `NANER_ROOT`" contract, made only when the user
+explicitly runs the command.
+
 Reported live: Claude Code, Codex CLI, and Gemini CLI all still leaving
 dotfolders in the real Windows profile from a naner-launched shell, well
 after the `CLAUDE_CONFIG_DIR`/`USERPROFILE` fixes in earlier releases.

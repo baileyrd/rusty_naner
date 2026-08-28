@@ -59,6 +59,10 @@ fn build_cli_command() -> Command {
         )
         .subcommand(Command::new("outdated").about("Compare installed vendors against latest"))
         .subcommand(Command::new("refresh-pins").about("Refresh vendor fallback pins"))
+        .subcommand(
+            Command::new("reclaim")
+                .about("Sweep leaked dotfolders into NANER_ROOT and link them back"),
+        )
 }
 
 #[cfg(test)]

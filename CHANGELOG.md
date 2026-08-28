@@ -1,5 +1,24 @@
 ## [Unreleased]
 ### Added
+- New command: `naner reclaim [--dry-run]` -- sweeps `.claude/`,
+  `.claude.json` (+ its `.backup.*` siblings), `.codex/`, and `.gemini/`
+  out of the real Windows profile into `%NANER_ROOT%\home`, for the three
+  cases (see docs/VALIDATION.md's Known limitations) where the shipped
+  `Environment.EnvironmentVariables` redirects cannot reach them at all.
+  Bridges the original location back to the moved copy afterward: a
+  directory junction (`mklink /J`, via the same mechanism
+  `Advanced.HomeJunctions` already uses, so no admin/Developer Mode
+  needed) for `.codex/`/`.gemini/`, a real symlink for the single-file
+  `.claude.json` (NTFS reparse points only redirect directories, so this
+  one does need `SeCreateSymbolicLinkPrivilege` -- Developer Mode or
+  Administrator; a failure there is reported, not fatal, since the file
+  is already safely moved either way). Never overwrites: if naner's home
+  already has its own copy of something that also leaked, the leaked
+  copy is preserved under a timestamped name instead of being discarded
+  or clobbering what's there. Resolves the real profile directory via
+  `SHGetKnownFolderPath(FOLDERID_Profile)` rather than trusting
+  `USERPROFILE`, which may already be naner's own redirected value if
+  invoked from inside an already-launched naner shell.
 - New vendor: `Gemini` (`@google/gemini-cli`, npm) — Google's agentic
   coding CLI, alongside the existing `ClaudeCode`/`Codex` vendors. Not
   naner-managed before, so its `npm install -g` (and every subsequent

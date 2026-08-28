@@ -26,6 +26,11 @@ features = [
     # add-to-path: HKCU\Environment editing + the WM_SETTINGCHANGE broadcast.
     "Win32_System_Registry",
     "Win32_UI_WindowsAndMessaging",
+    # leak_reclaim: SHGetKnownFolderPath(FOLDERID_Profile) to resolve the
+    # real Windows profile directory regardless of what naner has already
+    # redirected USERPROFILE to for this process.
+    "Win32_UI_Shell",
+    "Win32_System_Com",
 ]
 
 # Size-focused release profile (MIGRATION_ANALYSIS §2.3): target ~1.5–4 MB

@@ -21,6 +21,7 @@ mod fs_atomic;
 pub mod github;
 pub mod home_junctions;
 pub mod http;
+pub mod leak_reclaim;
 pub mod lockfile;
 pub mod logger;
 pub mod paths;
