@@ -27,6 +27,9 @@ pub fn execute() -> i32 {
     println!("  suggest <name>             Map a missing command to the vendor providing it");
     println!("  outdated                   Compare installed vendors against latest releases");
     println!("  refresh-pins [dir]         Re-resolve and rewrite vendor fallback pins");
+    println!(
+        "  reclaim [--dry-run]        Sweep leaked dotfolders into NANER_ROOT and link them back"
+    );
     println!();
 
     println!("OPTIONS:");

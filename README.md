@@ -96,8 +96,9 @@ aside.
 
 `naner --help` lists every subcommand — `doctor`, `schema`, `completions`,
 `setup-shell`, `suggest`, `outdated`, `refresh-pins`, `repair`, `profile`,
-`diff`, `bench`, `migrate`, `pack`, `lock`, and more — each with its own `--help` text; the full reference is
-also in [Core CLI Subcommands](#core-cli-subcommands) below.
+`diff`, `bench`, `migrate`, `pack`, `lock`, `reclaim`, and more — each with
+its own `--help` text; the full reference is also in
+[Core CLI Subcommands](#core-cli-subcommands) below.
 
 ## Status
 
@@ -183,6 +184,7 @@ that cross-publish has been removed. Phases 0–5 done:
 - **`naner pack [dir] --out bundle.zip`**: Bundles a naner installation (`bin/`, `config/`, `home/`, `icons/`, `scripts/`) into a portable zip, skipping transient files. Defaults to the discovered root; `[dir]` overrides it.
 - **`naner update` / `naner self-update`**: Updates naner itself to the latest release in place. `naner.exe` cannot be *overwritten* while running, but Windows will rename a running exe — so the update renames the live binary aside, installs the new one under its name, and sweeps the `.old` leftover on the next launch.
 - **`naner lock [--refresh [vendor...]] [--porcelain]`**: Inspects `naner.lock`, the pin of exactly which vendor artifacts this environment installs, and drops pins so the next install re-resolves.
+- **`naner reclaim [--dry-run]`**: Sweeps dotfolders/files known to leak into the real Windows profile despite the redirects above — Claude Code (`.claude/`, `.claude.json`), Codex CLI (`.codex/`), Gemini CLI/Antigravity (`.gemini/`) — into `%NANER_ROOT%\home`, then bridges the original location back to the new one (a directory junction, or for the single-file `.claude.json` a symlink) so future writes land there too, even from a tool that resolves its own path via a native OS call and ignores every env var naner sets. The symlink case needs Windows Developer Mode or Administrator; a failure there is reported, not fatal — the data is still safely moved. Never overwrites: if naner's home already has its own copy of something that also leaked, the leaked copy is preserved under a timestamped name instead.
 
 ### Infrastructure & Subsystem Enhancements
 - **Download Integrity Verification**: every vendor download is checked against a digest published by the distributor itself where one exists — Go and Node.js (SHA-256), the .NET SDK (SHA-512, via the channel manifest that also supplies the authoritative URL), `rustup-init.exe` (`.sha256` sidecar) and Anaconda (repository listing). A vendor may also pin a digest via `checksum` in its own definition file, which takes precedence. A mismatch against an upstream digest blocks installation. Sources that publish no digest (MSYS2, GitHub release assets) install unverified unless pinned.

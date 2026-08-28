@@ -17,6 +17,7 @@ pub mod migrate;
 pub mod outdated;
 pub mod pack;
 pub mod profile;
+pub mod reclaim;
 pub mod refresh_pins;
 pub mod repair;
 pub mod root;
@@ -60,8 +61,9 @@ pub mod names {
     pub const SUGGEST: &str = "suggest";
     pub const OUTDATED: &str = "outdated";
     pub const REFRESH_PINS: &str = "refresh-pins";
+    pub const RECLAIM: &str = "reclaim";
 
-    pub const CONSOLE_COMMANDS: [&str; 32] = [
+    pub const CONSOLE_COMMANDS: [&str; 33] = [
         VERSION,
         VERSION_SHORT,
         HELP,
@@ -94,6 +96,7 @@ pub mod names {
         SUGGEST,
         OUTDATED,
         REFRESH_PINS,
+        RECLAIM,
     ];
 }
 
@@ -131,6 +134,7 @@ pub enum Verb {
     Suggest,
     Outdated,
     RefreshPins,
+    Reclaim,
 }
 
 impl Verb {
@@ -165,6 +169,7 @@ impl Verb {
             names::SUGGEST => Self::Suggest,
             names::OUTDATED => Self::Outdated,
             names::REFRESH_PINS => Self::RefreshPins,
+            names::RECLAIM => Self::Reclaim,
             _ => return None,
         })
     }
@@ -200,6 +205,7 @@ impl Verb {
             Self::Suggest => suggest::execute(rest),
             Self::Outdated => outdated::execute(rest),
             Self::RefreshPins => refresh_pins::execute(rest),
+            Self::Reclaim => reclaim::execute(rest),
         }
     }
 }
@@ -273,6 +279,7 @@ mod tests {
             names::SUGGEST,
             names::OUTDATED,
             names::REFRESH_PINS,
+            names::RECLAIM,
         ] {
             assert!(
                 names::CONSOLE_COMMANDS.contains(&name),
@@ -345,6 +352,7 @@ mod tests {
             Verb::Suggest,
             Verb::Outdated,
             Verb::RefreshPins,
+            Verb::Reclaim,
         ];
         for verb in all {
             assert!(

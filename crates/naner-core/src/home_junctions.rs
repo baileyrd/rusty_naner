@@ -69,7 +69,7 @@ pub fn ensure_home_junctions(
 }
 
 #[cfg(windows)]
-fn create_junction(link: &Path, target: &Path) {
+pub(crate) fn create_junction(link: &Path, target: &Path) -> bool {
     // mklink is a cmd.exe built-in, not a standalone executable -- no
     // vendored shell (PowerShell may not be installed yet) or elevation
     // needed either way, since /J junctions don't require
@@ -86,6 +86,7 @@ fn create_junction(link: &Path, target: &Path) {
                 link.display(),
                 target.display()
             ));
+            true
         }
         Ok(out) => {
             logger::warning(&format!(
@@ -93,15 +94,19 @@ fn create_junction(link: &Path, target: &Path) {
                 link.display(),
                 String::from_utf8_lossy(&out.stderr).trim()
             ));
+            false
         }
         Err(e) => {
             logger::warning(&format!("Could not run mklink for {}: {e}", link.display()));
+            false
         }
     }
 }
 
 #[cfg(not(windows))]
-fn create_junction(_link: &Path, _target: &Path) {}
+pub(crate) fn create_junction(_link: &Path, _target: &Path) -> bool {
+    false
+}
 
 #[cfg(test)]
 mod tests {
