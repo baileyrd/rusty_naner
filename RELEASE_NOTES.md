@@ -7,6 +7,56 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.27 — 2026-09-03
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.26...v0.9.27).
+
+Follow-up to 0.9.26's console-flash fix, reported live again against
+that exact release: `naner update`'s "already up to date" result no
+longer opened a second console window, but its final line still landed
+spliced into the parent PowerShell tab's *next* prompt row instead of
+appearing above it -- the prompt's own segments and naner's own text
+sharing one line.
+
+A before/after screenshot comparison against 0.9.25 ruled out 0.9.26's
+change as the cause: the exact same splice happened whether the extra
+console opened or not, so it was never about *where* naner's output
+went, only about *when* the shell decided to draw its next prompt
+relative to it.
+
+The actual cause is a well-documented Windows quirk, not specific to
+naner: a GUI-subsystem process (`#![windows_subsystem = "windows"]`,
+naner's own choice, deliberately, to avoid a console flash on
+double-click) that `AttachConsole`s to its parent shell's console is
+never *waited for* by that shell. `cmd.exe`/PowerShell dispatch it and
+move straight on to draw their own next prompt without knowing whether
+it has actually finished writing, so naner's console output and the
+shell's prompt redraw end up as two independent writers on one shared
+console with no ordering guarantee between them (matches the
+`AttachConsole`/GUI-subsystem class of bug documented against other
+tools, e.g.
+[microsoft/terminal#4921](https://github.com/microsoft/terminal/issues/4921)).
+
+`FreeConsole()` right before exit -- after every byte naner will ever
+write has already landed -- is the documented mitigation: it cannot
+make the shell *wait*, but it hands the console back cleanly the
+instant naner is actually done with it instead of leaving that to
+whatever the OS does on process teardown, so there is nothing left for
+the shell's own prompt-draw to race against. Every exit path in
+`naner.exe` now funnels through a new `console::detach()` call
+immediately before terminating, not just `update`/`init`'s.
+
+**Known limitation, disclosed rather than silently assumed**: this
+release's own build/CI environment has no way to launch a real
+interactive Windows Terminal/PowerShell/oh-my-posh session, so this fix
+was verified by `cargo fmt --all --check` (clean) and CI green on
+`windows-latest` -- which confirm it compiles, links, and passes the
+test suite -- but **not** by reproducing the original splice and
+watching it disappear on a physical Windows box. If it recurs, report
+it; the diagnosis above was reasoned from Windows/PowerShell's own
+documented `AttachConsole` behavior and a screenshot comparison, not
+from a fix verified against the actual bug in the same session.
+
 ## v0.9.26 — 2026-09-03
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.25...v0.9.26).
