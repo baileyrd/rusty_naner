@@ -1,5 +1,26 @@
 ## [Unreleased]
 
+## [0.9.27] - 2026-09-03
+### Fixed
+- Follow-up to 0.9.26's `naner update`/`naner init` console-flash fix,
+  reported live again: even without the extra console window, naner's
+  final status line (e.g. "[OK] Naner is already up to date!") still
+  landed spliced into the parent PowerShell tab's next prompt row
+  instead of appearing above it. Confirmed via before/after screenshot
+  comparison this was never caused by 0.9.26's change -- reexec-vs-not
+  made no observable difference. Root cause: a GUI-subsystem process
+  (`#![windows_subsystem = "windows"]`) that `AttachConsole`s to its
+  parent shell's console is never *waited for* by that shell --
+  `cmd.exe`/PowerShell dispatch it and move straight on to draw their
+  own next prompt, so naner's console writes and the shell's prompt
+  redraw are two independent writers on the same shared console with
+  no ordering guarantee between them. Every exit path in `naner.exe`
+  now calls the new `console::detach()` (`FreeConsole`) immediately
+  before terminating -- after every byte naner will ever write has
+  already landed, so there is nothing left for the shell's own
+  prompt-draw to race against. Applies to every console-attached
+  command, not just `update`/`init`.
+
 ## [0.9.26] - 2026-09-03
 ### Fixed
 - `naner update` and `naner init` flashed a second, real console window
