@@ -7,6 +7,41 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.26 — 2026-09-03
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.25...v0.9.26).
+
+Reported live: running `naner update` (or `naner init`) from an
+ordinary attached PowerShell tab flashed open a second, real console
+window -- on every invocation, including the common case where there
+was nothing to do. `naner update`'s "Naner is already up to date!"
+result opened that window, printed the version check into it, and
+closed it again in the same instant, with no "press any key" pause to
+hold it open on that path. The flash raced the parent tab's own prompt
+redraw, visibly corrupting the terminal -- output from the closing
+console landing on the same line as PowerShell's next prompt instead of
+above it.
+
+The window itself is not a bug on its own: it's the `#81` fix, a
+deliberate workaround for `cmd.exe`/PowerShell not waiting on a
+GUI-subsystem process, so a Y/n prompt read from the parent shell's
+console raced the shell's own next prompt for keystrokes. The bug was
+in *when* naner decided to open it -- `execute_update` and
+`execute_init` both called the re-exec unconditionally at the top of
+the function, before either had done the read-only work that
+determines whether a prompt will happen at all. `naner check-update`,
+which never prompts, never had this problem -- confirming the fix:
+move the re-exec past the non-interactive checks, to immediately before
+each function's first actual prompt, so the extra console now opens
+only when a prompt is genuinely imminent.
+
+Verified on CI: `cargo fmt --all --check`, `cargo clippy --workspace
+--all-targets -- -D warnings`, and `cargo test --workspace` all green on
+both `ubuntu-latest` and `windows-latest`. The `docs/VALIDATION.md`
+interactive checklist -- specifically the console-window behavior it
+covers -- was not re-run against this release on a physical Windows box;
+flagged here rather than silently assumed.
+
 ## v0.9.25 — 2026-08-28
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.24...v0.9.25).
