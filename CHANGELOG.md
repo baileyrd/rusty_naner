@@ -1,5 +1,23 @@
 ## [Unreleased]
 
+## [0.9.26] - 2026-09-03
+### Fixed
+- `naner update` and `naner init` flashed a second, real console window
+  open on every run when attached to a parent shell (PowerShell/cmd),
+  even when nothing interactive was about to happen -- the `#81`
+  keystroke-race workaround (re-exec into a `CREATE_NEW_CONSOLE` window)
+  fired unconditionally at the top of both commands, before either knew
+  whether it would ever call `prompt_yes`. Reported live: `naner
+  update`'s common "Naner is already up to date!" path opened that
+  second console, printed into it, and closed it instantly -- no
+  "press any key" pause on that path -- racing the parent PowerShell
+  tab's own prompt redraw and visibly corrupting the terminal output.
+  `reexec_in_own_console_if_racy` now runs immediately before each
+  function's first `prompt_yes` call instead of unconditionally at
+  entry, so a console of naner's own only opens when a prompt is
+  actually imminent; `naner check-update`, which never prompts, was
+  already unaffected.
+
 ## [0.9.25] - 2026-08-28
 ### Added
 - New command: `naner reclaim [--dry-run]` -- sweeps `.claude/`,
