@@ -108,6 +108,28 @@ pub fn force_foreground() {
     imp::force_foreground();
 }
 
+/// Explicitly detach this process from whatever console it is attached to
+/// (`AttachConsole`'d or `AllocConsole`'d), right before the process exits.
+///
+/// A GUI-subsystem process (`#![windows_subsystem = "windows"]`) that
+/// attached to its parent shell's console is never waited for by that
+/// shell -- `cmd.exe`/PowerShell dispatch it and move straight on to their
+/// own next prompt, so naner's console I/O and the shell's own prompt
+/// redraw are two independent writers on the same shared console with no
+/// ordering guarantee between them. Reported live: `naner update`'s final
+/// status line landing spliced into the parent shell's next prompt instead
+/// of above it. `FreeConsole` cannot make the shell *wait*, but it does
+/// give the console back cleanly the instant naner is done with it rather
+/// than holding it through whatever teardown the OS does on process exit,
+/// which is the documented mitigation for exactly this class of
+/// GUI-subsystem/console-owning-shell race. A no-op (and harmless) when
+/// there was never anything to detach from (`Redirected`/`Inherited`).
+/// Must be the last console operation before the process exits -- nothing
+/// after this call can assume a console still exists.
+pub fn detach() {
+    imp::detach();
+}
+
 /// Grant `pid` (a just-spawned child) the right to foreground its own
 /// window regardless of how long it takes to get there, reinforcing
 /// [`force_foreground`] from the parent side. `SetForegroundWindow` alone
@@ -172,9 +194,9 @@ mod imp {
     };
     use windows_sys::Win32::System::Console::{
         ATTACH_PARENT_PROCESS, AllocConsole, AttachConsole, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT,
-        ENABLE_VIRTUAL_TERMINAL_PROCESSING, GetConsoleMode, GetConsoleWindow, GetStdHandle,
-        INPUT_RECORD, KEY_EVENT, ReadConsoleInputW, STD_ERROR_HANDLE, STD_INPUT_HANDLE,
-        STD_OUTPUT_HANDLE, SetConsoleMode, SetStdHandle,
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, FreeConsole, GetConsoleMode, GetConsoleWindow,
+        GetStdHandle, INPUT_RECORD, KEY_EVENT, ReadConsoleInputW, STD_ERROR_HANDLE,
+        STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetConsoleMode, SetStdHandle,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         AllowSetForegroundWindow, SetForegroundWindow,
@@ -312,6 +334,17 @@ mod imp {
         // process id; failure is a normal, silently-ignored outcome.
         unsafe {
             AllowSetForegroundWindow(pid);
+        }
+    }
+
+    /// See the public [`super::detach`] doc comment. `FreeConsole` failing
+    /// (nothing attached) is left unhandled -- exactly the harmless no-op
+    /// case for `Redirected`/`Inherited` states, which never attached one.
+    pub fn detach() {
+        // SAFETY: FreeConsole has no preconditions; failure (no console
+        // attached) is a normal, silently-ignored outcome.
+        unsafe {
+            FreeConsole();
         }
     }
 
@@ -528,6 +561,8 @@ mod imp {
     pub fn force_foreground() {}
 
     pub fn allow_foreground(_pid: u32) {}
+
+    pub fn detach() {}
 }
 
 #[cfg(test)]

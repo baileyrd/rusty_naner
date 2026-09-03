@@ -17,6 +17,25 @@ use clap::Parser;
 use naner_core::config::OrderedMap;
 use naner_core::{config, console, constants, env_export, logger, paths};
 
+/// Every process-terminating exit funnels through here instead of calling
+/// `std::process::exit` directly: a GUI-subsystem process attached to its
+/// parent shell's console is never waited for by that shell (`cmd.exe`/
+/// PowerShell dispatch it and move straight on to their own next prompt),
+/// so naner's own console writes and the shell's next-prompt redraw are two
+/// independent writers on the same shared console with no guaranteed
+/// ordering between them. Reported live: `naner update`'s final status
+/// line landing spliced into the parent shell's next prompt instead of
+/// above it. Detaching cleanly the instant naner is actually done with the
+/// console -- rather than leaving that to whatever teardown the OS does on
+/// process exit -- is the documented mitigation for exactly this class of
+/// race; it cannot make the shell *wait*, but every byte naner will ever
+/// write has already landed by the time this runs, so there is nothing left
+/// for the shell's own writes to race against.
+fn exit(code: i32) -> ! {
+    console::detach();
+    std::process::exit(code);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
@@ -42,7 +61,7 @@ fn main() {
 
     // Layer 1: router verbs.
     if let Some(code) = commands::route(&args, console_state) {
-        std::process::exit(code);
+        exit(code);
     }
 
     // First-run gate. Machine-readable invocations keep the terse notice --
@@ -53,7 +72,7 @@ fn main() {
     // to own: this binary in an empty folder IS the installer.
     if first_run::is_first_run() {
         if machine_readable {
-            std::process::exit(handle_first_run(machine_readable));
+            exit(handle_first_run(machine_readable));
         }
         let naner_root = commands::bootstrap::root_or_cwd();
         let github = naner_core::github::GitHubReleasesClient::new(
@@ -64,15 +83,15 @@ fn main() {
         if !updater.is_initialized() {
             commands::bootstrap::ensure_console(&mut console_state);
             if let Some(code) = commands::bootstrap::reexec_in_own_console_if_racy(console_state) {
-                std::process::exit(code);
+                exit(code);
             }
-            std::process::exit(commands::bootstrap::run_bootstrap(
+            exit(commands::bootstrap::run_bootstrap(
                 &updater,
                 &naner_root,
                 console_state,
             ));
         }
-        std::process::exit(handle_first_run(machine_readable));
+        exit(handle_first_run(machine_readable));
     }
 
     // Layer 2: launch options.
@@ -84,11 +103,11 @@ fn main() {
             // CommandLineParser printed its errors and returned 1; clap's
             // message stands in for that text.
             let _ = err.print();
-            std::process::exit(1);
+            exit(1);
         }
     };
 
-    std::process::exit(run_launcher(&opts, &mut console_state));
+    exit(run_launcher(&opts, &mut console_state));
 }
 
 fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleState) -> i32 {
