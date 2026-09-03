@@ -27,9 +27,6 @@ pub fn root_or_cwd() -> PathBuf {
 
 /// `naner init`.
 pub fn execute_init(state: ConsoleState) -> i32 {
-    if let Some(code) = reexec_in_own_console_if_racy(state) {
-        return code;
-    }
     let naner_root = root_or_cwd();
     let github = GitHubReleasesClient::new(constants::github::OWNER, constants::github::REPO);
     let updater = NanerUpdater::new(&naner_root, &github);
@@ -42,6 +39,13 @@ pub fn execute_init(state: ConsoleState) -> i32 {
         ));
         logger::info("Use 'naner update' to update to the latest version.");
         return 0;
+    }
+
+    // Only from here does `run_bootstrap` unconditionally prompt -- the
+    // already-initialized short-circuit above never touches stdin, so it
+    // must never pay for a console of its own either.
+    if let Some(code) = reexec_in_own_console_if_racy(state) {
+        return code;
     }
 
     run_bootstrap(&updater, &naner_root, state)
@@ -94,9 +98,6 @@ pub fn run_bootstrap(updater: &NanerUpdater, naner_root: &Path, state: ConsoleSt
 /// `naner update` (and `naner self-update`, its alias): update every copy of
 /// the binary to the latest published release.
 pub fn execute_update(state: ConsoleState) -> i32 {
-    if let Some(code) = reexec_in_own_console_if_racy(state) {
-        return code;
-    }
     let naner_root = root_or_cwd();
     let github = GitHubReleasesClient::new(constants::github::OWNER, constants::github::REPO);
     let updater = NanerUpdater::new(&naner_root, &github);
@@ -124,6 +125,14 @@ pub fn execute_update(state: ConsoleState) -> i32 {
     if current {
         logger::success("Naner is already up to date!");
         return 0;
+    }
+
+    // Only from here does an update actually prompt -- the up-to-date
+    // short-circuit above never touches stdin, so it must never pay for a
+    // console of its own (and its instant exit gave that flash window no
+    // "press any key" pause, making it especially jarring).
+    if let Some(code) = reexec_in_own_console_if_racy(state) {
+        return code;
     }
 
     logger::info(&format!("Latest version: {latest}"));
