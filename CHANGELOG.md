@@ -1,4 +1,6 @@
 ## [Unreleased]
+
+## [0.9.28] - 2026-09-08
 ### Fixed
 - `naner refresh-pins`'s status lines (`current: DotNetSDK`, `[OK] updated:
   GitHubCli v2.98.0 -> v2.100.0`, ...) printed every vendor's raw JSON key
