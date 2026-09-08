@@ -83,9 +83,9 @@ pub fn execute(args: &[String]) -> i32 {
         if !porcelain {
             let line = match (row.pinned.as_deref(), row.latest.as_deref()) {
                 (Some(old), Some(new)) if row.state == "updated" => {
-                    format!("{}: {} {old} -> {new}{}", row.state, row.vendor, row.note)
+                    format!("{}: {} {old} -> {new}{}", row.state, row.name, row.note)
                 }
-                _ => format!("{}: {}{}", row.state, row.vendor, row.note),
+                _ => format!("{}: {}{}", row.state, row.name, row.note),
             };
             match row.state.as_str() {
                 "failed" => logger::warning(&line),
@@ -102,6 +102,7 @@ pub fn execute(args: &[String]) -> i32 {
             "vendors_dir": vendors_dir.display().to_string(),
             "vendors": rows.iter().map(|r| json!({
                 "vendor": r.vendor,
+                "name": r.name,
                 "state": r.state,
                 "pinned": r.pinned,
                 "latest": r.latest,
@@ -124,6 +125,7 @@ pub fn execute(args: &[String]) -> i32 {
 
 struct Row {
     vendor: String,
+    name: String,
     state: String,
     pinned: Option<String>,
     latest: Option<String>,
@@ -139,6 +141,7 @@ fn refresh_one(
 ) -> Row {
     let mut row = Row {
         vendor: vendor.key.clone(),
+        name: vendor.name.clone(),
         state: String::new(),
         pinned: vendor.fallback_version.clone(),
         latest: None,

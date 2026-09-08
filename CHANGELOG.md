@@ -1,4 +1,16 @@
 ## [Unreleased]
+### Fixed
+- `naner refresh-pins`'s status lines (`current: DotNetSDK`, `[OK] updated:
+  GitHubCli v2.98.0 -> v2.100.0`, ...) printed every vendor's raw JSON key
+  instead of its display name, unlike every other vendor-facing command
+  (`naner install --list`, `naner outdated`). Reported live, alongside a
+  screenshot of `refresh-pins` output next to `NodeJS`/`SevenZip`/
+  `MsvcBuildTools`/`NotebookLmCli` reading as run-on PascalCase instead of
+  "Node.js"/"7-Zip"/"MSVC Build Tools"/"NotebookLM CLI". `refresh_one`'s
+  `Row` now carries the vendor's `name` alongside its `key` (`outdated`'s
+  `Row` already did exactly this) and the human-readable line uses it; the
+  `--porcelain` JSON keeps `vendor` as the key and adds `name` alongside it,
+  so scripted consumers matching on `vendor` are unaffected.
 
 ## [0.9.27] - 2026-09-03
 ### Fixed
