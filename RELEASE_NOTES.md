@@ -7,6 +7,34 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.28 — 2026-09-08
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.27...v0.9.28).
+
+Reported live via a `naner refresh-pins` screenshot: every status line
+(`current: DotNetSDK`, `[OK] updated: GitHubCli v2.98.0 -> v2.100.0`,
+`manual: MsvcBuildTools (static URL...)`) printed the vendor's raw JSON
+key instead of its display name -- run-on PascalCase (`NodeJS`,
+`SevenZip`, `MsvcBuildTools`, `NotebookLmCli`) where `naner install
+--list` and `naner outdated` already show `Node.js`, `7-Zip`, `MSVC
+Build Tools`, `NotebookLM CLI`. `naner outdated`'s `Row` has carried
+both the key and the display name for exactly this reason since it was
+written; `refresh-pins` was the one vendor-facing command that never
+got the same treatment.
+
+`refresh_one`'s `Row` now carries `name` alongside `key`, matching
+`outdated.rs`'s existing shape, and the human-readable line formats
+with it. `--porcelain` JSON is additive only: `vendor` still holds the
+key, `name` is a new field alongside it, so scripted consumers are
+unaffected.
+
+**Verified**: CI green on both `ubuntu-latest` and `windows-latest`
+(the latter a real MSVC build/test run, unlike the sandbox this change
+was authored in, which has no working MSVC linker). The change itself
+is mechanical -- one added struct field, two `format!` call sites, one
+JSON key -- and was cross-checked line-by-line against `outdated.rs`'s
+already-shipped `Row { vendor, name, ... }` pattern.
+
 ## v0.9.27 — 2026-09-03
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.26...v0.9.27).
