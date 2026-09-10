@@ -1,4 +1,6 @@
 ## [Unreleased]
+
+## [0.9.29] - 2026-09-10
 ### Added
 - New vendor: Hister, a private, self-hosted full-text search engine for
   browsing history and local files (`asciimoo/hister`, GitHub-sourced,

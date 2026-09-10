@@ -7,6 +7,42 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.29 — 2026-09-10
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.28...v0.9.29).
+
+New vendor: [Hister](https://hister.org/) (`asciimoo/hister`), a private,
+self-hosted full-text search engine for browsing history and local files,
+with a web UI, terminal UI, CLI and MCP endpoint. Its Windows release
+asset is a bare, unsigned `.exe`, so `dist-assets/config/vendors/Hister.json`
+uses `installType: "binary"` (the same shape already shipped for
+`OhMyPosh`), placed as `hister.exe`, and verified against the release's
+shared `checksums.txt` via a scrape `checksumSource` — a mismatch there
+always blocks installation, per `vendors-schema.json`. Optional, like every
+other non-essential vendor — not installed automatically; install with
+`naner install hister`.
+
+Config-only change: no installer, resolver or PATH-assembly code paths
+were touched beyond the two golden-snapshot tests that enumerate the
+shipped vendor set (`shipped_vendor_files_are_wellformed.rs`'s file-count
+assertion and `loader.rs`'s `the_shipped_config_reproduces_the_original_
+path_order` PATH-ordering test), both updated to include the new entry.
+
+**Verified**: CI green on both `ubuntu-latest` and `windows-latest` (the
+latter a real MSVC build/test run, unlike the sandbox this change was
+authored in, which has no working MSVC linker). `Hister.json` validated
+against `vendors-schema.json`; every invariant
+`shipped_vendor_files_are_wellformed.rs` checks (file count, key matches
+file stem, no duplicate keys, `dependencies` resolve, `provides` entries
+are unique bare lowercase names) was independently replicated against the
+real shipped vendor set before pushing. Validation gates in
+[docs/VALIDATION.md](./docs/VALIDATION.md) were **not** re-run this
+cycle — same disclosure as v0.9.27/v0.9.28's release notes — since this
+change adds one inert, disabled-by-nothing-but-opt-in vendor definition
+and does not touch console-attach, vendor-install, or PATH-assembly
+*code*.
+
+
 ## v0.9.28 — 2026-09-08
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.27...v0.9.28).
