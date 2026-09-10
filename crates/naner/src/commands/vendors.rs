@@ -260,7 +260,7 @@ fn vendors_to_update(loader: &VendorConfigurationLoader) -> Vec<VendorDefinition
     essential.into_iter().chain(installed_optional).collect()
 }
 
-fn strip_quiet(args: &[String]) -> (Vec<String>, bool) {
+pub(crate) fn strip_quiet(args: &[String]) -> (Vec<String>, bool) {
     // Tier-3: auto-quiet in pipelines. Explicit --quiet still works in a
     // terminal; a redirected stdout suppresses the [*]/[OK]/info chatter on
     // its own. Failures and stderr warnings are unaffected, and porcelain

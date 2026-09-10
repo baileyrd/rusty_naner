@@ -7,6 +7,22 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+Found live while dogfooding: `naner install <vendor>` and `naner
+update-vendors` auto-quiet their `[*]`/`[OK]`/info chatter (and the HTTP
+download's raw `\r` progress bar) whenever stdout is not a terminal —
+"Tier-3 auto-quiet in pipelines," shipped for #67. `naner update`
+(self-update) never got the same treatment: run from a piped/non-interactive
+session it printed the full narration plus every `Progress: N%` update as
+its own line, exactly the "noise with none of the substantive text to
+explain it" problem #67 fixed everywhere else. Reproduced directly:
+installing the new `Hister` vendor (below) through a non-TTY session
+produced no output at all beyond its header, while `naner update` in the
+same session printed roughly thirty lines of status and progress text for a
+download barely a fortieth the size. `execute_update` now runs the same
+`vendors::strip_quiet` check the other two commands already share before
+doing anything else; failures, warnings, and the interactive "Update now?
+(Y/n)" prompt itself are untouched.
+
 ## v0.9.29 — 2026-09-10
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.28...v0.9.29).

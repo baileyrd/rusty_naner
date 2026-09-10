@@ -1,4 +1,17 @@
 ## [Unreleased]
+### Fixed
+- `naner update` (self-update) ignored the "Tier-3 auto-quiet in pipelines"
+  policy `naner install`/`update-vendors` already applied (#67): run with
+  stdout redirected — as it was when driven live from a piped/non-TTY
+  session — it printed every `[*]`/info status line plus the raw `\r`
+  download-progress bytes verbatim into the pipe, one `Progress: N%` update
+  per line, none of the surrounding text that would explain them. `naner
+  update`/`self-update` now call the same `strip_quiet` check the other two
+  commands use (auto-detect a non-terminal stdout, or an explicit
+  `--quiet`) before doing anything else. Failures, warnings, and the
+  interactive "Update now? (Y/n)" confirmation itself are unaffected — only
+  the routine status/progress chatter is suppressed, matching the existing
+  contract exactly.
 
 ## [0.9.29] - 2026-09-10
 ### Added
