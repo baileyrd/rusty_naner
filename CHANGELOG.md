@@ -1,4 +1,10 @@
 ## [Unreleased]
+### Added
+- New vendor: Hister, a private, self-hosted full-text search engine for
+  browsing history and local files (`asciimoo/hister`, GitHub-sourced,
+  `binary` install type, checksum-verified against its release's shared
+  `checksums.txt`, like `OhMyPosh`). Optional, installed on demand via
+  `naner install hister` like every other vendor.
 
 ## [0.9.28] - 2026-09-08
 ### Fixed
