@@ -7,6 +7,10 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.30 — 2026-09-10
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.29...v0.9.30).
+
 Found live while dogfooding: `naner install <vendor>` and `naner
 update-vendors` auto-quiet their `[*]`/`[OK]`/info chatter (and the HTTP
 download's raw `\r` progress bar) whenever stdout is not a terminal —
@@ -22,6 +26,15 @@ download barely a fortieth the size. `execute_update` now runs the same
 `vendors::strip_quiet` check the other two commands already share before
 doing anything else; failures, warnings, and the interactive "Update now?
 (Y/n)" prompt itself are untouched.
+
+**Verified**: CI green on both `ubuntu-latest` and `windows-latest` (the
+latter a real MSVC build/test run, unlike the sandbox this change was
+authored in, which has no working MSVC linker). `cargo fmt --check` passed
+locally. Validation gates in [docs/VALIDATION.md](./docs/VALIDATION.md)
+were **not** re-run this cycle — same disclosure as the last several
+release notes — the change reuses an already-shipped, already-tested
+helper (`vendors::strip_quiet`) at one additional call site; it does not
+touch console-attach, vendor-install, or PATH-assembly behavior otherwise.
 
 ## v0.9.29 — 2026-09-10
 
