@@ -1,4 +1,6 @@
 ## [Unreleased]
+
+## [0.9.30] - 2026-09-10
 ### Fixed
 - `naner update` (self-update) ignored the "Tier-3 auto-quiet in pipelines"
   policy `naner install`/`update-vendors` already applied (#67): run with
