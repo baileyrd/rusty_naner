@@ -406,7 +406,7 @@ mod vendor_merge_tests {
     /// real shipped vendor directory, so a priority typo fails here.
     #[test]
     fn the_shipped_config_reproduces_the_original_path_order() {
-        const EXPECTED: [&str; 34] = [
+        const EXPECTED: [&str; 35] = [
             "bin",
             "home/.npm-global",
             "home/.bun/bin",
@@ -431,6 +431,7 @@ mod vendor_merge_tests {
             "vendor/zed/bin",
             "vendor/bun",
             "vendor/gh/bin",
+            "vendor/hister",
             "vendor/git/cmd",
             "vendor/git/mingw64/bin",
             "vendor/git/usr/bin",

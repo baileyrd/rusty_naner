@@ -1,0 +1,35 @@
+{
+  "Hister": {
+    "name": "Hister",
+    "description": "Private, self-hosted full-text search engine for browsing history and local files",
+    "provides": [
+      "hister"
+    ],
+    "extractDir": "hister",
+    "enabled": true,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "asciimoo/hister",
+      "assetPattern": "hister_*_windows_amd64.exe",
+      "fallback": {
+        "version": "v0.19.0",
+        "url": "https://github.com/asciimoo/hister/releases/download/v0.19.0/hister_0.19.0_windows_amd64.exe",
+        "fileName": "hister_0.19.0_windows_amd64.exe",
+        "size": "~106"
+      }
+    },
+    "checksumSource": {
+      "type": "scrape",
+      "url": "https://github.com/asciimoo/hister/releases/download/v0.19.0/hister_0.19.0_checksums.txt",
+      "pattern": "([0-9a-fA-F]{64})\\s+{FILE}"
+    },
+    "installType": "binary",
+    "binaryName": "hister.exe",
+    "pathPriority": 66,
+    "pathPrecedence": [
+      "%NANER_ROOT%\\vendor\\hister"
+    ]
+  }
+}
