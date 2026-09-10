@@ -97,7 +97,19 @@ pub fn run_bootstrap(updater: &NanerUpdater, naner_root: &Path, state: ConsoleSt
 
 /// `naner update` (and `naner self-update`, its alias): update every copy of
 /// the binary to the latest published release.
-pub fn execute_update(state: ConsoleState) -> i32 {
+///
+/// Applies the same Tier-3 auto-quiet-in-pipelines policy `naner
+/// install`/`update-vendors` already do (`vendors::strip_quiet`): status,
+/// success and info chatter — including the HTTP download's `\r` progress
+/// bar, which reads the same global flag — are suppressed whenever stdout
+/// isn't a terminal, or `--quiet` is passed explicitly. This command took no
+/// arguments before `--quiet` support was added, so `args` has no other use
+/// yet. Failures, warnings and the interactive confirmation prompt itself
+/// are unaffected, matching that same precedent.
+pub fn execute_update(args: &[String], state: ConsoleState) -> i32 {
+    let (_, quiet) = super::vendors::strip_quiet(args);
+    logger::set_quiet(quiet);
+
     let naner_root = root_or_cwd();
     let github = GitHubReleasesClient::new(constants::github::OWNER, constants::github::REPO);
     let updater = NanerUpdater::new(&naner_root, &github);
