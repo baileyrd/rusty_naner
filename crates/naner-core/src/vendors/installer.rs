@@ -2792,7 +2792,11 @@ mod tests {
 
         let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
         assert!(installer.install_vendor("PowerShell"));
-        assert_eq!(http.downloads.get(), 1, "the initial install downloads once");
+        assert_eq!(
+            http.downloads.get(),
+            1,
+            "the initial install downloads once"
+        );
 
         assert!(installer.update_vendor("PowerShell"));
         assert_eq!(
