@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [0.9.32] - 2026-09-28
+### Fixed
+- Vendor installs no longer fall back to an hour-long file-by-file copy
+  when antivirus or the indexer still holds handles in the freshly staged
+  tree (Anaconda, ~200k files). The rename into `vendor/` is now retried
+  on in-use errors for up to ~5 minutes, and the copy fallback is logged
+  when taken.
+
 ## [0.9.31] - 2026-09-28
 ### Fixed
 - `update-vendors` no longer deletes and redownloads every vendor
