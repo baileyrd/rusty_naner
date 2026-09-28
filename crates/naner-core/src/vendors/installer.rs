@@ -1827,12 +1827,15 @@ fn swap_into_place(staging: &Path, target: &Path) -> std::io::Result<()> {
     let _ = std::fs::remove_dir_all(&backup); // stale one from an interrupted run
     let had_previous = target.exists();
     if had_previous {
-        std::fs::rename(target, &backup)?;
+        rename_with_retry(target, &backup)?;
     }
 
-    let placed = std::fs::rename(staging, target).or_else(|rename_err| {
+    let placed = rename_with_retry(staging, target).or_else(|rename_err| {
         // Cross-device: staging and target normally share `vendor/`, so this
         // is rare. Copy, then drop staging.
+        logger::warning(&format!(
+            "    Rename into place failed ({rename_err}); falling back to a file-by-file copy"
+        ));
         copy_tree(staging, target)
             .inspect_err(|_| {
                 let _ = std::fs::remove_dir_all(target);
@@ -1858,6 +1861,39 @@ fn swap_into_place(staging: &Path, target: &Path) -> std::io::Result<()> {
             Err(e)
         }
     }
+}
+
+/// `std::fs::rename`, retried while Windows reports the tree as in use.
+///
+/// A directory rename fails with "Access is denied" while any handle inside
+/// the tree is open. Right after a large NSIS install (Anaconda: ~200k files)
+/// Defender and the search indexer are still scanning the fresh files, so the
+/// first attempt routinely loses that race — and the copy fallback then
+/// crawls through every file one at a time for over an hour. The locks are
+/// transient, so waiting them out is far cheaper than copying.
+fn rename_with_retry(from: &Path, to: &Path) -> std::io::Result<()> {
+    const DELAYS_SECS: [u64; 6] = [1, 2, 4, 8, 15, 30];
+    let mut attempt = 0;
+    loop {
+        match std::fs::rename(from, to) {
+            Err(e) if is_transient_lock(&e) && attempt < DELAYS_SECS.len() => {
+                if attempt == 0 {
+                    logger::status("    Files still in use (antivirus scan?), retrying rename...");
+                }
+                std::thread::sleep(std::time::Duration::from_secs(DELAYS_SECS[attempt]));
+                attempt += 1;
+            }
+            result => return result,
+        }
+    }
+}
+
+/// ERROR_ACCESS_DENIED (5) / ERROR_SHARING_VIOLATION (32): something holds a
+/// handle inside the tree. Anything else (missing source, cross-device) will
+/// not change by waiting.
+fn is_transient_lock(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::PermissionDenied
+        || (cfg!(windows) && matches!(e.raw_os_error(), Some(5 | 32)))
 }
 
 /// Overlay `staging` onto `target`, leaving files that only exist in `target`.
@@ -2729,6 +2765,21 @@ mod tests {
             b"the version that works"
         );
         assert!(!tmp.path().join("vendor/pwsh.old").exists());
+    }
+
+    /// Only "something holds a handle" is worth waiting out; a missing source
+    /// must fail straight through to the copy fallback without sleeping.
+    #[test]
+    fn only_in_use_errors_are_retried() {
+        use std::io::{Error, ErrorKind};
+        assert!(is_transient_lock(&Error::from(ErrorKind::PermissionDenied)));
+        assert!(!is_transient_lock(&Error::from(ErrorKind::NotFound)));
+        #[cfg(windows)]
+        {
+            assert!(is_transient_lock(&Error::from_raw_os_error(5)));
+            assert!(is_transient_lock(&Error::from_raw_os_error(32)));
+            assert!(!is_transient_lock(&Error::from_raw_os_error(17))); // ERROR_NOT_SAME_DEVICE
+        }
     }
 
     #[test]
