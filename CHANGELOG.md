@@ -1,5 +1,21 @@
 ## [Unreleased]
 
+## [0.9.31] - 2026-09-28
+### Fixed
+- `update-vendors` no longer deletes and redownloads every vendor
+  unconditionally on each run. It now resolves what upstream currently
+  calls latest first (the same check `naner outdated` already does) and
+  skips the reinstall when the installed version is already current,
+  logging "already up to date" instead. `MsvcBuildTools` (no resolvable
+  "latest") and resolution failures still fall through to the previous
+  unconditional-reinstall behavior.
+### Added
+- `update-vendors` now tries a vendor's own native updater first when its
+  binary is present — `rustup update`, `conda update --all`, `bun
+  upgrade`, `git update-git-for-windows` — and only falls back to the
+  generic delete-and-reinstall pipeline when there's no native updater for
+  that vendor or its binary is missing.
+
 ## [0.9.30] - 2026-09-10
 ### Fixed
 - `naner update` (self-update) ignored the "Tier-3 auto-quiet in pipelines"
