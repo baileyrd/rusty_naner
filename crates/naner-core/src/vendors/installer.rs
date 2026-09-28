@@ -451,6 +451,21 @@ impl<'a> UnifiedVendorInstaller<'a> {
         let is_wt = is_windows_terminal(&vendor.name);
 
         if target_dir.is_dir() {
+            // Some vendors bundle their own real updater -- rustup, conda,
+            // Bun's self-updater, Git for Windows' own updater -- and it is
+            // authoritative over the generic pipeline below when its binary
+            // is actually present: naner's own delete-and-reinstall would
+            // otherwise wipe and rebuild a multi-hundred-MB toolchain (or, for
+            // Rust, whose `.vendor-version` is always the literal string
+            // "latest" -- see `version_from_file_name` -- silently do nothing
+            // at all, forever) instead of asking the tool to update itself the
+            // way its own maintainers documented. A missing binary (a partial
+            // or pre-native-update install) falls through to the version
+            // check and generic reinstall below, same as before this existed.
+            if let Some(result) = self.try_native_update(vendor, &target_dir) {
+                return result;
+            }
+
             let current = read_version(&target_dir);
 
             // Resolve what upstream currently calls latest -- the same
@@ -502,6 +517,132 @@ impl<'a> UnifiedVendorInstaller<'a> {
         // the pin and rewrites it. Honouring the lock here would make
         // `update-vendors` a no-op on every pinned vendor.
         self.install_vendor_inner(vendor_name, false, false)
+    }
+
+    /// Dispatch to a vendor's own updater by key, when one exists and its
+    /// binary is actually present under `target_dir`. `None` means "no native
+    /// updater for this vendor" (or its binary is missing) -- the caller
+    /// falls through to the generic download-delete-reinstall pipeline.
+    /// `Some(_)` is authoritative either way: on success the generic pipeline
+    /// never runs at all, and on failure the existing install is left alone
+    /// rather than compounding one failure with a full wipe-and-reinstall.
+    fn try_native_update(&self, vendor: &VendorDefinition, target_dir: &Path) -> Option<bool> {
+        if vendor.key.eq_ignore_ascii_case("Rust") {
+            self.rustup_update(target_dir)
+        } else if vendor.key.eq_ignore_ascii_case("Anaconda") {
+            self.conda_update(target_dir)
+        } else if vendor.key.eq_ignore_ascii_case("Bun") {
+            self.bun_upgrade(target_dir)
+        } else if vendor.key.eq_ignore_ascii_case("GitForWindows") {
+            self.git_for_windows_update(target_dir)
+        } else {
+            None
+        }
+    }
+
+    /// `rustup update` -- updates rustup itself and every installed
+    /// toolchain in place. Replaces re-running `rustup-init.exe` from
+    /// scratch, which would tear down `.rustup`/`.cargo` (every installed
+    /// target, component and cached crate) and rebuild just the default
+    /// toolchain, throwing away anything added since.
+    fn rustup_update(&self, target_dir: &Path) -> Option<bool> {
+        let rustup = target_dir.join(".cargo").join("bin").join("rustup.exe");
+        if !rustup.is_file() {
+            return None;
+        }
+        logger::status("  Running 'rustup update'...");
+        let mut command = std::process::Command::new(&rustup);
+        command.arg("update");
+        command.env("RUSTUP_HOME", target_dir.join(".rustup"));
+        command.env("CARGO_HOME", target_dir.join(".cargo"));
+        for (key, value) in archives::home_isolation_envs(&self.naner_root) {
+            command.env(key, value);
+        }
+        let ok = run_and_report(command, "rustup update");
+        if ok {
+            logger::success("  Rust toolchain updated via rustup");
+        }
+        Some(ok)
+    }
+
+    /// `conda update --all -y` -- Anaconda's own package manager updating
+    /// its own packages in place. Replaces re-running the ~1 GB NSIS
+    /// installer from scratch every time the pinned version in
+    /// `vendors.json` moves.
+    fn conda_update(&self, target_dir: &Path) -> Option<bool> {
+        let conda = target_dir.join("Scripts").join("conda.exe");
+        if !conda.is_file() {
+            return None;
+        }
+        logger::status("  Running 'conda update --all' (Anaconda's own updater)...");
+        let mut command = std::process::Command::new(&conda);
+        command.args(["update", "--all", "-y"]);
+        for (key, value) in archives::home_isolation_envs(&self.naner_root) {
+            command.env(key, value);
+        }
+        let ok = run_and_report(command, "conda update --all");
+        if ok {
+            logger::success("  Anaconda packages updated via conda");
+        }
+        Some(ok)
+    }
+
+    /// `bun upgrade` -- Bun's own self-updater, run in place rather than
+    /// downloading and swapping in a fresh GitHub release archive. The
+    /// recorded `.vendor-version` (the GitHub release tag at install time)
+    /// would otherwise go stale the moment this runs, so it is re-read from
+    /// the binary itself and rewritten on success.
+    fn bun_upgrade(&self, target_dir: &Path) -> Option<bool> {
+        let bun = target_dir.join("bun.exe");
+        if !bun.is_file() {
+            return None;
+        }
+        logger::status("  Running 'bun upgrade' (Bun's own self-updater)...");
+        let mut command = std::process::Command::new(&bun);
+        command.arg("upgrade");
+        for (key, value) in archives::home_isolation_envs(&self.naner_root) {
+            command.env(key, value);
+        }
+        let ok = run_and_report(command, "bun upgrade");
+        if ok {
+            logger::success("  Bun updated via 'bun upgrade'");
+            record_version_from_output(&bun, &["--version"], target_dir, |text| {
+                let trimmed = text.trim();
+                (!trimmed.is_empty()).then(|| trimmed.to_string())
+            });
+        }
+        Some(ok)
+    }
+
+    /// `git update-git-for-windows -y` -- the updater Git for Windows bundles
+    /// with every portable install, run in place rather than re-extracting a
+    /// fresh GitHub release archive over it. The recorded `.vendor-version`
+    /// is re-read from `git --version` and rewritten on success, same reason
+    /// as [`Self::bun_upgrade`].
+    fn git_for_windows_update(&self, target_dir: &Path) -> Option<bool> {
+        let git = target_dir.join("cmd").join("git.exe");
+        if !git.is_file() {
+            return None;
+        }
+        logger::status("  Running 'git update-git-for-windows' (its own bundled updater)...");
+        let mut command = std::process::Command::new(&git);
+        command.args(["update-git-for-windows", "-y"]);
+        for (key, value) in archives::home_isolation_envs(&self.naner_root) {
+            command.env(key, value);
+        }
+        let ok = run_and_report(command, "git update-git-for-windows");
+        if ok {
+            logger::success("  Git for Windows updated via its bundled updater");
+            record_version_from_output(&git, &["--version"], target_dir, |text| {
+                // "git version 2.55.0.windows.4" -> "2.55.0.windows.4".
+                text.trim()
+                    .rsplit(' ')
+                    .next()
+                    .filter(|v| !v.is_empty())
+                    .map(str::to_string)
+            });
+        }
+        Some(ok)
     }
 
     /// `InstallAllVendorsAsync` (essential bootstrap path).
@@ -1365,6 +1506,51 @@ fn scrape_match_is_newer(
 /// for comparison, silently lossy for display.
 fn with_v_prefix(version: &str) -> String {
     format!("v{}", version.trim_start_matches(['v', 'V']))
+}
+
+/// Run a native vendor updater and report success/failure the same way
+/// [`UnifiedVendorInstaller::install_package_vendor`] reports an npm/pip
+/// invocation.
+fn run_and_report(mut command: std::process::Command, description: &str) -> bool {
+    match command.status() {
+        Ok(status) if status.success() => true,
+        Ok(status) => {
+            logger::failure(&format!("  {description} failed with {status}"));
+            false
+        }
+        Err(e) => {
+            logger::failure(&format!("  Could not run {description}: {e}"));
+            false
+        }
+    }
+}
+
+/// Re-read a vendor's version straight from its own binary after a native
+/// update, and rewrite `.vendor-version` -- the value recorded at install
+/// time (a GitHub release tag) has no way to know the tool updated itself
+/// outside naner's own download/extract pipeline. Best-effort: unable to run
+/// the binary, a non-UTF8 or unparseable answer, or a failed write all just
+/// leave the previous, now-stale, value in place rather than failing the
+/// update that already succeeded.
+fn record_version_from_output(
+    binary: &Path,
+    args: &[&str],
+    target_dir: &Path,
+    parse: impl FnOnce(&str) -> Option<String>,
+) {
+    let Ok(output) = std::process::Command::new(binary).args(args).output() else {
+        return;
+    };
+    if !output.status.success() {
+        return;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let Some(version) = parse(&text) else {
+        return;
+    };
+    if std::fs::write(target_dir.join(VENDOR_VERSION_FILE), &version).is_err() {
+        logger::debug("Failed to save vendor version", false);
+    }
 }
 
 /// `ExtractVersionFromFileName`: first `(\d+\.?\d*\.?\d*\.?\d*)` match, else
@@ -2808,6 +2994,47 @@ mod tests {
             root.path().join("vendor/powershell/pwsh.exe").is_file(),
             "the existing install must be left in place, not deleted"
         );
+    }
+
+    /// A vendor with no bundled native updater (the common case) must not be
+    /// claimed by the dispatch -- it has to fall through to the generic
+    /// pipeline exercised elsewhere in this file.
+    #[test]
+    fn native_update_dispatch_ignores_vendors_without_one() {
+        let root = tempfile::tempdir().unwrap();
+        let http = StubHttp::default();
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![], &http);
+        let vendor = VendorDefinition {
+            key: "PowerShell".into(),
+            ..Default::default()
+        };
+        assert!(installer.try_native_update(&vendor, root.path()).is_none());
+    }
+
+    /// The reported gap: Rust, Anaconda, Bun and Git for Windows all bundle
+    /// their own real updater, and `update_vendor` must prefer running it
+    /// over the generic delete-and-reinstall pipeline. But a vendor whose
+    /// directory exists without its native updater binary in it -- a partial
+    /// install, or one predating this feature -- must fall through to that
+    /// generic pipeline rather than silently doing nothing.
+    #[test]
+    fn native_update_falls_through_when_the_binary_is_missing() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("empty");
+        std::fs::create_dir_all(&target).unwrap();
+        let http = StubHttp::default();
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![], &http);
+
+        for key in ["Rust", "Anaconda", "Bun", "GitForWindows"] {
+            let vendor = VendorDefinition {
+                key: key.into(),
+                ..Default::default()
+            };
+            assert!(
+                installer.try_native_update(&vendor, &target).is_none(),
+                "{key} claimed a native update despite no updater binary present"
+            );
+        }
     }
 
     /// A vendors.json `checksum` is the operator's explicit assertion and still
