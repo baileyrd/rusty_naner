@@ -452,6 +452,32 @@ impl<'a> UnifiedVendorInstaller<'a> {
 
         if target_dir.is_dir() {
             let current = read_version(&target_dir);
+
+            // Resolve what upstream currently calls latest -- the same
+            // check `naner outdated` does -- and skip the download and
+            // reinstall entirely when the installed version is already
+            // that or newer. `update-vendors` used to delete and redownload
+            // every vendor unconditionally, so re-running it did the full
+            // download-extract-swap cycle even when nothing upstream had
+            // changed. `MsvcBuildTools` has no resolvable "latest" (its
+            // hardcoded payload table *is* the pin) and a resolution
+            // failure leaves this unable to say either way, so both fall
+            // through to the unconditional reinstall that always ran
+            // before this check existed.
+            if let Some(current) = current.as_deref()
+                && !vendor.key.eq_ignore_ascii_case("MsvcBuildTools")
+                && let Ok(Some(info)) = self.resolve_upstream(vendor)
+                && let Some(latest) = info.version.as_deref()
+                && crate::version::vendor_compare(current, latest) != std::cmp::Ordering::Less
+            {
+                logger::info(&format!(
+                    "{} is already up to date ({})",
+                    vendor.name,
+                    with_v_prefix(current)
+                ));
+                return true;
+            }
+
             let suffix = current
                 .as_deref()
                 .map(|v| format!(" ({})", with_v_prefix(v)))
@@ -2744,6 +2770,40 @@ mod tests {
             .expect("re-pinned");
         assert_eq!(entry.version, "v7.5.0");
         assert_eq!(entry.sha256.as_deref(), Some(sha256_of(&payload).as_str()));
+    }
+
+    /// The reported bug: `update-vendors` deleted and redownloaded every
+    /// vendor unconditionally, even when the installed version already
+    /// matched whatever upstream currently calls latest. An update has to
+    /// recognize "nothing to do" and skip the download-and-reinstall cycle
+    /// instead of doing it anyway.
+    #[test]
+    fn update_skips_the_reinstall_when_already_current() {
+        let root = tempfile::tempdir().unwrap();
+        let mut http = StubHttp::default();
+        http.text.insert(
+            "https://api.github.com/repos/PowerShell/PowerShell/releases/latest".into(),
+            (200, RELEASE_JSON.into()),
+        );
+        http.files.insert(
+            "https://gh.example/PowerShell-7.5.0-win-x64.zip".into(),
+            zip_bytes("pwsh.exe", b"fake"),
+        );
+
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
+        assert!(installer.install_vendor("PowerShell"));
+        assert_eq!(http.downloads.get(), 1, "the initial install downloads once");
+
+        assert!(installer.update_vendor("PowerShell"));
+        assert_eq!(
+            http.downloads.get(),
+            1,
+            "update must not re-download when the installed version is already latest"
+        );
+        assert!(
+            root.path().join("vendor/powershell/pwsh.exe").is_file(),
+            "the existing install must be left in place, not deleted"
+        );
     }
 
     /// A vendors.json `checksum` is the operator's explicit assertion and still
