@@ -7,6 +7,46 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.31 — 2026-09-28
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.30...v0.9.31).
+
+Two fixes to `update-vendors`, both found live while dogfooding.
+
+**`update-vendors` no longer reinstalls a vendor already at latest.**
+`update_vendor()` unconditionally deleted and redownloaded every vendor on
+each run, even when the installed `.vendor-version` already matched what
+upstream currently calls latest. It now resolves upstream first — the same
+check `naner outdated` already does — and skips the download/reinstall
+cycle when the installed version is current, logging "already up to date"
+instead. `MsvcBuildTools` (no resolvable "latest") and resolution failures
+fall through to the previous unconditional-reinstall behavior.
+
+**`update-vendors` now uses each tool's own updater where one exists.**
+The generic delete-and-reinstall pipeline never used a vendor's own native
+update mechanism, even for the ones that bundle one: Rust ships rustup,
+Anaconda ships conda, Bun has a self-updater, and Git for Windows bundles
+its own updater. `naner` was instead wiping and rebuilding the whole
+toolchain from scratch — or, since the prior fix in this same release,
+treating Rust's install as permanently "already up to date," since its
+`.vendor-version` is always the literal string `"latest"` and has nothing
+real to compare against. `update_vendor` now tries the vendor's own
+updater first when its binary is present (`rustup update` / `conda update
+--all` / `bun upgrade` / `git update-git-for-windows`), and only falls
+through to the generic pipeline when there's no native updater for that
+vendor or its binary is missing (a partial install, or one that predates
+this).
+
+**Verified**: both changes ship unit tests exercising the new behavior
+(`update_skips_the_reinstall_when_already_current` and the native-updater
+dispatch tests) against CI on both `ubuntu-latest` and `windows-latest`.
+Validation gates in [docs/VALIDATION.md](./docs/VALIDATION.md) were **not**
+re-run this cycle — same disclosure as recent release notes — the sandbox
+this change was authored in has no working MSVC linker, so a real-box pass
+through Step 4's live vendor pipeline (rustup/conda/bun/git installs) is
+outstanding for whoever validates the next tagged release. Nothing else in
+console-attach, PATH-assembly, or the other vendor-pipeline steps changed.
+
 ## v0.9.30 — 2026-09-10
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.29...v0.9.30).
