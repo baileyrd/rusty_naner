@@ -7,6 +7,32 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.32 — 2026-09-28
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.31...v0.9.32).
+
+One fix to the vendor install pipeline, found live installing Anaconda.
+
+**Large vendor installs no longer crawl through a file-by-file copy.**
+Vendors are installed into `vendor/.staging/` and renamed into place. Right
+after a large NSIS install (Anaconda, ~200k files) Defender and the search
+indexer still hold handles inside the staged tree, so the rename failed
+with "Access is denied" and `swap_into_place` silently fell back to a
+recursive copy — about 30 files/sec, over an hour for Anaconda, with no
+message explaining the stall. An interrupted copy left a multi-GB
+`.staging/anaconda` behind and a `vendor/anaconda` with no
+`.vendor-version`. The rename is now retried with backoff on in-use errors
+for up to ~5 minutes (#176, #177), and taking the copy fallback is logged.
+
+**Upgrading with a half-finished Anaconda install**: run
+`naner install Anaconda` after updating. The install clears the stale
+staging tree itself.
+
+**Verified**: installer unit tests on CI (`ubuntu-latest`,
+`windows-latest`). Validation gates in [docs/VALIDATION.md](./docs/VALIDATION.md)
+were **not** re-run this cycle: this environment has no working MSVC
+linker. A real-box Anaconda install on this release is the outstanding check.
+
 ## v0.9.31 — 2026-09-28
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.30...v0.9.31).
