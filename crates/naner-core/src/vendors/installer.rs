@@ -1870,9 +1870,11 @@ fn swap_into_place(staging: &Path, target: &Path) -> std::io::Result<()> {
 /// Defender and the search indexer are still scanning the fresh files, so the
 /// first attempt routinely loses that race — and the copy fallback then
 /// crawls through every file one at a time for over an hour. The locks are
-/// transient, so waiting them out is far cheaper than copying.
+/// transient, so waiting them out is far cheaper than copying — hence a budget
+/// of ~5 minutes: a scan of that many files can outlast one minute, and even
+/// the full wait is a fraction of the copy it avoids.
 fn rename_with_retry(from: &Path, to: &Path) -> std::io::Result<()> {
-    const DELAYS_SECS: [u64; 6] = [1, 2, 4, 8, 15, 30];
+    const DELAYS_SECS: [u64; 10] = [1, 2, 4, 8, 15, 30, 60, 60, 60, 60];
     let mut attempt = 0;
     loop {
         match std::fs::rename(from, to) {
