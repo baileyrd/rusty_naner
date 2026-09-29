@@ -197,6 +197,39 @@ impl<'a> UnifiedVendorInstaller<'a> {
         }
 
         logger::status(&format!("  Installing {}...", vendor.name));
+        let is_binary = vendor.install_type.as_deref() == Some("binary");
+        let seven_zip = self.vendor_dir.join("7zip").join("7z.exe");
+        let extract_to = |dest: &Path| {
+            archives::extract_archive(
+                &download_path,
+                dest,
+                &vendor.name,
+                Some(&seven_zip),
+                vendor.installer_args.as_deref(),
+                &self.naner_root,
+            )
+        };
+
+        // A real `.exe` installer writes its own install location into what
+        // it installs -- Anaconda's constructor rewrites the prefix into
+        // `conda-meta/`, `etc/profile.d/conda.sh`, `qt6.conf` and hundreds of
+        // other files. Staging it and renaming the tree afterwards left every
+        // one of those pointing at `.staging/`, which no longer exists, so it
+        // runs against the final location instead.
+        if !is_binary && is_installer_exe(&download_path) {
+            if let Err(e) = install_in_place(&target_dir, extract_to) {
+                logger::failure(&format!("    Failed to install {}: {e}", vendor.name));
+                return false;
+            }
+            return self.finish_install(
+                vendor,
+                &info,
+                &download_path,
+                &target_dir,
+                pinned.is_some(),
+            );
+        }
+
         let staging_root = self.vendor_dir.join(".staging");
         let staging_target = staging_root.join(&vendor.extract_dir);
         let _ = std::fs::remove_dir_all(&staging_target);
@@ -206,7 +239,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
         // installer to run; running it would launch the tool). `binaryName`
         // names the file users will type; without it the download's own
         // name is kept.
-        let staged = if vendor.install_type.as_deref() == Some("binary") {
+        let staged = if is_binary {
             let placed_name = vendor
                 .binary_name
                 .clone()
@@ -219,15 +252,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
             std::fs::create_dir_all(&staging_target).is_ok()
                 && std::fs::copy(&download_path, staging_target.join(&placed_name)).is_ok()
         } else {
-            let seven_zip = self.vendor_dir.join("7zip").join("7z.exe");
-            archives::extract_archive(
-                &download_path,
-                &staging_target,
-                &vendor.name,
-                Some(&seven_zip),
-                vendor.installer_args.as_deref(),
-                &self.naner_root,
-            )
+            extract_to(&staging_target)
         };
         if !staged {
             logger::warning(&format!("Failed to install {}, skipping...", vendor.name));
@@ -251,10 +276,23 @@ impl<'a> UnifiedVendorInstaller<'a> {
             return false;
         }
 
+        self.finish_install(vendor, &info, &download_path, &target_dir, pinned.is_some())
+    }
+
+    /// Everything after the new tree is in place: post-install configuration,
+    /// `.vendor-version`, and the lock entry.
+    fn finish_install(
+        &self,
+        vendor: &VendorDefinition,
+        info: &VendorDownloadInfo,
+        download_path: &Path,
+        target_dir: &Path,
+        pinned: bool,
+    ) -> bool {
         // Post-install (Windows Terminal portable mode only).
         if is_windows_terminal(&vendor.name)
             && let Err(e) = WindowsTerminalConfigurator::new(&self.naner_root)
-                .configure_portable_mode(&target_dir)
+                .configure_portable_mode(target_dir)
         {
             logger::warning(&format!("    Post-install configuration warning: {e}"));
         }
@@ -266,7 +304,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
             logger::debug("Failed to save vendor version", false);
         }
 
-        self.record_lock_entry(vendor, &info, &download_path, pinned.is_some());
+        self.record_lock_entry(vendor, info, download_path, pinned);
 
         logger::success(&format!("  Installed {}", vendor.name));
         true
@@ -1863,6 +1901,46 @@ fn swap_into_place(staging: &Path, target: &Path) -> std::io::Result<()> {
     }
 }
 
+/// Whether the download is an installer to run rather than an archive to
+/// extract -- the same test `archives::extract_archive` dispatches on.
+fn is_installer_exe(download: &Path) -> bool {
+    download
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("exe"))
+}
+
+/// Run `install` directly against `target`, keeping the previous tree aside
+/// until it succeeds.
+///
+/// For installers that bake their location into the tree, where a staged
+/// install would be renamed out from under its own paths. `target` does not
+/// exist when `install` runs -- Anaconda's installer refuses an existing
+/// directory, even an empty one (see `archives::run_exe_installer`). On
+/// failure the partial tree is removed and the previous one restored.
+fn install_in_place(target: &Path, install: impl FnOnce(&Path) -> bool) -> std::io::Result<()> {
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let backup = with_suffix(target, ".old");
+    let _ = std::fs::remove_dir_all(&backup); // stale one from an interrupted run
+    let had_previous = target.exists();
+    if had_previous {
+        rename_with_retry(target, &backup)?;
+    }
+
+    if install(target) {
+        let _ = std::fs::remove_dir_all(&backup);
+        return Ok(());
+    }
+
+    let _ = std::fs::remove_dir_all(target);
+    if had_previous {
+        let _ = rename_with_retry(&backup, target);
+    }
+    Err(std::io::Error::other("installer did not complete"))
+}
+
 /// `std::fs::rename`, retried while Windows reports the tree as in use.
 ///
 /// A directory rename fails with "Access is denied" while any handle inside
@@ -2767,6 +2845,79 @@ mod tests {
             b"the version that works"
         );
         assert!(!tmp.path().join("vendor/pwsh.old").exists());
+    }
+
+    /// The installer runs against the final path -- what it writes into its
+    /// own files must name where it ends up -- and never finds it pre-existing.
+    #[test]
+    fn install_in_place_runs_against_the_final_path_and_replaces_the_old_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("vendor/anaconda");
+        tree(&target, &[("stale.exe", b"old")]);
+
+        install_in_place(&target, |dest| {
+            assert_eq!(dest, target);
+            assert!(
+                !dest.exists(),
+                "installer must not find its target pre-created"
+            );
+            tree(dest, &[("etc/conda.sh", dest.to_string_lossy().as_bytes())]);
+            true
+        })
+        .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(target.join("etc/conda.sh")).unwrap(),
+            target.to_string_lossy()
+        );
+        assert!(!target.join("stale.exe").exists());
+        assert!(!tmp.path().join("vendor/anaconda.old").exists());
+    }
+
+    #[test]
+    fn a_failed_in_place_install_restores_the_previous_tree() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("vendor/anaconda");
+        tree(&target, &[("python.exe", b"the version that works")]);
+
+        let err = install_in_place(&target, |dest| {
+            tree(dest, &[("half-written", b"x")]);
+            false
+        })
+        .unwrap_err();
+        assert!(err.to_string().contains("installer"), "{err}");
+
+        assert_eq!(
+            std::fs::read(target.join("python.exe")).unwrap(),
+            b"the version that works"
+        );
+        assert!(!target.join("half-written").exists());
+        assert!(!tmp.path().join("vendor/anaconda.old").exists());
+    }
+
+    #[test]
+    fn a_failed_first_install_in_place_leaves_nothing_behind() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("vendor/anaconda");
+
+        install_in_place(&target, |dest| {
+            tree(dest, &[("partial", b"x")]);
+            false
+        })
+        .unwrap_err();
+
+        assert!(!target.exists(), "a partial tree would read as installed");
+    }
+
+    #[test]
+    fn only_exe_downloads_are_installed_in_place() {
+        assert!(is_installer_exe(Path::new(
+            "Anaconda3-2026.07-1-Windows-x86_64.exe"
+        )));
+        assert!(is_installer_exe(Path::new("RUSTUP-INIT.EXE")));
+        assert!(!is_installer_exe(Path::new("node-v24-win-x64.zip")));
+        assert!(!is_installer_exe(Path::new("PowerShell-7.msi")));
+        assert!(!is_installer_exe(Path::new("msys2-base.tar.xz")));
     }
 
     /// Only "something holds a handle" is worth waiting out; a missing source
