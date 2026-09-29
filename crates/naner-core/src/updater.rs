@@ -219,7 +219,26 @@ impl<'a> NanerUpdater<'a> {
             logger::success(&format!("Installed {}", canonical.display()));
         }
 
-        // 3. Pre-single-binary leftovers. Best effort: a locked copy fails
+        // 3. The bootstrap copy at the root -- the naner.exe the user
+        // downloaded and ran `init` from -- when the update runs from
+        // somewhere else. That is the steady state (PATH resolves
+        // vendor/bin), so without this the root copy stayed at whatever
+        // version initialized the tree, and launching it later ran that.
+        // Best effort, like the leftovers below.
+        let bootstrap = self.naner_root.join(constants::executables::NANER);
+        if bootstrap.is_file() && !same_path(&bootstrap, self_path) {
+            if install_copy(&staged, &bootstrap) {
+                logger::success(&format!("Installed {}", bootstrap.display()));
+            } else {
+                logger::warning(&format!(
+                    "Could not refresh {} (in use?) -- it stays at its old version. \
+                     Close it and run 'naner update' again, or delete it.",
+                    bootstrap.display()
+                ));
+            }
+        }
+
+        // 4. Pre-single-binary leftovers. Best effort: a locked copy fails
         // its own refresh, not the update -- but say exactly what it means.
         for legacy in [
             self.vendor_bin_dir.join(constants::executables::NANER_INIT),
@@ -696,6 +715,32 @@ mod tests {
             std::fs::read(vendor_bin.join("naner.exe.old")).unwrap(),
             b"old self"
         );
+        assert!(!vendor_bin.join("naner.exe.staged").exists());
+    }
+
+    /// Running from vendor/bin (the PATH copy) must still refresh the
+    /// bootstrap naner.exe at the root; it used to stay at the version the
+    /// tree was initialized with.
+    #[test]
+    fn updating_from_vendor_bin_refreshes_the_root_bootstrap_copy() {
+        let root = tempfile::tempdir().unwrap();
+        let vendor_bin = root.path().join("vendor/bin");
+        std::fs::create_dir_all(&vendor_bin).unwrap();
+        let self_path = vendor_bin.join(constants::executables::NANER);
+        std::fs::write(&self_path, b"old self").unwrap();
+        let bootstrap = root.path().join(constants::executables::NANER);
+        std::fs::write(&bootstrap, b"the version init ran from").unwrap();
+
+        let api = StubApi {
+            release: Some(exe_release()),
+            asset_bytes: Some(b"new exe".to_vec()),
+            sums: Some(sums_for(constants::executables::NANER, b"new exe")),
+        };
+        let updater = NanerUpdater::new(root.path(), &api);
+        assert!(updater.update_from_release(&exe_release(), &self_path));
+
+        assert_eq!(std::fs::read(&self_path).unwrap(), b"new exe");
+        assert_eq!(std::fs::read(&bootstrap).unwrap(), b"new exe");
         assert!(!vendor_bin.join("naner.exe.staged").exists());
     }
 
