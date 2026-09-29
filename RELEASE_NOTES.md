@@ -7,6 +7,49 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.33 — 2026-09-29
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.32...v0.9.33).
+
+Findings from monitoring a live Anaconda install on v0.9.32.
+
+**`.exe` installers run in place (#179).** Vendors are staged in
+`vendor/.staging/` and renamed into place. That is fine for archives, but a
+real installer writes its own location into what it installs. Anaconda baked
+`.staging/anaconda` into 376 files plus 910 `conda-meta` records, so after the
+rename sourcing `etc/profile.d/conda.sh` failed (`.staging/anaconda/Scripts/conda.exe:
+No such file or directory`) and `qt6.conf` pointed Qt at a missing prefix.
+`.exe` installers now run against `vendor/<name>` directly. The previous tree
+is moved to `<name>.old` and restored if the installer fails.
+
+**Interrupted installs are repaired, and `install --force` exists (#180).** A
+non-empty tree without `.vendor-version` (written last) is an interrupted
+install. `naner install` used to report it installed and skip it forever,
+while `update-vendors` handed Anaconda to `conda update --all`, so no command
+could repair it. `install` now reinstalls such trees (`--list` shows `[!]`),
+and `naner install --force <vendor>` reinstalls over a working one. PATH
+assembly, `doctor` and `outdated` still count any non-empty tree, so older
+installs without the marker keep working.
+
+**Stale Add/Remove Programs entries (#180).** Installer registrations were
+stripped by diffing keys before and after the run. A reinstall rewrites the
+same key name, so the old entry, which pointed at `.staging`, survived. Entries
+whose uninstaller lives in the vendor's own tree or its `.staging` twin are now
+removed on each install of that vendor.
+
+**`--verbose` (#180)** keeps progress output when stdout is redirected, for
+`install`, `update-vendors` and `update`.
+
+**Upgrading**: vendors installed from an `.exe` by an earlier version (Anaconda,
+Zed, Obsidian, Zen) carry paths into `.staging` and stale Add/Remove Programs
+entries. Repair each with `naner install --force <vendor>`.
+
+**Verified**: CI on `ubuntu-latest` and `windows-latest`, and a read-only probe of
+a real registry for the scoped entry match. Validation gates in
+[docs/VALIDATION.md](./docs/VALIDATION.md) were **not** re-run (no working MSVC
+linker in this environment). A live `install --force Anaconda` on this release is
+the outstanding check.
+
 ## v0.9.32 — 2026-09-28
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.31...v0.9.32).
