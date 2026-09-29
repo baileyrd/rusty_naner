@@ -307,6 +307,21 @@ impl VendorConfigurationLoader {
                 .unwrap_or(false)
     }
 
+    /// Installed *and* finished: `.vendor-version` is the last thing an
+    /// install writes, so a non-empty tree without it is one that was
+    /// interrupted (or never completed) and should be reinstalled rather than
+    /// skipped. Only `naner install` asks this; PATH assembly, `doctor` and
+    /// `outdated` keep using `is_vendor_installed`, so a tree from an older
+    /// naner that predates the marker is still found and used.
+    pub fn is_install_complete(&self, vendor: &VendorDefinition) -> bool {
+        self.is_vendor_installed(vendor)
+            && self
+                .vendor_dir
+                .join(&vendor.extract_dir)
+                .join(super::VENDOR_VERSION_FILE)
+                .is_file()
+    }
+
     /// Read a vendor's `.vendor-version` file, if present (used by the
     /// additive `--porcelain` listing).
     pub fn vendor_version(&self, vendor: &VendorDefinition) -> Option<String> {
@@ -820,6 +835,20 @@ mod tests {
 
         std::fs::write(tmp.path().join("vendor/ruby/ruby.exe"), "x").unwrap();
         assert!(loader.is_vendor_installed(&ruby));
+    }
+
+    #[test]
+    fn complete_means_the_version_marker_was_written() {
+        let (tmp, loader) = loader_with(Some(SAMPLE));
+        let ruby = loader.vendor_by_key("Ruby").unwrap();
+
+        std::fs::create_dir_all(tmp.path().join("vendor/ruby")).unwrap();
+        std::fs::write(tmp.path().join("vendor/ruby/ruby.exe"), "x").unwrap();
+        assert!(loader.is_vendor_installed(&ruby));
+        assert!(!loader.is_install_complete(&ruby), "interrupted install");
+
+        std::fs::write(tmp.path().join("vendor/ruby/.vendor-version"), "3.4.1").unwrap();
+        assert!(loader.is_install_complete(&ruby));
     }
 
     #[test]

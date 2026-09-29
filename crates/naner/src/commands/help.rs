@@ -18,6 +18,7 @@ pub fn execute() -> i32 {
     println!("    install --list           List available vendors and status");
     println!("    install --all            Install all optional vendors");
     println!("    install <vendor> [...]   Install specific vendor(s)");
+    println!("    install --force <vendor> Reinstall, repairing a broken install");
     println!("  init                       Initialize Naner in this folder (download from GitHub)");
     println!("  update                     Update Naner itself to the latest release");
     println!("  check-update               Check whether a newer release exists");

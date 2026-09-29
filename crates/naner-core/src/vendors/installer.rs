@@ -68,6 +68,14 @@ impl<'a> UnifiedVendorInstaller<'a> {
         self.install_vendor_inner(vendor_name, true, true)
     }
 
+    /// `naner install --force`: install over whatever is there, complete or
+    /// not. Unlike `update_vendor` this keeps the pinned artifact and never
+    /// hands off to the tool's own updater -- it is the way to repair a broken
+    /// tree, which `conda update --all` running inside that tree cannot be.
+    pub fn reinstall_vendor(&self, vendor_name: &str) -> bool {
+        self.install_vendor_inner(vendor_name, false, true)
+    }
+
     fn install_vendor_inner(
         &self,
         vendor_name: &str,
@@ -82,8 +90,16 @@ impl<'a> UnifiedVendorInstaller<'a> {
         let target_dir = self.vendor_dir.join(&vendor.extract_dir);
 
         if skip_if_exists && dir_is_nonempty(&target_dir) {
-            logger::info(&format!("Skipping {} (already installed)", vendor.name));
-            return true;
+            // `.vendor-version` is written last, so a tree without it was
+            // interrupted -- skipping it would leave it broken for good.
+            if target_dir.join(VENDOR_VERSION_FILE).is_file() {
+                logger::info(&format!("Skipping {} (already installed)", vendor.name));
+                return true;
+            }
+            logger::warning(&format!(
+                "{} looks incomplete (no {VENDOR_VERSION_FILE}); reinstalling",
+                vendor.name
+            ));
         }
 
         // MsvcBuildTools has no single artifact to resolve/download/extract
