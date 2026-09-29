@@ -7,6 +7,34 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.34 — 2026-09-29
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.33...v0.9.34).
+
+Two follow-ups from verifying v0.9.33 (#182).
+
+**`naner update > NUL` works.** `echo y | naner update > /dev/null` exited
+without updating and printed nothing. `NUL` is a character device just like a
+console, so naner did not treat stdout as redirected: it attached to the
+parent console and re-opened itself in a new console window to ask "Update
+now?", where the piped `y` never arrived. A character device now counts as a
+console only if it answers `GetConsoleMode`, which is the same test Rust's
+`IsTerminal` and naner's auto-quiet already use. Every command run with
+stdout on `NUL` now takes the redirected path, as a pipe or file always did.
+
+**Reinstalls clean up their Start Menu entry.** Installer-created Start Menu
+entries were stripped by diffing before and after the run, so a reinstall,
+which rewrites the folder the last install left, kept it. An existing entry is
+now removed when this run rewrote it **and** every shortcut in it targets the
+vendor's own tree (or its old `.staging` twin). A user's own shortcut or
+another app's is left alone.
+
+**Verified**: CI on `ubuntu-latest` and `windows-latest`, a Windows test on a
+real `NUL` handle, and a read-only probe of a real Start Menu (matches only the
+reinstalled vendor's folder). Validation gates in
+[docs/VALIDATION.md](./docs/VALIDATION.md) were **not** re-run (no working MSVC
+linker in this environment).
+
 ## v0.9.33 — 2026-09-29
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.32...v0.9.33).
