@@ -488,6 +488,7 @@ fn run_exe_installer(
     // have self-registered before it errored out).
     let registry_before = os_registration::uninstall_keys();
     let start_menu_before = os_registration::start_menu_entries();
+    let run_started = std::time::SystemTime::now();
 
     let result = match command.output() {
         Ok(out) if out.status.success() => true,
@@ -523,15 +524,88 @@ fn run_exe_installer(
             os_registration::delete_uninstall_key(&key);
         }
     }
-    for entry in os_registration::start_menu_entries().difference(&start_menu_before) {
-        let _ = if entry.is_dir() {
-            std::fs::remove_dir_all(entry)
-        } else {
-            std::fs::remove_file(entry)
-        };
+    // Same gap for the Start Menu: a reinstall rewrites the shortcut folder
+    // the previous install left, so the diff alone keeps it. A pre-existing
+    // entry goes only when this run rewrote it *and* every shortcut in it
+    // points into this vendor's tree; a user's own shortcut, or another
+    // app's, is never touched.
+    for entry in os_registration::start_menu_entries() {
+        let added = !start_menu_before.contains(&entry);
+        if added || (touched_since(&entry, run_started) && shortcuts_all_point_into(&entry, &owned))
+        {
+            let _ = if entry.is_dir() {
+                std::fs::remove_dir_all(&entry)
+            } else {
+                std::fs::remove_file(&entry)
+            };
+        }
     }
 
     result
+}
+
+/// `.lnk` files making up a Start Menu entry: the entry itself, or every one
+/// inside it when it is a folder.
+fn shortcut_files(entry: &Path) -> Vec<PathBuf> {
+    if !entry.is_dir() {
+        let is_lnk = entry
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("lnk"));
+        return if is_lnk {
+            vec![entry.to_path_buf()]
+        } else {
+            Vec::new()
+        };
+    }
+    std::fs::read_dir(entry)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .flat_map(|e| shortcut_files(&e.path()))
+        .collect()
+}
+
+/// Whether the entry, or a shortcut in it, was written at or after `since`
+/// (less a little slack for filesystem timestamp granularity).
+fn touched_since(entry: &Path, since: std::time::SystemTime) -> bool {
+    let since = since
+        .checked_sub(std::time::Duration::from_secs(2))
+        .unwrap_or(since);
+    let recent = |p: &Path| {
+        p.metadata()
+            .and_then(|m| m.modified())
+            .is_ok_and(|t| t >= since)
+    };
+    recent(entry) || shortcut_files(entry).iter().any(|l| recent(l))
+}
+
+/// Whether the entry holds at least one shortcut and every one of them
+/// targets a path under one of `dirs`.
+fn shortcuts_all_point_into(entry: &Path, dirs: &[PathBuf]) -> bool {
+    let links = shortcut_files(entry);
+    !links.is_empty()
+        && links.iter().all(|l| {
+            std::fs::read(l).is_ok_and(|bytes| dirs.iter().any(|d| lnk_references(&bytes, d)))
+        })
+}
+
+/// Whether a `.lnk` file's bytes name a path under `dir`. A shell link stores
+/// its target both as ANSI (`LocalBasePath`) and UTF-16LE (relative path,
+/// working directory), so either encoding counts. Compared case-insensitively
+/// as Windows paths are; reading the bytes avoids a COM `IShellLink` round
+/// trip for what is only a containment check.
+fn lnk_references(bytes: &[u8], dir: &Path) -> bool {
+    let needle = format!(
+        r"{}\",
+        dir.to_string_lossy()
+            .replace('/', r"\")
+            .trim_end_matches('\\')
+    )
+    .to_lowercase();
+    let haystack: Vec<u8> = bytes.iter().map(u8::to_ascii_lowercase).collect();
+    let wide: Vec<u8> = needle.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let contains = |n: &[u8]| haystack.windows(n.len()).any(|w| w == n);
+    contains(needle.as_bytes()) || contains(&wide)
 }
 
 /// OS-level state a real installer `.exe` can register outside the vendor's
@@ -772,6 +846,85 @@ fn build_installer_arguments(
 
 #[cfg(test)]
 mod tests {
+    /// Bytes shaped like a `.lnk`: binary header, the target as ANSI and as
+    /// UTF-16LE, binary trailer.
+    fn fake_lnk(target: &str) -> Vec<u8> {
+        let mut b = vec![0x4c, 0, 0, 0, 0x01, 0x14, 0x02, 0];
+        b.extend_from_slice(target.as_bytes());
+        b.push(0);
+        b.extend(target.encode_utf16().flat_map(u16::to_le_bytes));
+        b.extend_from_slice(&[0, 0, 0xff, 0x7f]);
+        b
+    }
+
+    #[test]
+    fn a_shortcut_into_the_vendor_tree_is_recognised_in_either_encoding() {
+        let zed = std::path::Path::new(r"C:\tools\naner\vendor\zed");
+        assert!(super::lnk_references(
+            &fake_lnk(r"C:\tools\naner\vendor\zed\Zed.exe"),
+            zed
+        ));
+
+        let wide_only: Vec<u8> = r"C:\TOOLS\NANER\VENDOR\ZED\Zed.exe"
+            .encode_utf16()
+            .flat_map(u16::to_le_bytes)
+            .collect();
+        assert!(
+            super::lnk_references(&wide_only, zed),
+            "case-insensitive UTF-16LE"
+        );
+
+        // A sibling whose name merely starts the same is not inside `zed\`.
+        assert!(!super::lnk_references(
+            &fake_lnk(r"C:\tools\naner\vendor\zed-nightly\z.exe"),
+            zed
+        ));
+        assert!(!super::lnk_references(
+            &fake_lnk(r"C:\Program Files\Zed\Zed.exe"),
+            zed
+        ));
+    }
+
+    #[test]
+    fn a_start_menu_folder_is_owned_only_when_every_shortcut_points_into_the_vendor() {
+        let tmp = tempfile::tempdir().unwrap();
+        let vendor = tmp.path().join("vendor").join("zed");
+        // Shortcuts store Windows paths; normalize so this also holds on Linux CI.
+        let target = |f: &str| vendor.join(f).to_string_lossy().replace('/', r"\");
+        let owned = [vendor.clone()];
+
+        let folder = tmp.path().join("Programs/Zed");
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::write(folder.join("Zed.lnk"), fake_lnk(&target("Zed.exe"))).unwrap();
+        assert!(super::shortcuts_all_point_into(&folder, &owned));
+
+        // One shortcut elsewhere (the user's, another app's) keeps the folder.
+        std::fs::write(folder.join("Mine.lnk"), fake_lnk(r"C:\Users\me\notes.exe")).unwrap();
+        assert!(!super::shortcuts_all_point_into(&folder, &owned));
+
+        // No shortcuts at all is not evidence of ownership.
+        let empty = tmp.path().join("Programs/Empty");
+        std::fs::create_dir_all(&empty).unwrap();
+        assert!(!super::shortcuts_all_point_into(&empty, &owned));
+
+        // A top-level shortcut on its own counts too.
+        let lone = tmp.path().join("Programs/Zed.lnk");
+        std::fs::write(&lone, fake_lnk(&target("Zed.exe"))).unwrap();
+        assert!(super::shortcuts_all_point_into(&lone, &owned));
+    }
+
+    #[test]
+    fn only_entries_written_during_the_run_count_as_touched() {
+        let tmp = tempfile::tempdir().unwrap();
+        let lnk = tmp.path().join("Zed.lnk");
+        std::fs::write(&lnk, b"x").unwrap();
+        let now = std::time::SystemTime::now();
+        assert!(super::touched_since(&lnk, now));
+
+        let later = now + std::time::Duration::from_secs(60);
+        assert!(!super::touched_since(&lnk, later));
+    }
+
     #[test]
     fn uninstaller_under_the_vendor_tree_is_recognised() {
         let vendor = std::path::Path::new(r"C:\tools\naner\vendor");

@@ -214,16 +214,28 @@ mod imp {
     }
 
     /// Port of the C# `IsStdoutCaptured`: stdout is "captured" when it is a
-    /// valid handle to something that is not a character device — i.e. a pipe
-    /// or a file. No handle at all (GUI launch) is *not* captured.
+    /// valid handle to something that is not a console — a pipe, a file, or
+    /// `NUL`. No handle at all (GUI launch) is *not* captured.
     pub fn is_stdout_captured() -> bool {
-        match std_handle(STD_OUTPUT_HANDLE) {
-            None => false,
-            // SAFETY: `h` was just validated as a live handle.
-            Some(h) => {
-                let ft = unsafe { GetFileType(h) };
-                ft != FILE_TYPE_CHAR && ft != FILE_TYPE_UNKNOWN
+        std_handle(STD_OUTPUT_HANDLE).is_some_and(handle_is_captured)
+    }
+
+    /// `NUL` is a character device just like a console, so the file type
+    /// alone read `naner update > NUL` (Git Bash's `> /dev/null`) as
+    /// interactive: `setup` attached to the parent console and the update
+    /// re-opened itself in a new window to prompt, where the piped `y` never
+    /// arrived -- the update silently did nothing. A character device is a
+    /// console only if it answers `GetConsoleMode`, the same test Rust's
+    /// `IsTerminal` (and so the auto-quiet in `strip_quiet`) already uses.
+    fn handle_is_captured(h: HANDLE) -> bool {
+        // SAFETY: `h` is a live handle; `mode` is a valid out-pointer.
+        match unsafe { GetFileType(h) } {
+            FILE_TYPE_UNKNOWN => false,
+            FILE_TYPE_CHAR => {
+                let mut mode = 0u32;
+                unsafe { GetConsoleMode(h, &mut mode) == 0 }
             }
+            _ => true,
         }
     }
 
@@ -534,6 +546,23 @@ mod imp {
         // reported before this function changed it.
         unsafe { SetConsoleMode(h, mode) };
         result.map(|()| line)
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use std::os::windows::io::AsRawHandle;
+
+        #[test]
+        fn nul_and_files_count_as_captured() {
+            let nul = std::fs::OpenOptions::new().write(true).open("NUL").unwrap();
+            assert!(
+                super::handle_is_captured(nul.as_raw_handle()),
+                "NUL is a redirect"
+            );
+
+            let tmp = tempfile::tempfile().unwrap();
+            assert!(super::handle_is_captured(tmp.as_raw_handle()));
+        }
     }
 }
 
