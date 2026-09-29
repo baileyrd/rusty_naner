@@ -889,7 +889,8 @@ mod tests {
     fn a_start_menu_folder_is_owned_only_when_every_shortcut_points_into_the_vendor() {
         let tmp = tempfile::tempdir().unwrap();
         let vendor = tmp.path().join("vendor").join("zed");
-        let target = |f: &str| vendor.join(f).to_string_lossy().into_owned();
+        // Shortcuts store Windows paths; normalize so this also holds on Linux CI.
+        let target = |f: &str| vendor.join(f).to_string_lossy().replace('/', r"\");
         let owned = [vendor.clone()];
 
         let folder = tmp.path().join("Programs/Zed");
