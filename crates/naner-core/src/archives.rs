@@ -507,6 +507,22 @@ fn run_exe_installer(
     for key in os_registration::uninstall_keys().difference(&registry_before) {
         os_registration::delete_uninstall_key(key);
     }
+    // The diff misses a reinstall: the installer rewrites the key the previous
+    // install left (same name), so it was already in `registry_before`. An
+    // entry whose uninstaller lives in this vendor's own tree -- or in the
+    // `.staging` twin older naner versions ran installers in, a path that no
+    // longer exists -- is this vendor's leftover, whenever it appeared.
+    // Scoped to this vendor: other vendors' entries are left to their own
+    // reinstall.
+    let mut owned = vec![target_dir.to_path_buf()];
+    if let (Some(vendor_root), Some(name)) = (target_dir.parent(), target_dir.file_name()) {
+        owned.push(vendor_root.join(".staging").join(name));
+    }
+    for dir in &owned {
+        for key in os_registration::uninstall_keys_under(dir) {
+            os_registration::delete_uninstall_key(&key);
+        }
+    }
     for entry in os_registration::start_menu_entries().difference(&start_menu_before) {
         let _ = if entry.is_dir() {
             std::fs::remove_dir_all(entry)
@@ -534,8 +550,8 @@ mod os_registration {
 
     use windows_sys::Win32::Foundation::{ERROR_NO_MORE_ITEMS, ERROR_SUCCESS};
     use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, KEY_ALL_ACCESS, KEY_ENUMERATE_SUB_KEYS, RegCloseKey,
-        RegDeleteKeyW, RegEnumKeyExW, RegOpenKeyExW,
+        HKEY, HKEY_CURRENT_USER, KEY_ALL_ACCESS, KEY_ENUMERATE_SUB_KEYS, RRF_RT_REG_EXPAND_SZ,
+        RRF_RT_REG_SZ, RegCloseKey, RegDeleteKeyW, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW,
     };
 
     use crate::logger;
@@ -604,6 +620,41 @@ mod os_registration {
         names
     }
 
+    /// One string value of an Add/Remove Programs entry, if present.
+    fn uninstall_value(name: &str, value: &str) -> Option<String> {
+        let subkey = wide(&format!(r"{UNINSTALL_KEY}\{name}"));
+        let value = wide(value);
+        let mut buf = [0u16; 1024];
+        let mut bytes = std::mem::size_of_val(&buf) as u32;
+        let rc = unsafe {
+            RegGetValueW(
+                HKEY_CURRENT_USER,
+                subkey.as_ptr(),
+                value.as_ptr(),
+                RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ,
+                std::ptr::null_mut(),
+                buf.as_mut_ptr().cast(),
+                &mut bytes,
+            )
+        };
+        if rc != ERROR_SUCCESS {
+            return None;
+        }
+        let len = (bytes as usize / 2).saturating_sub(1); // drop the NUL
+        Some(String::from_utf16_lossy(&buf[..len]))
+    }
+
+    /// Add/Remove Programs entries whose uninstaller lives under `dir`.
+    pub(super) fn uninstall_keys_under(dir: &Path) -> Vec<String> {
+        uninstall_keys()
+            .into_iter()
+            .filter(|name| {
+                uninstall_value(name, "UninstallString")
+                    .is_some_and(|cmd| super::uninstaller_is_under(&cmd, dir))
+            })
+            .collect()
+    }
+
     /// Delete one Add/Remove Programs subkey by name. Best-effort, and safe
     /// to call on a name that no longer exists. These entries carry no
     /// subkeys of their own (only values), so a plain `RegDeleteKeyW` --
@@ -635,6 +686,24 @@ mod os_registration {
     }
 }
 
+/// Whether an Add/Remove Programs `UninstallString` runs an uninstaller
+/// inside `dir`. The value is a command line -- usually a quoted path, maybe
+/// with arguments -- so this compares its leading executable path,
+/// case-insensitively and with either slash style, as Windows would.
+///
+/// Outside `os_registration` so its tests run on every platform.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn uninstaller_is_under(uninstall_string: &str, dir: &Path) -> bool {
+    let command = uninstall_string.trim();
+    let exe = match command.strip_prefix('"') {
+        Some(rest) => rest.split('"').next().unwrap_or(""),
+        None => command.split(' ').next().unwrap_or(""),
+    };
+    let normalize = |s: &str| s.replace('/', r"\").trim_end_matches('\\').to_lowercase();
+    let dir = normalize(&dir.to_string_lossy());
+    !dir.is_empty() && normalize(exe).starts_with(&format!(r"{dir}\"))
+}
+
 /// Non-Windows builds (Linux CI) never spawn a real installer `.exe`; every
 /// helper is a no-op so call sites need no `#[cfg(windows)]` of their own.
 #[cfg(not(windows))]
@@ -646,6 +715,9 @@ mod os_registration {
         HashSet::new()
     }
     pub(super) fn delete_uninstall_key(_name: &str) {}
+    pub(super) fn uninstall_keys_under(_dir: &std::path::Path) -> Vec<String> {
+        Vec::new()
+    }
     pub(super) fn start_menu_entries() -> HashSet<PathBuf> {
         HashSet::new()
     }
@@ -700,6 +772,26 @@ fn build_installer_arguments(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn uninstaller_under_the_vendor_tree_is_recognised() {
+        let vendor = std::path::Path::new(r"C:\tools\naner\vendor");
+        for owned in [
+            r#""C:\tools\naner\vendor\.staging\anaconda\Uninstall-Anaconda3.exe""#,
+            r#""c:/tools/naner/vendor/anaconda/Uninstall-Anaconda3.exe" /S"#,
+            r"C:\TOOLS\NANER\VENDOR\rust\uninstall.exe",
+        ] {
+            assert!(super::uninstaller_is_under(owned, vendor), "{owned}");
+        }
+        for foreign in [
+            r#""C:\Program Files\Git\unins000.exe""#,
+            r#""C:\tools\naner\vendor-other\x\u.exe""#, // sibling prefix, not a child
+            r"C:\tools\naner\vendor",                   // the dir itself
+            "",
+        ] {
+            assert!(!super::uninstaller_is_under(foreign, vendor), "{foreign}");
+        }
+    }
+
     use super::*;
     use std::io::Write;
 

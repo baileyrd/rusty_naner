@@ -15,6 +15,8 @@ const LIST_FLAG: &str = "--list";
 const ALL_FLAG: &str = "--all";
 const PORCELAIN_FLAG: &str = "--porcelain";
 const QUIET_FLAG: &str = "--quiet";
+const VERBOSE_FLAG: &str = "--verbose";
+const FORCE_FLAG: &str = "--force";
 
 /// `naner install ...`
 pub fn execute_install(args: &[String]) -> i32 {
@@ -44,7 +46,19 @@ pub fn execute_install(args: &[String]) -> i32 {
             show_install_help(&optional);
             0
         }
-        _ => install_specific(&naner_root, &loader, all_vendors, &args),
+        _ => {
+            let force = args.iter().any(|a| a.eq_ignore_ascii_case(FORCE_FLAG));
+            let names: Vec<String> = args
+                .iter()
+                .filter(|a| !a.eq_ignore_ascii_case(FORCE_FLAG))
+                .cloned()
+                .collect();
+            if names.is_empty() {
+                logger::failure("--force needs at least one vendor name");
+                return 1;
+            }
+            install_specific(&naner_root, &loader, all_vendors, &names, force)
+        }
     }
 }
 
@@ -265,11 +279,15 @@ pub(crate) fn strip_quiet(args: &[String]) -> (Vec<String>, bool) {
     // terminal; a redirected stdout suppresses the [*]/[OK]/info chatter on
     // its own. Failures and stderr warnings are unaffected, and porcelain
     // output prints directly (not via the logger).
-    let quiet = args.iter().any(|a| a.eq_ignore_ascii_case(QUIET_FLAG))
-        || !std::io::IsTerminal::is_terminal(&std::io::stdout());
+    // `--verbose` opts back out of the pipeline default, so a long install
+    // logged to a file (`naner install anaconda > install.log`) records its
+    // progress instead of only a header and any failures.
+    let has = |flag: &str| args.iter().any(|a| a.eq_ignore_ascii_case(flag));
+    let quiet = has(QUIET_FLAG)
+        || (!has(VERBOSE_FLAG) && !std::io::IsTerminal::is_terminal(&std::io::stdout()));
     let rest = args
         .iter()
-        .filter(|a| !a.eq_ignore_ascii_case(QUIET_FLAG))
+        .filter(|a| !a.eq_ignore_ascii_case(QUIET_FLAG) && !a.eq_ignore_ascii_case(VERBOSE_FLAG))
         .cloned()
         .collect();
     (rest, quiet)
@@ -338,8 +356,10 @@ fn show_vendor_list(
         for vendor in vendors {
             let (status, color) = if !vendor.enabled {
                 ("[--]", "90")
-            } else if loader.is_vendor_installed(vendor) {
+            } else if loader.is_install_complete(vendor) {
                 ("[OK]", "92")
+            } else if loader.is_vendor_installed(vendor) {
+                ("[!]", "93")
             } else {
                 ("[ ]", "37")
             };
@@ -362,6 +382,12 @@ fn show_vendor_list(
 
     if all_vendors.iter().any(|v| !v.enabled) {
         println!("[--] is disabled in vendors.json - set \"enabled\": true to install it.");
+    }
+    if all_vendors
+        .iter()
+        .any(|v| v.enabled && loader.is_vendor_installed(v) && !loader.is_install_complete(v))
+    {
+        println!("[!] looks incomplete (interrupted install) - 'naner install <name>' repairs it.");
     }
     println!("Use 'naner install <name>' to install a vendor.");
     println!("Use 'naner install --all' to install all optional vendors.");
@@ -396,7 +422,7 @@ fn install_all_optional(
     let installer = UnifiedVendorInstaller::new(naner_root, all_vendors, &http);
     let mut failed = 0;
     for vendor in &to_install {
-        if !install_with_dependencies(&installer, loader, vendor) {
+        if !install_with_dependencies(&installer, loader, vendor, false) {
             failed += 1;
         }
         logger::newline();
@@ -435,6 +461,7 @@ fn install_specific(
     loader: &VendorConfigurationLoader,
     all_vendors: Vec<VendorDefinition>,
     vendor_names: &[String],
+    force: bool,
 ) -> i32 {
     let mut to_install: Vec<VendorDefinition> = Vec::new();
     let mut not_found: Vec<&String> = Vec::new();
@@ -470,9 +497,12 @@ fn install_specific(
         logger::newline();
     }
 
+    // Complete installs are skipped unless forced. A tree without
+    // `.vendor-version` was interrupted, so it goes back through the
+    // installer (which says so) instead of being reported as installed.
     let (already, needs): (Vec<_>, Vec<_>) = to_install
         .into_iter()
-        .partition(|v| loader.is_vendor_installed(v));
+        .partition(|v| !force && loader.is_install_complete(v));
 
     for vendor in &already {
         logger::info(&format!("{} is already installed", vendor.name));
@@ -495,7 +525,7 @@ fn install_specific(
     let installer = UnifiedVendorInstaller::new(naner_root, all_vendors, &http);
     let mut install_failed = 0;
     for vendor in &needs {
-        if !install_with_dependencies(&installer, loader, vendor) {
+        if !install_with_dependencies(&installer, loader, vendor, force) {
             install_failed += 1;
         }
         logger::newline();
@@ -527,6 +557,7 @@ fn install_with_dependencies(
     installer: &UnifiedVendorInstaller,
     loader: &VendorConfigurationLoader,
     vendor: &VendorDefinition,
+    force: bool,
 ) -> bool {
     // Dependencies install regardless of `enabled`: they were not chosen from
     // a menu, they are needed by something the user did choose, and failing the
@@ -542,7 +573,13 @@ fn install_with_dependencies(
             }
         }
     }
-    installer.install_vendor(&vendor.name)
+    // `--force` applies to what was named, not to its dependencies: a
+    // working Git should not be torn down to repair something that needs it.
+    if force {
+        installer.reinstall_vendor(&vendor.name)
+    } else {
+        installer.install_vendor(&vendor.name)
+    }
 }
 
 /// `ShowInstallHelp`.
@@ -558,7 +595,9 @@ fn show_install_help(optional: &[&VendorDefinition]) {
     println!("  --list                     List available vendors and status");
     println!("  --list --porcelain         Machine-readable list (name<TAB>status<TAB>version)");
     println!("  --all                      Install all optional vendors");
+    println!("  --force                    Reinstall even if already installed");
     println!("  --quiet                    Suppress progress chatter");
+    println!("  --verbose                  Keep progress output when redirected to a file");
     logger::newline();
 
     println!("EXAMPLES:");
@@ -566,6 +605,7 @@ fn show_install_help(optional: &[&VendorDefinition]) {
     println!("  naner install ruby         # Install Ruby");
     println!("  naner install nodejs go    # Install Node.js and Go");
     println!("  naner install --all        # Install all optional vendors");
+    println!("  naner install --force anaconda  # Repair a broken Anaconda");
     logger::newline();
 
     // Rendered from the loaded definitions rather than a literal. The literal
@@ -661,6 +701,7 @@ mod tests {
         .unwrap();
         std::fs::create_dir_all(dir.path().join("vendor/testvendor")).unwrap();
         std::fs::write(dir.path().join("vendor/testvendor/marker"), "x").unwrap();
+        std::fs::write(dir.path().join("vendor/testvendor/.vendor-version"), "1.0").unwrap();
 
         let loader = VendorConfigurationLoader::new(dir.path());
         let all_vendors = loader.load_vendors();
@@ -669,8 +710,31 @@ mod tests {
             &loader,
             all_vendors,
             &["TestVendor".to_string(), "TestDisabled".to_string()],
+            false,
         );
         assert_eq!(code, 1, "one of the two requested vendors was refused");
+    }
+
+    /// Under `cargo test` stdout is captured, i.e. exactly the redirected
+    /// case auto-quiet exists for.
+    #[test]
+    fn verbose_keeps_progress_when_redirected_and_quiet_still_wins() {
+        let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+
+        assert!(
+            super::strip_quiet(&args(&["anaconda"])).1,
+            "redirected defaults to quiet"
+        );
+
+        let (rest, quiet) = super::strip_quiet(&args(&["--verbose", "anaconda"]));
+        assert!(!quiet);
+        assert_eq!(
+            rest,
+            args(&["anaconda"]),
+            "flag is consumed, not a vendor name"
+        );
+
+        assert!(super::strip_quiet(&args(&["--quiet", "--VERBOSE"])).1);
     }
 
     #[test]
