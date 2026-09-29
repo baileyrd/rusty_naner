@@ -1,5 +1,23 @@
 ## [Unreleased]
 
+## [0.9.33] - 2026-09-29
+### Fixed
+- `.exe` installer vendors (Anaconda, rustup, Zed, Obsidian, Zen) now run
+  against the final `vendor/<name>` path instead of `vendor/.staging/`.
+  Installers that write their own location into the tree (Anaconda's
+  `conda.sh`, `qt6.conf`, `conda-meta/`) were left pointing at a staging
+  path that no longer existed. The previous tree is restored if the
+  installer fails.
+- `naner install` reinstalls a vendor tree that has no `.vendor-version`
+  (an interrupted install) instead of reporting it already installed;
+  `install --list` marks it `[!]`.
+- Add/Remove Programs entries whose uninstaller lives in the vendor's own
+  tree or its old `.staging` twin are removed on reinstall, not only
+  entries new in that run.
+### Added
+- `naner install --force <vendor>` reinstalls over an existing install.
+- `--verbose` keeps progress output when stdout is redirected.
+
 ## [0.9.32] - 2026-09-28
 ### Fixed
 - Vendor installs no longer fall back to an hour-long file-by-file copy
