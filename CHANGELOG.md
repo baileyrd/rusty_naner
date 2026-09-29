@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+## [0.9.34] - 2026-09-29
+### Fixed
+- `naner update` with stdout redirected to `NUL` (Git Bash `> /dev/null`)
+  silently did nothing: `NUL` was mistaken for a console, so the update
+  re-opened itself in a new window to prompt and piped input never reached
+  it. A character device now counts as a console only if it answers
+  `GetConsoleMode`.
+- A reinstall no longer leaves the Start Menu entry the previous install
+  created. An existing entry is removed when the run rewrote it and every
+  shortcut in it targets that vendor's tree; other shortcuts are untouched.
+
 ## [0.9.33] - 2026-09-29
 ### Fixed
 - `.exe` installer vendors (Anaconda, rustup, Zed, Obsidian, Zen) now run
