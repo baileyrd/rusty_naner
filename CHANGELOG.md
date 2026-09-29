@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.9.35] - 2026-09-29
+### Fixed
+- `naner update` now refreshes the root `naner.exe` (the bootstrap copy
+  `naner init` ran from) when the update runs from `vendor/bin/`. It used
+  to stay at the version that initialized the tree.
+
 ## [0.9.34] - 2026-09-29
 ### Fixed
 - `naner update` with stdout redirected to `NUL` (Git Bash `> /dev/null`)
