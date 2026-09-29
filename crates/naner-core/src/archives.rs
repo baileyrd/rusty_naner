@@ -690,6 +690,9 @@ mod os_registration {
 /// inside `dir`. The value is a command line -- usually a quoted path, maybe
 /// with arguments -- so this compares its leading executable path,
 /// case-insensitively and with either slash style, as Windows would.
+///
+/// Outside `os_registration` so its tests run on every platform.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn uninstaller_is_under(uninstall_string: &str, dir: &Path) -> bool {
     let command = uninstall_string.trim();
     let exe = match command.strip_prefix('"') {
