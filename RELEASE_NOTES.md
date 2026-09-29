@@ -7,6 +7,29 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.35 — 2026-09-29
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.34...v0.9.35).
+
+**`naner update` refreshes the root bootstrap copy (#184).** The updater
+replaced the running binary, `vendor/bin/naner.exe`, and any `naner-init.exe`
+leftovers, but replaced `<root>/naner.exe`, the copy a user downloads and
+runs `naner init` from, only when that was the running binary. Updates
+normally run from `vendor/bin` (it is what PATH resolves), so the root copy
+stayed at the version that initialized the tree. On the dev box it was still
+v0.9.23 after updating to v0.9.34. It is now refreshed as a best-effort step,
+with a warning if it cannot be (for example, while it is running).
+
+**Upgrading**: this only takes effect from an update run by v0.9.35 or later,
+so an existing stale root copy is refreshed on the update *to* the release
+after this one. To fix it now, copy `vendorin
+aner.exe` over it.
+
+**Verified**: CI on `ubuntu-latest` and `windows-latest`, and a regression test
+that fails without the fix. Validation gates in
+[docs/VALIDATION.md](./docs/VALIDATION.md) were **not** re-run (no working MSVC
+linker in this environment).
+
 ## v0.9.34 — 2026-09-29
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.33...v0.9.34).
