@@ -184,6 +184,14 @@ fn ask(can_close: bool) -> Choice {
     };
     print!("  {options} (default: skip): ");
     let _ = std::io::stdout().flush();
+    // Same sequence `naner update`'s prompt needed: a plain `stdin` read can
+    // block forever in a GUI-subsystem process while the console input is
+    // fought over, so read the console directly when there is one.
+    crate::console::force_foreground();
+    crate::console::refresh_std_handles();
+    if let Some(line) = crate::console::read_line_raw() {
+        return parse_choice(&line, can_close);
+    }
     let mut line = String::new();
     if std::io::stdin().lock().read_line(&mut line).is_err() {
         return Choice::Skip;

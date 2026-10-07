@@ -199,7 +199,7 @@ impl Verb {
             // muscle memory and old docs keep working.
             Self::SelfUpdate => bootstrap::execute_update(rest, state),
             Self::UpdateVendors => vendors::execute_update(rest),
-            Self::UpgradeVendors => vendors::execute_upgrade(rest),
+            Self::UpgradeVendors => vendors::execute_upgrade(rest, state),
             Self::Install => vendors::execute_install(rest),
             Self::Root => root::execute(),
             Self::Lock => lock::execute(rest),

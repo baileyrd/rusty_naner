@@ -88,8 +88,27 @@ pub fn execute_update(args: &[String]) -> i32 {
 }
 
 /// `naner upgrade-vendors [vendor...]`
-pub fn execute_upgrade(args: &[String]) -> i32 {
-    run_pass(args, Pass::Upgrade)
+///
+/// When it may prompt (a vendor's folder is held by a running process) from a
+/// shell it is attached to, it reopens itself in a console of its own first --
+/// the same fix `naner update` got for the #81 keystroke race: neither cmd nor
+/// PowerShell waits for a GUI-subsystem process, so the shell's own line
+/// editor and naner's prompt otherwise compete for the same keystrokes.
+pub fn execute_upgrade(args: &[String], state: naner_core::console::ConsoleState) -> i32 {
+    let has = |flag: &str| args.iter().any(|a| a.eq_ignore_ascii_case(flag));
+    let may_prompt = !has(NO_PROMPT_FLAG)
+        && !has(CLOSE_PROCESSES_FLAG)
+        && !has(QUIET_FLAG)
+        && !has(SYNC_CONFIG_ONLY_FLAG)
+        && InUsePolicy::interactive_default() == InUsePolicy::Prompt;
+    if may_prompt && let Some(code) = super::bootstrap::reexec_in_own_console_if_racy(state) {
+        return code;
+    }
+    let code = run_pass(args, Pass::Upgrade);
+    if may_prompt {
+        super::bootstrap::wait_for_key_before_exit(state);
+    }
+    code
 }
 
 /// Keep only the vendors named on the command line (by name or key, any
