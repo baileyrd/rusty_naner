@@ -269,10 +269,22 @@ fn run_pass(args: &[String], pass: Pass) -> i32 {
                 .filter(|v| !have.contains(&v.key.to_lowercase())),
         );
     }
+    let mut available: Vec<String> = vendors
+        .iter()
+        .map(|v| {
+            if v.name.eq_ignore_ascii_case(&v.key) {
+                v.name.clone()
+            } else {
+                format!("{} ({})", v.name, v.key)
+            }
+        })
+        .collect();
+    available.sort_by_key(|a| a.to_lowercase());
     let vendors = match select_named(vendors, &names) {
         Ok(selected) => selected,
         Err(unknown) => {
             logger::failure(&format!("Unknown vendor(s): {}", unknown.join(", ")));
+            logger::info(&format!("Use a name or key from: {}", available.join(", ")));
             return 1;
         }
     };
@@ -302,12 +314,18 @@ fn run_pass(args: &[String], pass: Pass) -> i32 {
         Pass::Update => installer.update_all_vendors(),
         Pass::Upgrade => installer.upgrade_all_vendors(),
     };
+    let queued = installer.queued_count();
 
     logger::newline();
     merge_config_defaults(&naner_root);
 
     logger::newline();
-    if all_ok {
+    if all_ok && queued > 0 {
+        logger::success(&format!(
+            "{queued} {verb}(s) queued for the next naner launch; the rest completed."
+        ));
+        0
+    } else if all_ok {
         logger::success(&format!("Vendor {verb}s completed!"));
         0
     } else {

@@ -1,5 +1,12 @@
 ## [Unreleased]
 ### Fixed
+- `naner install` ignores a `naner.lock` pin whose digest contradicts the
+  `checksum` in the vendor's config, and resolves the latest instead (the
+  config checksum still verifies it). After `refresh-pins` rewrote a
+  checksum, the older pin could only fail verification (Zen, Zed).
+- `update-vendors`/`upgrade-vendors` with an unknown vendor name now list the
+  names and keys that are valid; `upgrade-vendors` says how many upgrades
+  were queued for the next launch instead of reporting them as completed.
 - `update-vendors` no longer runs `git update-git-for-windows` on the portable
   Git. That updater is written for an installed Git: it ignored `vendor/git`,
   ran the normal Setup, and left a second ~410 MB Git in

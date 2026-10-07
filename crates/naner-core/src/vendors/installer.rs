@@ -41,6 +41,8 @@ pub struct UnifiedVendorInstaller<'a> {
     vendors: Vec<VendorDefinition>,
     accept_conda_tos: bool,
     in_use_policy: InUsePolicy,
+    /// Upgrades deferred to the next launcher run during this pass.
+    queued: std::cell::Cell<usize>,
 }
 
 /// Channels `conda` demands Terms-of-Service acceptance for before it will
@@ -62,6 +64,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
             vendors,
             accept_conda_tos: false,
             in_use_policy: InUsePolicy::default(),
+            queued: std::cell::Cell::new(0),
         }
     }
 
@@ -160,7 +163,17 @@ impl<'a> UnifiedVendorInstaller<'a> {
         let pinned = use_lock
             .then(|| NanerLockfile::load(&self.naner_root))
             .flatten()
-            .and_then(|lock| lock.get(&vendor.key).cloned());
+            .and_then(|lock| lock.get(&vendor.key).cloned())
+            .filter(|locked| {
+                let stale = lock_contradicts_config(vendor, locked);
+                if stale {
+                    logger::warning(&format!(
+                        "  naner.lock pins {} {} with a digest that no longer matches the                          checksum in config; resolving the latest instead",
+                        vendor.name, locked.version
+                    ));
+                }
+                !stale
+            });
 
         let Some(mut info) = (match &pinned {
             Some(locked) => {
@@ -576,6 +589,11 @@ impl<'a> UnifiedVendorInstaller<'a> {
         true
     }
 
+    /// How many upgrades were queued for the next launch instead of run.
+    pub fn queued_count(&self) -> usize {
+        self.queued.get()
+    }
+
     /// Whether a running process currently holds `vendor_name`'s folder. Used
     /// to tell a queued upgrade that is merely waiting from one that failed.
     pub fn is_held(&self, vendor_name: &str) -> bool {
@@ -641,7 +659,10 @@ impl<'a> UnifiedVendorInstaller<'a> {
             ) {
                 Resolution::Proceed => {}
                 Resolution::Skip => return false,
-                Resolution::Scheduled => return true,
+                Resolution::Scheduled => {
+                    self.queued.set(self.queued.get() + 1);
+                    return true;
+                }
             }
 
             if is_wt {
@@ -1479,6 +1500,20 @@ const LOCKFILE_LABEL: &str = crate::lockfile::LOCKFILE_NAME;
 /// The pinned digest becomes the download's checksum and is `required`: the
 /// whole point of a pin is that a different artifact at that URL is a failure,
 /// not a silent upgrade. A pin without a digest still fixes the URL and version.
+/// A lock pin whose digest disagrees with the `checksum` in the vendor's
+/// config was made for a different artifact than the one the config now
+/// asserts (the config was refreshed, e.g. by `refresh-pins`, after the pin
+/// was written). Installing the pin could then only fail verification, so the
+/// pin is ignored; the config checksum still verifies whatever is resolved.
+fn lock_contradicts_config(vendor: &VendorDefinition, locked: &LockedVendor) -> bool {
+    match (&vendor.checksum, locked.sha256.as_deref()) {
+        (Some(config), Some(pinned)) if !pinned.is_empty() => {
+            !config.value.eq_ignore_ascii_case(pinned)
+        }
+        _ => false,
+    }
+}
+
 fn locked_download_info(locked: &LockedVendor) -> VendorDownloadInfo {
     VendorDownloadInfo {
         url: locked.url.clone(),
@@ -3415,6 +3450,34 @@ mod tests {
 
     /// An update is not an install: a vendor that is absent is reported and
     /// the run is marked failed, rather than quietly downloading it.
+    /// After `refresh-pins` rewrote a vendor's config checksum, a lock pin made
+    /// for the older artifact could only fail verification (Zen, Zed).
+    #[test]
+    fn a_lock_pin_that_contradicts_the_config_checksum_is_stale() {
+        let vendor = VendorDefinition {
+            checksum: Some(checksum::ChecksumInfo {
+                algorithm: "SHA256".into(),
+                value: "AAAA".into(),
+                required: true,
+            }),
+            ..Default::default()
+        };
+        let locked = |sha: Option<&str>| LockedVendor {
+            version: "1".into(),
+            url: "https://x/y".into(),
+            sha256: sha.map(str::to_string),
+        };
+        assert!(lock_contradicts_config(&vendor, &locked(Some("bbbb"))));
+        assert!(!lock_contradicts_config(&vendor, &locked(Some("aaaa"))));
+        assert!(!lock_contradicts_config(&vendor, &locked(None)));
+        assert!(!lock_contradicts_config(&vendor, &locked(Some(""))));
+        // No config checksum: nothing to contradict.
+        assert!(!lock_contradicts_config(
+            &VendorDefinition::default(),
+            &locked(Some("bbbb"))
+        ));
+    }
+
     #[test]
     fn update_does_not_install_a_missing_vendor() {
         let root = tempfile::tempdir().unwrap();
