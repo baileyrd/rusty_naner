@@ -6,7 +6,7 @@
 
 use naner_core::http::UreqHttp;
 use naner_core::vendors::{
-    UnifiedVendorInstaller, VendorConfigurationLoader, VendorDefinition,
+    InUsePolicy, UnifiedVendorInstaller, VendorConfigurationLoader, VendorDefinition,
     essential_vendor_definitions,
 };
 use naner_core::{constants, logger, paths};
@@ -18,6 +18,8 @@ const QUIET_FLAG: &str = "--quiet";
 const VERBOSE_FLAG: &str = "--verbose";
 const FORCE_FLAG: &str = "--force";
 const ACCEPT_CONDA_TOS_FLAG: &str = "--accept-conda-tos";
+const CLOSE_PROCESSES_FLAG: &str = "--close-processes";
+const NO_PROMPT_FLAG: &str = "--no-prompt";
 
 /// `naner install ...`
 pub fn execute_install(args: &[String]) -> i32 {
@@ -188,8 +190,17 @@ fn run_pass(args: &[String], pass: Pass) -> i32 {
     let accept_tos = args
         .iter()
         .any(|a| a.eq_ignore_ascii_case(ACCEPT_CONDA_TOS_FLAG));
-    let installer =
-        UnifiedVendorInstaller::new(&naner_root, vendors, &http).with_accept_conda_tos(accept_tos);
+    let has = |flag: &str| args.iter().any(|a| a.eq_ignore_ascii_case(flag));
+    let in_use_policy = if has(CLOSE_PROCESSES_FLAG) {
+        InUsePolicy::Close
+    } else if has(NO_PROMPT_FLAG) || quiet {
+        InUsePolicy::Report
+    } else {
+        InUsePolicy::interactive_default()
+    };
+    let installer = UnifiedVendorInstaller::new(&naner_root, vendors, &http)
+        .with_accept_conda_tos(accept_tos)
+        .with_in_use_policy(in_use_policy);
     let all_ok = match pass {
         Pass::Update => installer.update_all_vendors(),
         Pass::Upgrade => installer.upgrade_all_vendors(),

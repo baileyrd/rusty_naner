@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use super::in_use::{self, InUsePolicy, Resolution};
 use super::{
     ChecksumSource, VENDOR_VERSION_FILE, VendorDefinition, VendorSourceType,
     WindowsTerminalConfigurator, is_windows_terminal,
@@ -39,6 +40,7 @@ pub struct UnifiedVendorInstaller<'a> {
     http: &'a dyn Http,
     vendors: Vec<VendorDefinition>,
     accept_conda_tos: bool,
+    in_use_policy: InUsePolicy,
 }
 
 /// Channels `conda` demands Terms-of-Service acceptance for before it will
@@ -59,7 +61,15 @@ impl<'a> UnifiedVendorInstaller<'a> {
             http,
             vendors,
             accept_conda_tos: false,
+            in_use_policy: InUsePolicy::default(),
         }
+    }
+
+    /// What `upgrade_vendor` does when a running process holds the vendor's
+    /// folder: report and skip (default), prompt, or close them.
+    pub fn with_in_use_policy(mut self, policy: InUsePolicy) -> Self {
+        self.in_use_policy = policy;
+        self
     }
 
     /// Accept Anaconda's Terms of Service for its default channels before a
@@ -596,6 +606,20 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 .as_deref()
                 .map(|v| format!(" ({})", with_v_prefix(v)))
                 .unwrap_or_default();
+
+            // Check before touching anything: a replacement that dies halfway
+            // on a locked file is worse than one that never started.
+            match in_use::resolve(
+                &vendor.name,
+                &target_dir,
+                &self.naner_root,
+                self.in_use_policy,
+                &["upgrade-vendors", &vendor.name],
+            ) {
+                Resolution::Proceed => {}
+                Resolution::Skip => return false,
+                Resolution::Scheduled => return true,
+            }
 
             if is_wt {
                 logger::info(&format!("Updating {}{suffix}...", vendor.name));
@@ -1676,53 +1700,23 @@ fn with_v_prefix(version: &str) -> String {
     format!("v{}", version.trim_start_matches(['v', 'V']))
 }
 
-/// Windows error codes for "something has this file open": access denied
-/// (a running exe can't be deleted), sharing/lock violation, and a file with a
-/// mapped section (a loaded exe or DLL).
-fn is_in_use_error(e: &std::io::Error) -> bool {
-    matches!(e.raw_os_error(), Some(5 | 32 | 33 | 1224))
-}
-
-/// Names of running processes whose executable lives under `dir`, best-effort
-/// (one PowerShell call; empty when it can't be asked or nothing matches).
-fn processes_running_from(dir: &Path) -> Vec<String> {
-    let script = format!(
-        "Get-Process | Where-Object {{ $_.Path -and $_.Path.StartsWith('{}', 'OrdinalIgnoreCase') }} \
-         | Select-Object -ExpandProperty ProcessName -Unique",
-        dir.display().to_string().replace('\'', "''")
-    );
-    let Ok(output) = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .output()
-    else {
-        return Vec::new();
-    };
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(str::to_string)
-        .collect()
-}
-
 /// When `e` means a file is in use, say so and name what is holding the
 /// vendor's tree, instead of leaving the user with a bare `os error`.
 fn explain_in_use(e: &std::io::Error, vendor: &str, dir: &Path) {
-    if !is_in_use_error(e) {
+    if !in_use::is_in_use_error(e) {
         return;
     }
-    let holders = processes_running_from(dir);
+    let holders = in_use::find_holders(dir);
     if holders.is_empty() {
         logger::warning(&format!(
-            "  A file in {vendor}'s folder is in use. Close anything running from {} \
-             (including terminals started from it) and retry.",
+            "  A file in {vendor}'s folder is in use. Close anything running from {}              (including terminals started from it) and retry.",
             dir.display()
         ));
     } else {
+        let names: Vec<&str> = holders.iter().map(|h| h.name.as_str()).collect();
         logger::warning(&format!(
-            "  {vendor} is in use by: {}. Close {} and retry.",
-            holders.join(", "),
-            if holders.len() == 1 { "it" } else { "them" }
+            "  {vendor} is in use by: {}. Close them and retry.",
+            names.join(", ")
         ));
     }
 }
@@ -3409,15 +3403,6 @@ mod tests {
 
     /// An update is not an install: a vendor that is absent is reported and
     /// the run is marked failed, rather than quietly downloading it.
-    #[test]
-    fn in_use_errors_are_recognised_by_windows_code() {
-        for code in [5, 32, 33, 1224] {
-            assert!(is_in_use_error(&std::io::Error::from_raw_os_error(code)));
-        }
-        assert!(!is_in_use_error(&std::io::Error::from_raw_os_error(2)));
-        assert!(!is_in_use_error(&std::io::Error::other("x")));
-    }
-
     #[test]
     fn update_does_not_install_a_missing_vendor() {
         let root = tempfile::tempdir().unwrap();
