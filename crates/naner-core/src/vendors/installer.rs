@@ -561,6 +561,14 @@ impl<'a> UnifiedVendorInstaller<'a> {
         true
     }
 
+    /// Whether a running process currently holds `vendor_name`'s folder. Used
+    /// to tell a queued upgrade that is merely waiting from one that failed.
+    pub fn is_held(&self, vendor_name: &str) -> bool {
+        self.find(vendor_name)
+            .map(|v| self.vendor_dir.join(&v.extract_dir))
+            .is_some_and(|dir| dir.is_dir() && !in_use::find_holders(&dir).is_empty())
+    }
+
     /// **Upgrade**: wholesale replacement with the latest release -- delete
     /// and reinstall, except Windows Terminal (extract over-top, preserving
     /// settings/). Never consults the vendor's own CLI updater; that is
@@ -614,7 +622,6 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 &target_dir,
                 &self.naner_root,
                 self.in_use_policy,
-                &["upgrade-vendors", &vendor.name],
             ) {
                 Resolution::Proceed => {}
                 Resolution::Skip => return false,

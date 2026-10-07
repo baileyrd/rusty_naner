@@ -294,6 +294,10 @@ fn run_launcher(opts: &cli::LaunchOptions, console_state: &mut console::ConsoleS
         return 0;
     }
 
+    // Upgrades queued because something held the vendor's folder: this is the
+    // one point where nothing from this launch is running yet.
+    commands::vendors::apply_pending_upgrades(&naner_root, console_state, opts.debug);
+
     // 4–5. Pick the profile and launch.
     let explicit = opts.profile.is_some();
     let profile_name = opts

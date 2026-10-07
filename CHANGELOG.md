@@ -2,30 +2,11 @@
 ### Added
 - `upgrade-vendors` checks, before replacing a vendor, whether a running
   process holds its folder. On a terminal it asks: close them and continue,
-  replace at next logon (a one-shot `RunOnce` entry that re-runs the upgrade
-  before anything is open), or skip. naner never offers to close itself or
-  the console it runs in. `--close-processes` closes without asking;
-  `--no-prompt` (and any redirected output) only reports and skips.
-### Added
-- `update-vendors --accept-conda-tos` accepts Anaconda's Terms of Service for
-  its default channels before `conda update --all`. Opt-in only: it is the
-  user's acceptance, so naner never does it unasked. Without the flag, a
-  failed conda update says how to re-run.
-- When an update/upgrade fails because a file is in use (os error 5, 32, 33,
-  1224), naner now names the running processes holding the vendor's folder
-  instead of leaving a bare `os error`.
-### Changed
-- `update-vendors` and the new `upgrade-vendors` are now separate. **Update**
-  runs the vendor's own CLI updater in place (`rustup update`, `conda update
-  --all`, `bun upgrade`, `git update-git-for-windows`, or the package
-  manager for npm/pip vendors) and never deletes or re-downloads a tree. A
-  vendor with no CLI updater, or whose updater binary is missing, is left
-  untouched and reported with a pointer to `upgrade-vendors`; a vendor that
-  is not installed is reported, not installed. **Upgrade** is the wholesale
-  delete-and-reinstall (Windows Terminal extracts over-top), ignores the
-  `naner.lock` pin and rewrites it, and never calls a native updater.
-- Both take optional vendor names (`naner upgrade-vendors nodejs`) and exit
-  non-zero when any vendor failed.
+  replace at next launch (queued in `vendor/.pending-upgrades` and applied by
+  the launcher just before it opens a terminal, once nothing holds the
+  folder; dropped after 3 failed tries), or skip. naner never offers to
+  close itself or the console it runs in. `--close-processes` closes without
+  asking; `--no-prompt` (and any redirected output) only reports and skips.
 
 ## [0.9.35] - 2026-09-29
 ### Fixed

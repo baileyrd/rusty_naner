@@ -1,11 +1,12 @@
 //! Files held open by running processes: finding who holds a vendor's tree,
-//! offering to close them, or deferring the replacement to the next logon.
+//! offering to close them, or deferring the replacement to the next launcher run.
 //!
 //! Replacing a vendor means deleting or overwriting files a running `pwsh.exe`
 //! or `WindowsTerminal.exe` has mapped, which Windows refuses (os error 5,
 //! 32, 33, 1224). Checking *before* the replacement starts -- rather than
 //! reacting to the failure afterwards -- means the download is not wasted and
-//! the tree is never left half-replaced.
+//! the tree is never left half-replaced. A replacement that cannot happen now
+//! is queued in `vendor/.pending-upgrades` and applied by the launcher.
 
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::Path;
@@ -18,7 +19,7 @@ pub enum InUsePolicy {
     /// Say who is holding it and stop. For pipes and scripts.
     #[default]
     Report,
-    /// Ask: close them, retry at next logon, or skip.
+    /// Ask: close them, retry at next launch, or skip.
     Prompt,
     /// Close them without asking (`--close-processes`).
     Close,
@@ -52,7 +53,7 @@ pub enum Resolution {
     Proceed,
     /// The user declined, or it could not be freed: leave the vendor alone.
     Skip,
-    /// Deferred to the next logon: leave the vendor alone for now.
+    /// Queued for the next launcher run: leave the vendor alone for now.
     Scheduled,
 }
 
@@ -178,9 +179,9 @@ pub(crate) fn parse_choice(input: &str, can_close: bool) -> Choice {
 
 fn ask(can_close: bool) -> Choice {
     let options = if can_close {
-        "[k] close them and continue, [r] replace at next logon, [s] skip"
+        "[k] close them and continue, [r] replace at next launch, [s] skip"
     } else {
-        "[r] replace at next logon, [s] skip"
+        "[r] replace at next launch, [s] skip"
     };
     print!("  {options} (default: skip): ");
     let _ = std::io::stdout().flush();
@@ -200,16 +201,7 @@ fn ask(can_close: bool) -> Choice {
 }
 
 /// Make sure nothing is holding `dir` before `vendor` is replaced.
-///
-/// `command_args` is what `naner` should be re-run with at the next logon
-/// (e.g. `["upgrade-vendors", "Windows Terminal"]`).
-pub fn resolve(
-    vendor: &str,
-    dir: &Path,
-    naner_root: &Path,
-    policy: InUsePolicy,
-    command_args: &[&str],
-) -> Resolution {
+pub fn resolve(vendor: &str, dir: &Path, naner_root: &Path, policy: InUsePolicy) -> Resolution {
     let holders = find_holders(dir);
     if holders.is_empty() {
         return Resolution::Proceed;
@@ -249,16 +241,15 @@ pub fn resolve(
                 Resolution::Skip
             }
         }
-        Choice::Reboot => match schedule_at_logon(vendor, naner_root, command_args) {
+        Choice::Reboot => match add_pending(naner_root, vendor) {
             Ok(()) => {
                 logger::info(&format!(
-                    "  Scheduled: {vendor} will be replaced the next time you sign in, \
-                     before anything has it open."
+                    "  Queued: {vendor} will be replaced the next time naner launches,                      before the terminal opens (once nothing is holding it)."
                 ));
                 Resolution::Scheduled
             }
             Err(e) => {
-                logger::failure(&format!("  Could not schedule it: {e}"));
+                logger::failure(&format!("  Could not queue it: {e}"));
                 Resolution::Skip
             }
         },
@@ -269,53 +260,67 @@ pub fn resolve(
     }
 }
 
-/// The command line `RunOnce` runs at the next logon. No quoting around the
-/// whole string: `cmd /c` only strips quotes when the string *starts* with
-/// one, and this starts with `set`.
-pub(crate) fn logon_command(exe: &Path, naner_root: &Path, command_args: &[&str]) -> String {
-    let args: Vec<String> = command_args.iter().map(|a| format!("\"{a}\"")).collect();
-    format!(
-        "cmd.exe /c set \"NANER_ROOT={}\"&&\"{}\" {} --no-prompt",
-        naner_root.display(),
-        exe.display(),
-        args.join(" ")
-    )
+/// Vendors whose upgrade is waiting for the next launcher run, because a
+/// running process held their folder when it was asked for.
+const PENDING_FILE: &str = ".pending-upgrades";
+
+/// Give up on a pending upgrade after this many launcher runs that could not
+/// complete it, so a permanently failing one cannot slow every launch forever.
+pub const MAX_PENDING_ATTEMPTS: u32 = 3;
+
+fn pending_path(naner_root: &Path) -> std::path::PathBuf {
+    naner_root.join("vendor").join(PENDING_FILE)
 }
 
-/// Register a one-shot command under `HKCU\...\RunOnce`: Windows runs it at
-/// the user's next logon and then deletes it, before they have had the chance
-/// to open a terminal.
-fn schedule_at_logon(vendor: &str, naner_root: &Path, command_args: &[&str]) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let value_name: String = format!("NanerUpgrade-{vendor}")
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' {
-                c
-            } else {
-                '_'
-            }
+/// `vendor<TAB>attempts` per line.
+pub(crate) fn parse_pending(text: &str) -> Vec<(String, u32)> {
+    text.lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\t');
+            let name = parts.next()?.trim();
+            let attempts = parts
+                .next()
+                .and_then(|a| a.trim().parse().ok())
+                .unwrap_or(0);
+            (!name.is_empty()).then(|| (name.to_string(), attempts))
         })
-        .collect();
-    let out = std::process::Command::new(system32("reg.exe"))
-        .args([
-            "add",
-            r"HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce",
-            "/v",
-            &value_name,
-            "/t",
-            "REG_SZ",
-            "/d",
-            &logon_command(&exe, naner_root, command_args),
-            "/f",
-        ])
-        .output()
-        .map_err(|e| e.to_string())?;
-    if out.status.success() {
-        Ok(())
-    } else {
-        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+        .collect()
+}
+
+pub(crate) fn format_pending(entries: &[(String, u32)]) -> String {
+    entries
+        .iter()
+        .map(|(name, attempts)| format!("{name}\t{attempts}\n"))
+        .collect()
+}
+
+/// What is waiting for the next launcher run.
+pub fn load_pending(naner_root: &Path) -> Vec<(String, u32)> {
+    std::fs::read_to_string(pending_path(naner_root))
+        .map(|text| parse_pending(&text))
+        .unwrap_or_default()
+}
+
+/// Replace the pending list; an empty list removes the file so the launcher's
+/// check stays a single failed `read`.
+pub fn save_pending(naner_root: &Path, entries: &[(String, u32)]) -> std::io::Result<()> {
+    let path = pending_path(naner_root);
+    if entries.is_empty() {
+        return match std::fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        };
     }
+    std::fs::write(path, format_pending(entries))
+}
+
+/// Queue `vendor` for the next launcher run (no duplicates).
+fn add_pending(naner_root: &Path, vendor: &str) -> std::io::Result<()> {
+    let mut entries = load_pending(naner_root);
+    if !entries.iter().any(|(n, _)| n.eq_ignore_ascii_case(vendor)) {
+        entries.push((vendor.to_string(), 0));
+    }
+    save_pending(naner_root, &entries)
 }
 
 #[cfg(test)]
@@ -368,16 +373,40 @@ mod tests {
     }
 
     #[test]
-    fn the_logon_command_reruns_naner_against_the_same_root_without_prompting() {
-        let cmd = logon_command(
-            Path::new(r"C:\tools\naner\vendor\bin\naner.exe"),
-            Path::new(r"C:\tools\naner"),
-            &["upgrade-vendors", "Windows Terminal"],
-        );
+    fn pending_upgrades_round_trip_and_tolerate_junk() {
+        let entries = vec![
+            ("Windows Terminal".to_string(), 0),
+            ("PowerShell".to_string(), 2),
+        ];
+        assert_eq!(parse_pending(&format_pending(&entries)), entries);
+        // A bare name (hand-edited file) means "no attempts yet"; blanks vanish.
         assert_eq!(
-            cmd,
-            r#"cmd.exe /c set "NANER_ROOT=C:\tools\naner"&&"C:\tools\naner\vendor\bin\naner.exe" "upgrade-vendors" "Windows Terminal" --no-prompt"#
+            parse_pending(
+                "PowerShell
+
+  
+Go	x
+"
+            ),
+            vec![("PowerShell".to_string(), 0), ("Go".to_string(), 0)]
         );
+    }
+
+    #[test]
+    fn queueing_dedupes_and_an_empty_list_removes_the_file() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join("vendor")).unwrap();
+        add_pending(root.path(), "PowerShell").unwrap();
+        add_pending(root.path(), "powershell").unwrap();
+        assert_eq!(
+            load_pending(root.path()),
+            vec![("PowerShell".to_string(), 0)]
+        );
+        save_pending(root.path(), &[]).unwrap();
+        assert!(load_pending(root.path()).is_empty());
+        assert!(!root.path().join("vendor/.pending-upgrades").exists());
+        // Removing what is not there is not an error.
+        save_pending(root.path(), &[]).unwrap();
     }
 
     #[test]
