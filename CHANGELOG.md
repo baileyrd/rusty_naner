@@ -1,23 +1,18 @@
 ## [Unreleased]
-### Fixed
-- `naner install` ignores a `naner.lock` pin whose digest contradicts the
-  `checksum` in the vendor's config, and resolves the latest instead (the
-  config checksum still verifies it). After `refresh-pins` rewrote a
-  checksum, the older pin could only fail verification (Zen, Zed).
-- `update-vendors`/`upgrade-vendors` with an unknown vendor name now list the
-  names and keys that are valid; `upgrade-vendors` says how many upgrades
-  were queued for the next launch instead of reporting them as completed.
-- `update-vendors` no longer runs `git update-git-for-windows` on the portable
-  Git. That updater is written for an installed Git: it ignored `vendor/git`,
-  ran the normal Setup, and left a second ~410 MB Git in
-  `home/AppData/Local/Programs/Git` while `vendor/git` stayed on the old
-  version. Git now has no CLI updater here; `upgrade-vendors GitForWindows`
-  replaces the archive.
-- `update-vendors` now checks for running processes before it runs rustup,
-  conda, bun or Git for Windows' own updater, and offers to close them (or
-  `--close-processes`). Git's updater used to fail with a bare "exit code 2"
-  when an editor or shell had `git.exe` open. Updates cannot be queued for
-  the next launch; only upgrades can.
+
+## [0.9.36] - 2026-10-07
+### Changed
+- `update-vendors` and the new `upgrade-vendors` are now separate. **Update**
+  runs the vendor's own CLI updater in place (`rustup update`, `conda update
+  --all`, `bun upgrade`, or the package manager for npm/pip vendors) and
+  never deletes or re-downloads a tree. A vendor with no CLI updater, or
+  whose updater binary is missing, is left untouched and reported with a
+  pointer to `upgrade-vendors`; a vendor that is not installed is reported,
+  not installed. **Upgrade** is the wholesale delete-and-reinstall (Windows
+  Terminal extracts over-top), ignores the `naner.lock` pin and rewrites it,
+  and never calls a native updater.
+- Both take optional vendor names (`naner upgrade-vendors nodejs`) and exit
+  non-zero when any vendor failed.
 ### Added
 - `upgrade-vendors` checks, before replacing a vendor, whether a running
   process holds its folder. On a terminal it asks: close them and continue,
@@ -26,6 +21,34 @@
   folder; dropped after 3 failed tries), or skip. naner never offers to
   close itself or the console it runs in. `--close-processes` closes without
   asking; `--no-prompt` (and any redirected output) only reports and skips.
+  The prompt reopens naner in a console of its own, as `naner update` does.
+- `update-vendors --accept-conda-tos` accepts Anaconda's Terms of Service for
+  its default channels before `conda update --all`. Opt-in only: it is the
+  user's acceptance, so naner never does it unasked. Without the flag, a
+  failed conda update says how to re-run.
+- When an update/upgrade fails because a file is in use (os error 5, 32, 33,
+  1224), naner names the running processes holding the vendor's folder
+  instead of leaving a bare `os error`.
+### Fixed
+- `update-vendors` checks for running processes before it runs rustup, conda
+  or bun's own updater, and offers to close them (or `--close-processes`).
+  Updates cannot be queued for the next launch; only upgrades can.
+- `update-vendors` no longer runs `git update-git-for-windows` on the portable
+  Git. That updater is written for an installed Git: it ignored `vendor/git`,
+  ran the normal Setup, and left a second ~410 MB Git in
+  `home/AppData/Local/Programs/Git` while `vendor/git` stayed on the old
+  version. Git now has no CLI updater here; `upgrade-vendors GitForWindows`
+  replaces the archive.
+- `naner install` ignores a `naner.lock` pin whose digest contradicts the
+  `checksum` in the vendor's config, and resolves the latest instead (the
+  config checksum still verifies it). After `refresh-pins` rewrote a
+  checksum, the older pin could only fail verification (Zen, Zed).
+- `update-vendors`/`upgrade-vendors` with an unknown vendor name now list the
+  names and keys that are valid; `upgrade-vendors` says how many upgrades
+  were queued for the next launch instead of reporting them as completed.
+- The in-use lookup launches Windows PowerShell, `taskkill` and `reg` by
+  absolute `System32` path: naner's rewritten `PATH` has none of them, so a
+  bare name made it report that nothing was holding the folder.
 
 ## [0.9.35] - 2026-09-29
 ### Fixed

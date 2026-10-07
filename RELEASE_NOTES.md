@@ -7,6 +7,55 @@ PR until it is tagged. Terse per-category entries live in
 
 ## Unreleased
 
+## v0.9.36 — 2026-10-07
+
+[Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.35...v0.9.36).
+
+**Update and upgrade are now two commands (#186).** `update-vendors` used to
+try a vendor's own updater and, when there was none, silently fall through to
+deleting and reinstalling the whole tree, which is how an "update" wiped
+multi-hundred-MB toolchains and failed halfway on locked files. `update-vendors`
+now only runs a vendor's own CLI updater (rustup, conda, bun, or npm/pip) and
+reports the rest; the new `upgrade-vendors` is the explicit wholesale
+replacement. Both take vendor names and exit non-zero on failure.
+
+**Locked vendors are handled instead of failing halfway (#188, #189, #190,
+#191, #192).** `upgrade-vendors` checks first what is running from a vendor's
+folder and asks: close them, replace at the next naner launch (queued in
+`vendor/.pending-upgrades`, applied by the launcher before it opens a
+terminal), or skip. It never offers to close naner or the console it runs in.
+The prompt reopens naner in its own console, the same fix `naner update` got
+for the GUI-subsystem keystroke race. `update-vendors` runs the same check
+before rustup, conda and bun. The lookup uses absolute `System32` paths:
+naner's `PATH` has no `powershell`, which made the first version report that
+nothing was holding anything.
+
+**Portable Git is no longer updated by its installer (#193).**
+`git update-git-for-windows` ignored `vendor/git`, ran Setup, and left a second
+~410 MB Git in `home/AppData/Local/Programs/Git`. Git is now refreshed through
+`upgrade-vendors GitForWindows`.
+
+**Smaller fixes (#187, #194, #195).** `--accept-conda-tos` is an opt-in flag
+for Anaconda's Terms of Service; `install` ignores a `naner.lock` pin that
+contradicts a refreshed config checksum (Zen and Zed hit this after
+`refresh-pins`); unknown vendor names list the valid ones; a queued upgrade is
+reported as queued, not completed.
+
+**Upgrading**: `naner update` replaces `naner.exe`, but a queue written by an
+older build is only applied by this one or later. Anything left in
+`vendor/.pending-upgrades` by a development build is picked up on the next
+launch once nothing holds the folder. A `RunOnce` logon entry written by an
+intermediate development build is not removed by this release.
+
+**Verified**: CI on `ubuntu-latest` and `windows-latest` for every change, plus
+live runs on a real Windows install: PowerShell and Windows Terminal replaced
+through the next-launch queue, Git for Windows and Zen Browser and Zed
+upgraded through `upgrade-vendors`, and the in-use prompt answered from its own
+console. **Not** verified on a real install: `--close-processes` / the `k`
+choice actually closing processes, a Node.js upgrade through the queue,
+`--accept-conda-tos`, and the stale-lock fallback in `install`. The validation
+gates in [docs/VALIDATION.md](./docs/VALIDATION.md) were **not** re-run.
+
 ## v0.9.35 — 2026-09-29
 
 [Compare](https://github.com/baileyrd/rusty_naner/compare/v0.9.34...v0.9.35).
