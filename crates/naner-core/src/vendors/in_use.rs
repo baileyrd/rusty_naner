@@ -255,7 +255,7 @@ pub fn resolve(
         Choice::Reboot => match add_pending(naner_root, vendor) {
             Ok(()) => {
                 logger::info(&format!(
-                    "  Queued: {vendor} will be replaced the next time naner launches,                      before the terminal opens (once nothing is holding it)."
+                    "  Queued: {vendor} will be replaced the next time naner launches, before the terminal opens (once nothing is holding it)."
                 ));
                 Resolution::Scheduled
             }

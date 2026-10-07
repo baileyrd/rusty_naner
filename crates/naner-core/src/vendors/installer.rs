@@ -168,7 +168,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 let stale = lock_contradicts_config(vendor, locked);
                 if stale {
                     logger::warning(&format!(
-                        "  naner.lock pins {} {} with a digest that no longer matches the                          checksum in config; resolving the latest instead",
+                        "  naner.lock pins {} {} with a digest that no longer matches the checksum in config; resolving the latest instead",
                         vendor.name, locked.version
                     ));
                 }
