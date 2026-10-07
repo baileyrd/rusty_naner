@@ -1,5 +1,11 @@
 ## [Unreleased]
 ### Fixed
+- `update-vendors` no longer runs `git update-git-for-windows` on the portable
+  Git. That updater is written for an installed Git: it ignored `vendor/git`,
+  ran the normal Setup, and left a second ~410 MB Git in
+  `home/AppData/Local/Programs/Git` while `vendor/git` stayed on the old
+  version. Git now has no CLI updater here; `upgrade-vendors GitForWindows`
+  replaces the archive.
 - `update-vendors` now checks for running processes before it runs rustup,
   conda, bun or Git for Windows' own updater, and offers to close them (or
   `--close-processes`). Git's updater used to fail with a bare "exit code 2"

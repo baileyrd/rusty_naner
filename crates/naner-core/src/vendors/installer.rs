@@ -525,8 +525,8 @@ impl<'a> UnifiedVendorInstaller<'a> {
     }
 
     /// **Update**: hand the vendor to its own CLI updater, in place -- `rustup
-    /// update`, `conda update --all`, `bun upgrade`, `git
-    /// update-git-for-windows`, or the package manager for npm/pip vendors.
+    /// update`, `conda update --all`, `bun upgrade`, or
+    /// the package manager for npm/pip vendors.
     /// Never deletes or re-downloads the vendor's tree.
     ///
     /// A vendor with no CLI updater (or whose updater binary is missing) is
@@ -680,8 +680,11 @@ impl<'a> UnifiedVendorInstaller<'a> {
             self.conda_update(target_dir)
         } else if vendor.key.eq_ignore_ascii_case("Bun") {
             self.bun_upgrade(target_dir)
-        } else if vendor.key.eq_ignore_ascii_case("GitForWindows") {
-            self.git_for_windows_update(target_dir)
+        // Deliberately no Git for Windows branch. `git update-git-for-windows`
+        // is written for an *installed* Git: on this portable tree it ignored
+        // `vendor/git`, ran the normal Setup, and left a second 410 MB Git
+        // under `home/AppData/Local/Programs/Git` with `vendor/git` untouched.
+        // Git is refreshed by `upgrade-vendors`, which replaces the archive.
         } else if matches!(
             vendor.source_type,
             VendorSourceType::Npm | VendorSourceType::Pip
@@ -811,37 +814,6 @@ impl<'a> UnifiedVendorInstaller<'a> {
             record_version_from_output(&bun, &["--version"], target_dir, |text| {
                 let trimmed = text.trim();
                 (!trimmed.is_empty()).then(|| trimmed.to_string())
-            });
-        }
-        Some(ok)
-    }
-
-    /// `git update-git-for-windows -y` -- the updater Git for Windows bundles
-    /// with every portable install, run in place rather than re-extracting a
-    /// fresh GitHub release archive over it. The recorded `.vendor-version`
-    /// is re-read from `git --version` and rewritten on success, same reason
-    /// as [`Self::bun_upgrade`].
-    fn git_for_windows_update(&self, target_dir: &Path) -> Option<bool> {
-        let git = target_dir.join("cmd").join("git.exe");
-        if !git.is_file() {
-            return None;
-        }
-        logger::status("  Running 'git update-git-for-windows' (its own bundled updater)...");
-        let mut command = std::process::Command::new(&git);
-        command.args(["update-git-for-windows", "-y"]);
-        for (key, value) in archives::home_isolation_envs(&self.naner_root) {
-            command.env(key, value);
-        }
-        let ok = run_and_report(command, "git update-git-for-windows");
-        if ok {
-            logger::success("  Git for Windows updated via its bundled updater");
-            record_version_from_output(&git, &["--version"], target_dir, |text| {
-                // "git version 2.55.0.windows.4" -> "2.55.0.windows.4".
-                text.trim()
-                    .rsplit(' ')
-                    .next()
-                    .filter(|v| !v.is_empty())
-                    .map(str::to_string)
             });
         }
         Some(ok)
@@ -1724,7 +1696,7 @@ fn with_v_prefix(version: &str) -> String {
 }
 
 /// Whether `vendor` has an updater binary in its own tree that rewrites that
-/// tree in place (rustup, conda, bun, git). These are the native updaters a
+/// tree in place (rustup, conda, bun). These are the native updaters a
 /// running process can break; the npm/pip ones only touch `home/`.
 fn has_binary_updater(vendor: &VendorDefinition, target_dir: &Path) -> bool {
     let key = vendor.key.as_str();
@@ -1734,8 +1706,6 @@ fn has_binary_updater(vendor: &VendorDefinition, target_dir: &Path) -> bool {
         target_dir.join("Scripts").join("conda.exe")
     } else if key.eq_ignore_ascii_case("Bun") {
         target_dir.join("bun.exe")
-    } else if key.eq_ignore_ascii_case("GitForWindows") {
-        target_dir.join("cmd").join("git.exe")
     } else {
         return false;
     };
@@ -3485,7 +3455,7 @@ mod tests {
         let http = StubHttp::default();
         let installer = UnifiedVendorInstaller::new(root.path(), vec![], &http);
 
-        for key in ["Rust", "Anaconda", "Bun", "GitForWindows"] {
+        for key in ["Rust", "Anaconda", "Bun"] {
             let vendor = VendorDefinition {
                 key: key.into(),
                 ..Default::default()
@@ -3495,6 +3465,25 @@ mod tests {
                 "{key} claimed a native update despite no updater binary present"
             );
         }
+    }
+
+    /// `git update-git-for-windows` ran Setup into `home/AppData/Local/Programs/Git`
+    /// and left `vendor/git` untouched, so Git must never be claimed by the
+    /// native-update dispatch, even with `git.exe` present.
+    #[test]
+    fn git_for_windows_is_never_updated_by_its_own_installer_updater() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("git");
+        std::fs::create_dir_all(target.join("cmd")).unwrap();
+        std::fs::write(target.join("cmd").join("git.exe"), "x").unwrap();
+        let http = StubHttp::default();
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![], &http);
+        let vendor = VendorDefinition {
+            key: "GitForWindows".into(),
+            ..Default::default()
+        };
+        assert!(installer.try_native_update(&vendor, &target).is_none());
+        assert!(!has_binary_updater(&vendor, &target));
     }
 
     /// A vendors.json `checksum` is the operator's explicit assertion and still
