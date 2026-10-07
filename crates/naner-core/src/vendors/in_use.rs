@@ -169,19 +169,20 @@ pub(crate) enum Choice {
     Skip,
 }
 
-pub(crate) fn parse_choice(input: &str, can_close: bool) -> Choice {
+pub(crate) fn parse_choice(input: &str, can_close: bool, allow_defer: bool) -> Choice {
     match input.trim().to_ascii_lowercase().as_str() {
         "k" | "kill" | "c" | "close" if can_close => Choice::Close,
-        "r" | "reboot" | "l" | "logon" => Choice::Reboot,
+        "r" | "reboot" | "l" | "logon" | "launch" if allow_defer => Choice::Reboot,
         _ => Choice::Skip,
     }
 }
 
-fn ask(can_close: bool) -> Choice {
-    let options = if can_close {
-        "[k] close them and continue, [r] replace at next launch, [s] skip"
-    } else {
-        "[r] replace at next launch, [s] skip"
+fn ask(can_close: bool, allow_defer: bool) -> Choice {
+    let options = match (can_close, allow_defer) {
+        (true, true) => "[k] close them and continue, [r] replace at next launch, [s] skip",
+        (true, false) => "[k] close them and continue, [s] skip",
+        (false, true) => "[r] replace at next launch, [s] skip",
+        (false, false) => "[s] skip",
     };
     print!("  {options} (default: skip): ");
     let _ = std::io::stdout().flush();
@@ -191,17 +192,27 @@ fn ask(can_close: bool) -> Choice {
     crate::console::force_foreground();
     crate::console::refresh_std_handles();
     if let Some(line) = crate::console::read_line_raw() {
-        return parse_choice(&line, can_close);
+        return parse_choice(&line, can_close, allow_defer);
     }
     let mut line = String::new();
     if std::io::stdin().lock().read_line(&mut line).is_err() {
         return Choice::Skip;
     }
-    parse_choice(&line, can_close)
+    parse_choice(&line, can_close, allow_defer)
 }
 
 /// Make sure nothing is holding `dir` before `vendor` is replaced.
-pub fn resolve(vendor: &str, dir: &Path, naner_root: &Path, policy: InUsePolicy) -> Resolution {
+///
+/// `allow_defer` offers "replace at next launch". Only a wholesale upgrade can
+/// be queued: the queue runs `upgrade_vendor`, which is not what an update
+/// through a vendor's own CLI updater means.
+pub fn resolve(
+    vendor: &str,
+    dir: &Path,
+    naner_root: &Path,
+    policy: InUsePolicy,
+    allow_defer: bool,
+) -> Resolution {
     let holders = find_holders(dir);
     if holders.is_empty() {
         return Resolution::Proceed;
@@ -225,7 +236,7 @@ pub fn resolve(vendor: &str, dir: &Path, naner_root: &Path, policy: InUsePolicy)
         }
         InUsePolicy::Close if can_close => Choice::Close,
         InUsePolicy::Close => Choice::Skip,
-        InUsePolicy::Prompt => ask(can_close),
+        InUsePolicy::Prompt => ask(can_close, allow_defer),
     };
 
     match choice {
@@ -363,13 +374,15 @@ mod tests {
 
     #[test]
     fn choices_default_to_skip_and_respect_what_can_be_closed() {
-        assert_eq!(parse_choice("k\n", true), Choice::Close);
-        assert_eq!(parse_choice("K", true), Choice::Close);
+        assert_eq!(parse_choice("k\n", true, true), Choice::Close);
+        assert_eq!(parse_choice("K", true, true), Choice::Close);
+        // An update cannot be queued: "r" must not be honoured there.
+        assert_eq!(parse_choice("r", true, false), Choice::Skip);
         // Nothing closable: "k" must not be honoured.
-        assert_eq!(parse_choice("k", false), Choice::Skip);
-        assert_eq!(parse_choice("r", false), Choice::Reboot);
-        assert_eq!(parse_choice("", true), Choice::Skip);
-        assert_eq!(parse_choice("whatever", true), Choice::Skip);
+        assert_eq!(parse_choice("k", false, true), Choice::Skip);
+        assert_eq!(parse_choice("r", false, true), Choice::Reboot);
+        assert_eq!(parse_choice("", true, true), Choice::Skip);
+        assert_eq!(parse_choice("whatever", true, true), Choice::Skip);
     }
 
     #[test]
