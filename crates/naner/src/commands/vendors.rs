@@ -111,6 +111,76 @@ pub fn execute_upgrade(args: &[String], state: naner_core::console::ConsoleState
     code
 }
 
+/// Run the upgrades `upgrade-vendors` queued (answer `r` at the in-use
+/// prompt). Called by the launcher right before it starts a terminal, the one
+/// moment nothing from *this* launch is running yet. Report-only: if something
+/// still holds a vendor's folder, it stays queued -- silently, since the
+/// launcher is otherwise quiet and a console would have to be conjured for it.
+/// Only an upgrade that actually ran and failed counts toward giving up.
+pub(crate) fn apply_pending_upgrades(
+    naner_root: &std::path::Path,
+    state: &mut naner_core::console::ConsoleState,
+    debug: bool,
+) {
+    use naner_core::vendors::{MAX_PENDING_ATTEMPTS, load_pending, save_pending};
+
+    let pending = load_pending(naner_root);
+    if pending.is_empty() {
+        return;
+    }
+    let loader = VendorConfigurationLoader::new(naner_root);
+    let mut pool = vendors_to_update(&loader);
+    let have: std::collections::HashSet<String> =
+        pool.iter().map(|v| v.key.to_lowercase()).collect();
+    pool.extend(
+        loader
+            .load_vendors()
+            .into_iter()
+            .filter(|v| !have.contains(&v.key.to_lowercase())),
+    );
+    let known = |name: &str| {
+        pool.iter()
+            .any(|v| v.name.eq_ignore_ascii_case(name) || v.key.eq_ignore_ascii_case(name))
+    };
+
+    let http = UreqHttp::new();
+    let installer = UnifiedVendorInstaller::new(naner_root, pool.clone(), &http)
+        .with_in_use_policy(InUsePolicy::Report);
+
+    let mut remaining = Vec::new();
+    let mut announced = false;
+    for (name, attempts) in pending {
+        if !known(&name) {
+            continue; // no longer a vendor: drop it
+        }
+        if installer.is_held(&name) {
+            logger::debug(&format!("Queued upgrade of {name} still blocked"), debug);
+            remaining.push((name, attempts));
+            continue;
+        }
+        if !announced {
+            super::bootstrap::ensure_console(state);
+            logger::header("Applying queued vendor upgrades");
+            announced = true;
+        }
+        if installer.upgrade_vendor(&name) {
+            continue;
+        }
+        let attempts = attempts + 1;
+        if attempts >= MAX_PENDING_ATTEMPTS {
+            logger::warning(&format!(
+                "Giving up on the queued upgrade of {name} after {attempts} failed tries; \
+                 run 'naner upgrade-vendors {name}' to retry"
+            ));
+        } else {
+            remaining.push((name, attempts));
+        }
+    }
+    if let Err(e) = save_pending(naner_root, &remaining) {
+        logger::warning(&format!("Could not update the queued upgrades: {e}"));
+    }
+}
+
 /// Keep only the vendors named on the command line (by name or key, any
 /// case). `Err` carries the names that matched nothing.
 fn select_named(

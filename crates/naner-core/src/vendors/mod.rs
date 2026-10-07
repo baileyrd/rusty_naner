@@ -10,7 +10,7 @@ mod msvc_build_tools;
 mod wt_config;
 
 pub use config_merge::{VendorsMergeOutcome, merge_shipped_vendor_defaults};
-pub use in_use::InUsePolicy;
+pub use in_use::{InUsePolicy, MAX_PENDING_ATTEMPTS, load_pending, save_pending};
 pub use installer::{UnifiedVendorInstaller, VendorDownloadInfo};
 pub use loader::VendorConfigurationLoader;
 pub use wt_config::{WindowsTerminalConfigurator, is_windows_terminal};
