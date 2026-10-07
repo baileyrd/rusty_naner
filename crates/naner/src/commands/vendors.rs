@@ -70,8 +70,52 @@ pub fn execute_install(args: &[String]) -> i32 {
 /// would make painfully slow and is not what anyone asked for.
 const SYNC_CONFIG_ONLY_FLAG: &str = "--sync-config-only";
 
-/// `naner update-vendors`
+/// Which of the two vendor-maintenance verbs is running.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pass {
+    /// `update-vendors`: each vendor's own CLI updater, in place.
+    Update,
+    /// `upgrade-vendors`: wholesale replacement with the latest release.
+    Upgrade,
+}
+
+/// `naner update-vendors [vendor...]`
 pub fn execute_update(args: &[String]) -> i32 {
+    run_pass(args, Pass::Update)
+}
+
+/// `naner upgrade-vendors [vendor...]`
+pub fn execute_upgrade(args: &[String]) -> i32 {
+    run_pass(args, Pass::Upgrade)
+}
+
+/// Keep only the vendors named on the command line (by name or key, any
+/// case). `Err` carries the names that matched nothing.
+fn select_named(
+    vendors: Vec<VendorDefinition>,
+    names: &[String],
+) -> Result<Vec<VendorDefinition>, Vec<String>> {
+    if names.is_empty() {
+        return Ok(vendors);
+    }
+    let matches = |v: &VendorDefinition, n: &String| {
+        v.name.eq_ignore_ascii_case(n) || v.key.eq_ignore_ascii_case(n)
+    };
+    let unknown: Vec<String> = names
+        .iter()
+        .filter(|n| !vendors.iter().any(|v| matches(v, n)))
+        .cloned()
+        .collect();
+    if !unknown.is_empty() {
+        return Err(unknown);
+    }
+    Ok(vendors
+        .into_iter()
+        .filter(|v| names.iter().any(|n| matches(v, n)))
+        .collect())
+}
+
+fn run_pass(args: &[String], pass: Pass) -> i32 {
     let (args, quiet) = strip_quiet(args);
     logger::set_quiet(quiet);
 
@@ -94,30 +138,69 @@ pub fn execute_update(args: &[String]) -> i32 {
         return 0;
     }
 
-    logger::header("Updating Vendors");
+    let (verb, header) = match pass {
+        Pass::Update => ("update", "Updating Vendors (their own CLI updaters)"),
+        Pass::Upgrade => ("upgrade", "Upgrading Vendors (wholesale replacement)"),
+    };
+    logger::header(header);
     logger::newline();
 
     logger::info(&format!("Naner Root: {}", naner_root.display()));
     logger::newline();
 
-    let vendors = vendors_to_update(&VendorConfigurationLoader::new(&naner_root));
-    if vendors.is_empty() {
-        logger::warning(
-            "Every essential vendor is disabled in vendors.json and no optional vendor is \
-             installed; nothing to update.",
+    let loader = VendorConfigurationLoader::new(&naner_root);
+    let mut vendors = vendors_to_update(&loader);
+    // Naming a vendor widens the pool to everything enabled, so
+    // `upgrade-vendors nodejs` can install one that is not there yet and
+    // `update-vendors nodejs` can say it is not installed, instead of both
+    // calling a real vendor unknown.
+    let names: Vec<String> = args
+        .iter()
+        .filter(|a| !a.starts_with('-'))
+        .cloned()
+        .collect();
+    if !names.is_empty() {
+        let have: std::collections::HashSet<String> =
+            vendors.iter().map(|v| v.key.to_lowercase()).collect();
+        vendors.extend(
+            loader
+                .load_vendors()
+                .into_iter()
+                .filter(|v| !have.contains(&v.key.to_lowercase())),
         );
+    }
+    let vendors = match select_named(vendors, &names) {
+        Ok(selected) => selected,
+        Err(unknown) => {
+            logger::failure(&format!("Unknown vendor(s): {}", unknown.join(", ")));
+            return 1;
+        }
+    };
+    if vendors.is_empty() {
+        logger::warning(&format!(
+            "Every essential vendor is disabled in vendors.json and no optional vendor is \
+             installed; nothing to {verb}."
+        ));
         return 0;
     }
     let http = UreqHttp::new();
     let installer = UnifiedVendorInstaller::new(&naner_root, vendors, &http);
-    installer.update_all_vendors();
+    let all_ok = match pass {
+        Pass::Update => installer.update_all_vendors(),
+        Pass::Upgrade => installer.upgrade_all_vendors(),
+    };
 
     logger::newline();
     merge_config_defaults(&naner_root);
 
     logger::newline();
-    logger::success("Vendor updates completed!");
-    0
+    if all_ok {
+        logger::success(&format!("Vendor {verb}s completed!"));
+        0
+    } else {
+        logger::failure(&format!("Some vendors failed to {verb}; see above."));
+        1
+    }
 }
 
 /// Bring `config/naner.json` (or `.yaml`/`.yml`) and `config/vendors.json`

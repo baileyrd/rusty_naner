@@ -1,4 +1,16 @@
 ## [Unreleased]
+### Changed
+- `update-vendors` and the new `upgrade-vendors` are now separate. **Update**
+  runs the vendor's own CLI updater in place (`rustup update`, `conda update
+  --all`, `bun upgrade`, `git update-git-for-windows`, or the package
+  manager for npm/pip vendors) and never deletes or re-downloads a tree. A
+  vendor with no CLI updater, or whose updater binary is missing, is left
+  untouched and reported with a pointer to `upgrade-vendors`; a vendor that
+  is not installed is reported, not installed. **Upgrade** is the wholesale
+  delete-and-reinstall (Windows Terminal extracts over-top), ignores the
+  `naner.lock` pin and rewrites it, and never calls a native updater.
+- Both take optional vendor names (`naner upgrade-vendors nodejs`) and exit
+  non-zero when any vendor failed.
 
 ## [0.9.35] - 2026-09-29
 ### Fixed

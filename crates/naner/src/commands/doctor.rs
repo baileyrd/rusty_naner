@@ -116,7 +116,9 @@ pub fn execute(args: &[String]) -> i32 {
         for line in &stale_installed {
             logger::warning(&format!("  - {line}"));
         }
-        logger::info("Run 'naner outdated' for a live check, or 'naner update-vendors' to update.");
+        logger::info(
+            "Run 'naner outdated' for a live check, 'naner update-vendors' to update, or 'naner upgrade-vendors' to replace.",
+        );
         logger::newline();
     }
 

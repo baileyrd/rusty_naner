@@ -80,7 +80,9 @@ pub fn run_bootstrap(updater: &NanerUpdater, naner_root: &Path, state: ConsoleSt
 
     logger::newline();
     logger::info("Additional development tools can be installed later.");
-    logger::info("Run 'naner update-vendors' to update vendor tools.");
+    logger::info(
+        "Run 'naner update-vendors' (tools' own updaters) or 'naner upgrade-vendors' (wholesale replace).",
+    );
     logger::newline();
     logger::success("Naner is ready!");
     logger::newline();
