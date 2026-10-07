@@ -51,7 +51,13 @@ fn build_cli_command() -> Command {
         .subcommand(Command::new("profile").about("Import or export profile definitions"))
         .subcommand(Command::new("checksum").about("Update vendor checksums in vendors.json"))
         .subcommand(Command::new("install").about("Install vendor tools"))
-        .subcommand(Command::new("update-vendors").about("Update installed vendors"))
+        .subcommand(
+            Command::new("update-vendors").about("Update vendors via their own CLI updater"),
+        )
+        .subcommand(
+            Command::new("upgrade-vendors")
+                .about("Replace vendors wholesale with the latest release"),
+        )
         .subcommand(Command::new("root").about("Print NANER_ROOT path"))
         .subcommand(Command::new("add-to-path").about("Add naner to the user PATH"))
         .subcommand(

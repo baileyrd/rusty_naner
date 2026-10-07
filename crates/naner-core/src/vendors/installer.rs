@@ -3,8 +3,9 @@
 //! resolution failure AND a second attempt on download failure), download to
 //! `vendor/.downloads/`, optional checksum, extract, flatten, post-install
 //! (Windows Terminal only), write `.vendor-version`, delete `.downloads`.
-//! Update = delete-and-reinstall, except Windows Terminal which extracts
-//! over-top to preserve settings.
+//! Update = the vendor's own CLI updater, in place. Upgrade = wholesale
+//! delete-and-reinstall, except Windows Terminal which extracts over-top to
+//! preserve settings.
 
 use std::path::{Path, PathBuf};
 
@@ -69,9 +70,9 @@ impl<'a> UnifiedVendorInstaller<'a> {
     }
 
     /// `naner install --force`: install over whatever is there, complete or
-    /// not. Unlike `update_vendor` this keeps the pinned artifact and never
-    /// hands off to the tool's own updater -- it is the way to repair a broken
-    /// tree, which `conda update --all` running inside that tree cannot be.
+    /// not. Unlike `upgrade_vendor` this keeps the pinned artifact -- it is the
+    /// way to repair a broken tree, which `conda update --all` running inside
+    /// that tree cannot be.
     pub fn reinstall_vendor(&self, vendor_name: &str) -> bool {
         self.install_vendor_inner(vendor_name, false, true)
     }
@@ -493,9 +494,48 @@ impl<'a> UnifiedVendorInstaller<'a> {
         }
     }
 
-    /// `UpdateVendorAsync`: delete-and-reinstall, except Windows Terminal
-    /// (extract over-top, preserving settings/).
+    /// **Update**: hand the vendor to its own CLI updater, in place -- `rustup
+    /// update`, `conda update --all`, `bun upgrade`, `git
+    /// update-git-for-windows`, or the package manager for npm/pip vendors.
+    /// Never deletes or re-downloads the vendor's tree.
+    ///
+    /// A vendor with no CLI updater (or whose updater binary is missing) is
+    /// left untouched and reported, with the pointer to [`Self::upgrade_vendor`]
+    /// -- the wholesale replacement is a separate, explicit request, because
+    /// silently falling through to it is how an "update" used to wipe a
+    /// multi-hundred-MB toolchain. A vendor that is not installed is not
+    /// installed by an update either; that is `naner install`.
     pub fn update_vendor(&self, vendor_name: &str) -> bool {
+        let Some(vendor) = self.find(vendor_name) else {
+            logger::failure(&format!("Unknown vendor: {vendor_name}"));
+            return false;
+        };
+
+        let target_dir = self.vendor_dir.join(&vendor.extract_dir);
+        if !target_dir.is_dir() {
+            logger::warning(&format!(
+                "{} is not installed; run 'naner install {}' first",
+                vendor.name, vendor.name
+            ));
+            return false;
+        }
+
+        if let Some(result) = self.try_native_update(vendor, &target_dir) {
+            return result;
+        }
+        logger::info(&format!(
+            "{} has no CLI updater of its own; run 'naner upgrade-vendors {}' \
+             to replace it with the latest release",
+            vendor.name, vendor.name
+        ));
+        true
+    }
+
+    /// **Upgrade**: wholesale replacement with the latest release -- delete
+    /// and reinstall, except Windows Terminal (extract over-top, preserving
+    /// settings/). Never consults the vendor's own CLI updater; that is
+    /// [`Self::update_vendor`]. Installs the vendor if it is not there yet.
+    pub fn upgrade_vendor(&self, vendor_name: &str) -> bool {
         let Some(vendor) = self.find(vendor_name) else {
             logger::failure(&format!("Unknown vendor: {vendor_name}"));
             return false;
@@ -505,21 +545,6 @@ impl<'a> UnifiedVendorInstaller<'a> {
         let is_wt = is_windows_terminal(&vendor.name);
 
         if target_dir.is_dir() {
-            // Some vendors bundle their own real updater -- rustup, conda,
-            // Bun's self-updater, Git for Windows' own updater -- and it is
-            // authoritative over the generic pipeline below when its binary
-            // is actually present: naner's own delete-and-reinstall would
-            // otherwise wipe and rebuild a multi-hundred-MB toolchain (or, for
-            // Rust, whose `.vendor-version` is always the literal string
-            // "latest" -- see `version_from_file_name` -- silently do nothing
-            // at all, forever) instead of asking the tool to update itself the
-            // way its own maintainers documented. A missing binary (a partial
-            // or pre-native-update install) falls through to the version
-            // check and generic reinstall below, same as before this existed.
-            if let Some(result) = self.try_native_update(vendor, &target_dir) {
-                return result;
-            }
-
             let current = read_version(&target_dir);
 
             // Resolve what upstream currently calls latest -- the same
@@ -589,9 +614,48 @@ impl<'a> UnifiedVendorInstaller<'a> {
             self.bun_upgrade(target_dir)
         } else if vendor.key.eq_ignore_ascii_case("GitForWindows") {
             self.git_for_windows_update(target_dir)
+        } else if matches!(
+            vendor.source_type,
+            VendorSourceType::Npm | VendorSourceType::Pip
+        ) {
+            self.package_update(vendor, target_dir)
         } else {
             None
         }
+    }
+
+    /// npm/pip vendors update through their package manager, in place: `npm
+    /// install -g <pkg>@<latest>` / `pip install --upgrade`, the same command
+    /// the vendor's own docs give. Skipped when the recorded version is already
+    /// the registry's latest. A registry that cannot be reached is a failure,
+    /// not "up to date".
+    fn package_update(&self, vendor: &VendorDefinition, target_dir: &Path) -> Option<bool> {
+        let info = match self.resolve_upstream(vendor) {
+            Ok(Some(info)) => info,
+            Ok(None) | Err(_) => {
+                logger::failure(&format!(
+                    "  Could not resolve the latest {} from its registry",
+                    vendor.name
+                ));
+                return Some(false);
+            }
+        };
+        let current = read_version(target_dir);
+        if let (Some(current), Some(latest)) = (current.as_deref(), info.version.as_deref())
+            && crate::version::vendor_compare(current, latest) != std::cmp::Ordering::Less
+        {
+            logger::info(&format!(
+                "{} is already up to date ({})",
+                vendor.name,
+                with_v_prefix(current)
+            ));
+            return Some(true);
+        }
+        logger::status(&format!(
+            "  Updating {} via its package manager...",
+            vendor.name
+        ));
+        Some(self.install_package_vendor(vendor, &info, target_dir))
     }
 
     /// `rustup update` -- updates rustup itself and every installed
@@ -721,18 +785,31 @@ impl<'a> UnifiedVendorInstaller<'a> {
         true
     }
 
-    /// `UpdateAllVendorsAsync`.
+    /// Update every vendor through its own CLI updater. `true` only when none
+    /// of them failed.
     pub fn update_all_vendors(&self) -> bool {
+        let mut all_ok = true;
+        for vendor in dependency_order(&self.vendors) {
+            all_ok &= self.update_vendor(&vendor.name);
+            logger::newline();
+        }
+        all_ok
+    }
+
+    /// `UpdateAllVendorsAsync`: wholesale-replace every vendor. `true` only
+    /// when none of them failed.
+    pub fn upgrade_all_vendors(&self) -> bool {
         logger::status("This may take several minutes depending on your connection...");
         logger::newline();
 
         let _ = std::fs::create_dir_all(&self.download_dir);
+        let mut all_ok = true;
         for vendor in dependency_order(&self.vendors) {
-            self.update_vendor(&vendor.name);
+            all_ok &= self.upgrade_vendor(&vendor.name);
             logger::newline();
         }
         self.cleanup_downloads();
-        true
+        all_ok
     }
 
     pub fn cleanup_downloads(&self) {
@@ -3021,7 +3098,7 @@ mod tests {
         let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
         // skip_if_exists would short-circuit on the non-empty dir; go through
         // the update path so placement is actually attempted.
-        let installed = installer.update_vendor("Windows Terminal");
+        let installed = installer.upgrade_vendor("Windows Terminal");
 
         assert!(!installed, "a failed placement must not report success");
         assert!(
@@ -3167,7 +3244,7 @@ mod tests {
         );
 
         let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
-        assert!(installer.update_vendor("PowerShell"));
+        assert!(installer.upgrade_vendor("PowerShell"));
 
         let entry = NanerLockfile::load(root.path())
             .unwrap()
@@ -3204,7 +3281,7 @@ mod tests {
             "the initial install downloads once"
         );
 
-        assert!(installer.update_vendor("PowerShell"));
+        assert!(installer.upgrade_vendor("PowerShell"));
         assert_eq!(
             http.downloads.get(),
             1,
@@ -3216,9 +3293,48 @@ mod tests {
         );
     }
 
+    /// The point of the split: `update` on a vendor with no CLI updater must
+    /// leave the install exactly as it was -- no delete, no download -- and
+    /// point at `upgrade`. It used to fall through to the wholesale reinstall.
+    #[test]
+    fn update_never_replaces_a_vendor_that_has_no_cli_updater() {
+        let root = tempfile::tempdir().unwrap();
+        let target = root.path().join("vendor/powershell");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::write(target.join("pwsh.exe"), "old").unwrap();
+        std::fs::write(target.join(".vendor-version"), "7.0.0").unwrap();
+
+        let http = StubHttp::default();
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
+
+        assert!(installer.update_vendor("PowerShell"));
+        assert_eq!(http.downloads.get(), 0, "update must not download");
+        assert_eq!(
+            std::fs::read_to_string(target.join("pwsh.exe")).unwrap(),
+            "old"
+        );
+        assert_eq!(
+            std::fs::read_to_string(target.join(".vendor-version")).unwrap(),
+            "7.0.0"
+        );
+    }
+
+    /// An update is not an install: a vendor that is absent is reported and
+    /// the run is marked failed, rather than quietly downloading it.
+    #[test]
+    fn update_does_not_install_a_missing_vendor() {
+        let root = tempfile::tempdir().unwrap();
+        let http = StubHttp::default();
+        let installer = UnifiedVendorInstaller::new(root.path(), vec![github_vendor()], &http);
+
+        assert!(!installer.update_vendor("PowerShell"));
+        assert_eq!(http.downloads.get(), 0);
+        assert!(!root.path().join("vendor/powershell").exists());
+    }
+
     /// A vendor with no bundled native updater (the common case) must not be
-    /// claimed by the dispatch -- it has to fall through to the generic
-    /// pipeline exercised elsewhere in this file.
+    /// claimed by the dispatch -- `update_vendor` reports it and leaves it
+    /// alone, and `upgrade_vendor` is what replaces it.
     #[test]
     fn native_update_dispatch_ignores_vendors_without_one() {
         let root = tempfile::tempdir().unwrap();
@@ -3232,11 +3348,11 @@ mod tests {
     }
 
     /// The reported gap: Rust, Anaconda, Bun and Git for Windows all bundle
-    /// their own real updater, and `update_vendor` must prefer running it
-    /// over the generic delete-and-reinstall pipeline. But a vendor whose
+    /// their own real updater, and `update_vendor` runs it. A vendor whose
     /// directory exists without its native updater binary in it -- a partial
-    /// install, or one predating this feature -- must fall through to that
-    /// generic pipeline rather than silently doing nothing.
+    /// install, or one predating this feature -- is not claimed, so
+    /// `update_vendor` reports it and points at `upgrade_vendor` rather than
+    /// silently doing nothing.
     #[test]
     fn native_update_falls_through_when_the_binary_is_missing() {
         let root = tempfile::tempdir().unwrap();
@@ -3452,7 +3568,7 @@ mod tests {
         );
 
         // update: delete-and-reinstall.
-        assert!(installer.update_vendor("PowerShell"));
+        assert!(installer.upgrade_vendor("PowerShell"));
         assert_eq!(
             std::fs::read_to_string(target.join("pwsh.exe")).unwrap(),
             "new"
@@ -3504,7 +3620,7 @@ mod tests {
         );
 
         let installer = UnifiedVendorInstaller::new(root.path(), vec![vendor], &http);
-        assert!(installer.update_vendor("Windows Terminal"));
+        assert!(installer.upgrade_vendor("Windows Terminal"));
 
         // Extracted over-top: exe updated, user's settings file NOT deleted...
         assert_eq!(

@@ -22,7 +22,8 @@ pub fn execute() -> i32 {
     println!("  init                       Initialize Naner in this folder (download from GitHub)");
     println!("  update                     Update Naner itself to the latest release");
     println!("  check-update               Check whether a newer release exists");
-    println!("  update-vendors             Update all vendor dependencies to latest versions");
+    println!("  update-vendors [vendor]    Update vendors via their own CLI updater (in place)");
+    println!("  upgrade-vendors [vendor]   Replace vendors wholesale with the latest release");
     println!("  root                       Print the Naner root directory and exit");
     println!("  add-to-path                Put naner on the user PATH (undo: --remove)");
     println!("  suggest <name>             Map a missing command to the vendor providing it");
@@ -57,7 +58,8 @@ pub fn execute() -> i32 {
     println!("  naner.exe -p Bash -d C:\\projects   # Launch Bash in specific dir");
     println!("  naner.exe --debug                  # Show detailed diagnostics");
     println!("  naner.exe --diagnose               # Check installation health");
-    println!("  naner.exe update-vendors           # Update vendor dependencies");
+    println!("  naner.exe update-vendors           # Run each tool's own updater");
+    println!("  naner.exe upgrade-vendors nodejs   # Replace Node.js with the latest release");
     println!("  naner.exe install --list           # List available vendors");
     println!("  naner.exe install ruby nodejs      # Install Ruby and Node.js");
     println!();
@@ -74,7 +76,9 @@ pub fn execute() -> i32 {
     println!();
     println!("INITIALIZATION:");
     println!("  naner is a single binary: run it in an empty folder to install,");
-    println!("  'naner update' to update itself, 'naner update-vendors' for tools.");
+    println!(
+        "  'naner update' to update itself, 'naner update-vendors' / 'upgrade-vendors' for tools."
+    );
     println!();
 
     println!("REQUIREMENTS:");

@@ -50,6 +50,7 @@ pub mod names {
     pub const PACK: &str = "pack";
     pub const SELF_UPDATE: &str = "self-update";
     pub const UPDATE_VENDORS: &str = "update-vendors";
+    pub const UPGRADE_VENDORS: &str = "upgrade-vendors";
     pub const INSTALL: &str = "install";
     pub const DEBUG: &str = "--debug";
     pub const ROOT: &str = "root";
@@ -63,7 +64,7 @@ pub mod names {
     pub const REFRESH_PINS: &str = "refresh-pins";
     pub const RECLAIM: &str = "reclaim";
 
-    pub const CONSOLE_COMMANDS: [&str; 33] = [
+    pub const CONSOLE_COMMANDS: [&str; 34] = [
         VERSION,
         VERSION_SHORT,
         HELP,
@@ -85,6 +86,7 @@ pub mod names {
         PACK,
         SELF_UPDATE,
         UPDATE_VENDORS,
+        UPGRADE_VENDORS,
         INSTALL,
         DEBUG,
         ROOT,
@@ -124,6 +126,7 @@ pub enum Verb {
     Pack,
     SelfUpdate,
     UpdateVendors,
+    UpgradeVendors,
     Install,
     Root,
     Lock,
@@ -159,6 +162,7 @@ impl Verb {
             names::PACK => Self::Pack,
             names::SELF_UPDATE => Self::SelfUpdate,
             names::UPDATE_VENDORS => Self::UpdateVendors,
+            names::UPGRADE_VENDORS => Self::UpgradeVendors,
             names::INSTALL => Self::Install,
             names::ROOT => Self::Root,
             names::LOCK => Self::Lock,
@@ -195,6 +199,7 @@ impl Verb {
             // muscle memory and old docs keep working.
             Self::SelfUpdate => bootstrap::execute_update(rest, state),
             Self::UpdateVendors => vendors::execute_update(rest),
+            Self::UpgradeVendors => vendors::execute_upgrade(rest),
             Self::Install => vendors::execute_install(rest),
             Self::Root => root::execute(),
             Self::Lock => lock::execute(rest),
@@ -269,6 +274,7 @@ mod tests {
             names::PACK,
             names::SELF_UPDATE,
             names::UPDATE_VENDORS,
+            names::UPGRADE_VENDORS,
             names::INSTALL,
             names::ROOT,
             names::LOCK,
@@ -342,6 +348,7 @@ mod tests {
             Verb::Pack,
             Verb::SelfUpdate,
             Verb::UpdateVendors,
+            Verb::UpgradeVendors,
             Verb::Install,
             Verb::Root,
             Verb::Lock,

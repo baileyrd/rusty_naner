@@ -89,7 +89,7 @@ pub fn execute(args: &[String]) -> i32 {
     if outdated > 0 {
         logger::warning(&format!(
             "{outdated} vendor(s) have updates available. Run 'naner update-vendors' \
-             to update them all, or 'naner install <vendor>' after removing one."
+             to run their own updaters, or 'naner upgrade-vendors [vendor]' to replace them."
         ));
     } else {
         logger::success("Every checked vendor is current.");
