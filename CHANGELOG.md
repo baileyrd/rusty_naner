@@ -1,4 +1,12 @@
 ## [Unreleased]
+### Added
+- `update-vendors --accept-conda-tos` accepts Anaconda's Terms of Service for
+  its default channels before `conda update --all`. Opt-in only: it is the
+  user's acceptance, so naner never does it unasked. Without the flag, a
+  failed conda update says how to re-run.
+- When an update/upgrade fails because a file is in use (os error 5, 32, 33,
+  1224), naner now names the running processes holding the vendor's folder
+  instead of leaving a bare `os error`.
 ### Changed
 - `update-vendors` and the new `upgrade-vendors` are now separate. **Update**
   runs the vendor's own CLI updater in place (`rustup update`, `conda update
