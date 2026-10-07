@@ -94,13 +94,49 @@ Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($dir, 'OrdinalIgnor
     .replace("@DIR@", &dir.display().to_string().replace('\'', "''"))
     .replace("@SELF@", &std::process::id().to_string());
 
-    let Ok(output) = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+    let Ok(output) = std::process::Command::new(system32(r"WindowsPowerShell\v1.0\powershell.exe"))
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-EncodedCommand",
+            &encode_command(&script),
+        ])
         .output()
     else {
         return Vec::new();
     };
     parse_holders(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// A Windows system tool by absolute path. Naner rewrites `PATH`, and a bare
+/// `powershell` was not on it: the launch failed and the lookup quietly
+/// reported that nothing was holding the folder.
+fn system32(tool: &str) -> std::path::PathBuf {
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+    Path::new(&root).join("System32").join(tool)
+}
+
+/// `powershell -EncodedCommand` takes base64 of the script's UTF-16LE bytes.
+/// Passing the script via `-Command` instead loses its double quotes to
+/// command-line parsing, which silently turned the lookup into "nobody is
+/// holding anything".
+pub(crate) fn encode_command(script: &str) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = (u32::from(chunk[0]) << 16)
+            | (u32::from(*chunk.get(1).unwrap_or(&0)) << 8)
+            | u32::from(*chunk.get(2).unwrap_or(&0));
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(ALPHABET[((n >> (18 - 6 * i)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }
 
 /// Windows error codes for "something has this file open".
@@ -118,7 +154,7 @@ fn describe(holders: &[Holder]) -> String {
 
 fn kill(holders: &[Holder]) {
     for holder in holders.iter().filter(|h| !h.protected) {
-        let _ = std::process::Command::new("taskkill")
+        let _ = std::process::Command::new(system32("taskkill.exe"))
             .args(["/F", "/PID", &holder.pid.to_string()])
             .output();
     }
@@ -253,7 +289,7 @@ fn schedule_at_logon(vendor: &str, naner_root: &Path, command_args: &[&str]) -> 
             }
         })
         .collect();
-    let out = std::process::Command::new("reg")
+    let out = std::process::Command::new(system32("reg.exe"))
         .args([
             "add",
             r"HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce",
@@ -296,6 +332,20 @@ mod tests {
                 },
             ]
         );
+    }
+
+    #[test]
+    fn encoded_command_is_base64_of_utf16le() {
+        // "Hi" -> 48 00 69 00 -> SABpAA==
+        assert_eq!(encode_command("Hi"), "SABpAA==");
+        // Quotes survive: the reason this exists.
+        assert_eq!(encode_command("\"").len(), 4);
+    }
+
+    #[test]
+    fn system_tools_resolve_under_system32() {
+        let p = system32("taskkill.exe");
+        assert!(p.ends_with("System32/taskkill.exe") || p.ends_with(r"System32	askkill.exe"));
     }
 
     #[test]
