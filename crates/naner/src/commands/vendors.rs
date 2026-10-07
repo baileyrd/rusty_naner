@@ -17,6 +17,7 @@ const PORCELAIN_FLAG: &str = "--porcelain";
 const QUIET_FLAG: &str = "--quiet";
 const VERBOSE_FLAG: &str = "--verbose";
 const FORCE_FLAG: &str = "--force";
+const ACCEPT_CONDA_TOS_FLAG: &str = "--accept-conda-tos";
 
 /// `naner install ...`
 pub fn execute_install(args: &[String]) -> i32 {
@@ -184,7 +185,11 @@ fn run_pass(args: &[String], pass: Pass) -> i32 {
         return 0;
     }
     let http = UreqHttp::new();
-    let installer = UnifiedVendorInstaller::new(&naner_root, vendors, &http);
+    let accept_tos = args
+        .iter()
+        .any(|a| a.eq_ignore_ascii_case(ACCEPT_CONDA_TOS_FLAG));
+    let installer =
+        UnifiedVendorInstaller::new(&naner_root, vendors, &http).with_accept_conda_tos(accept_tos);
     let all_ok = match pass {
         Pass::Update => installer.update_all_vendors(),
         Pass::Upgrade => installer.upgrade_all_vendors(),

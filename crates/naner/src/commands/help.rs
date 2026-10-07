@@ -23,6 +23,7 @@ pub fn execute() -> i32 {
     println!("  update                     Update Naner itself to the latest release");
     println!("  check-update               Check whether a newer release exists");
     println!("  update-vendors [vendor]    Update vendors via their own CLI updater (in place)");
+    println!("    update-vendors --accept-conda-tos  Accept Anaconda's ToS before updating it");
     println!("  upgrade-vendors [vendor]   Replace vendors wholesale with the latest release");
     println!("  root                       Print the Naner root directory and exit");
     println!("  add-to-path                Put naner on the user PATH (undo: --remove)");

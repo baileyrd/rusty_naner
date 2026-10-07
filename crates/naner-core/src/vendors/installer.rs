@@ -38,7 +38,16 @@ pub struct UnifiedVendorInstaller<'a> {
     download_dir: PathBuf,
     http: &'a dyn Http,
     vendors: Vec<VendorDefinition>,
+    accept_conda_tos: bool,
 }
+
+/// Channels `conda` demands Terms-of-Service acceptance for before it will
+/// update anything.
+const CONDA_TOS_CHANNELS: [&str; 3] = [
+    "https://repo.anaconda.com/pkgs/main",
+    "https://repo.anaconda.com/pkgs/r",
+    "https://repo.anaconda.com/pkgs/msys2",
+];
 
 impl<'a> UnifiedVendorInstaller<'a> {
     pub fn new(naner_root: &Path, vendors: Vec<VendorDefinition>, http: &'a dyn Http) -> Self {
@@ -49,7 +58,16 @@ impl<'a> UnifiedVendorInstaller<'a> {
             vendor_dir,
             http,
             vendors,
+            accept_conda_tos: false,
         }
+    }
+
+    /// Accept Anaconda's Terms of Service for its default channels before a
+    /// conda update. Opt-in only: it is the user's legal acceptance, so naner
+    /// never does it unasked (`update-vendors --accept-conda-tos`).
+    pub fn with_accept_conda_tos(mut self, accept: bool) -> Self {
+        self.accept_conda_tos = accept;
+        self
     }
 
     fn find(&self, vendor_name: &str) -> Option<&VendorDefinition> {
@@ -236,6 +254,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
         if !is_binary && is_installer_exe(&download_path) {
             if let Err(e) = install_in_place(&target_dir, extract_to) {
                 logger::failure(&format!("    Failed to install {}: {e}", vendor.name));
+                explain_in_use(&e, &vendor.name, &target_dir);
                 return false;
             }
             return self.finish_install(
@@ -289,6 +308,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
         };
         if let Err(e) = placed {
             logger::failure(&format!("    Failed to install {}: {e}", vendor.name));
+            explain_in_use(&e, &vendor.name, &target_dir);
             let _ = std::fs::remove_dir_all(&staging_target);
             return false;
         }
@@ -587,6 +607,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 ));
                 if let Err(e) = std::fs::remove_dir_all(&target_dir) {
                     logger::warning(&format!("Failed to remove existing installation: {e}"));
+                    explain_in_use(&e, &vendor.name, &target_dir);
                     return false;
                 }
             }
@@ -692,6 +713,17 @@ impl<'a> UnifiedVendorInstaller<'a> {
         if !conda.is_file() {
             return None;
         }
+        if self.accept_conda_tos {
+            logger::status("  Accepting Anaconda's Terms of Service (--accept-conda-tos)...");
+            for channel in CONDA_TOS_CHANNELS {
+                let mut tos = std::process::Command::new(&conda);
+                tos.args(["tos", "accept", "--override-channels", "--channel", channel]);
+                for (key, value) in archives::home_isolation_envs(&self.naner_root) {
+                    tos.env(key, value);
+                }
+                run_and_report(tos, "conda tos accept");
+            }
+        }
         logger::status("  Running 'conda update --all' (Anaconda's own updater)...");
         let mut command = std::process::Command::new(&conda);
         command.args(["update", "--all", "-y"]);
@@ -701,6 +733,11 @@ impl<'a> UnifiedVendorInstaller<'a> {
         let ok = run_and_report(command, "conda update --all");
         if ok {
             logger::success("  Anaconda packages updated via conda");
+        } else if !self.accept_conda_tos {
+            logger::info(
+                "  If conda reported unaccepted Terms of Service, re-run with \
+                 --accept-conda-tos to accept them for the default channels",
+            );
         }
         Some(ok)
     }
@@ -1637,6 +1674,57 @@ fn scrape_match_is_newer(
 /// for comparison, silently lossy for display.
 fn with_v_prefix(version: &str) -> String {
     format!("v{}", version.trim_start_matches(['v', 'V']))
+}
+
+/// Windows error codes for "something has this file open": access denied
+/// (a running exe can't be deleted), sharing/lock violation, and a file with a
+/// mapped section (a loaded exe or DLL).
+fn is_in_use_error(e: &std::io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(5 | 32 | 33 | 1224))
+}
+
+/// Names of running processes whose executable lives under `dir`, best-effort
+/// (one PowerShell call; empty when it can't be asked or nothing matches).
+fn processes_running_from(dir: &Path) -> Vec<String> {
+    let script = format!(
+        "Get-Process | Where-Object {{ $_.Path -and $_.Path.StartsWith('{}', 'OrdinalIgnoreCase') }} \
+         | Select-Object -ExpandProperty ProcessName -Unique",
+        dir.display().to_string().replace('\'', "''")
+    );
+    let Ok(output) = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+    else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+/// When `e` means a file is in use, say so and name what is holding the
+/// vendor's tree, instead of leaving the user with a bare `os error`.
+fn explain_in_use(e: &std::io::Error, vendor: &str, dir: &Path) {
+    if !is_in_use_error(e) {
+        return;
+    }
+    let holders = processes_running_from(dir);
+    if holders.is_empty() {
+        logger::warning(&format!(
+            "  A file in {vendor}'s folder is in use. Close anything running from {} \
+             (including terminals started from it) and retry.",
+            dir.display()
+        ));
+    } else {
+        logger::warning(&format!(
+            "  {vendor} is in use by: {}. Close {} and retry.",
+            holders.join(", "),
+            if holders.len() == 1 { "it" } else { "them" }
+        ));
+    }
 }
 
 /// Run a native vendor updater and report success/failure the same way
@@ -3321,6 +3409,15 @@ mod tests {
 
     /// An update is not an install: a vendor that is absent is reported and
     /// the run is marked failed, rather than quietly downloading it.
+    #[test]
+    fn in_use_errors_are_recognised_by_windows_code() {
+        for code in [5, 32, 33, 1224] {
+            assert!(is_in_use_error(&std::io::Error::from_raw_os_error(code)));
+        }
+        assert!(!is_in_use_error(&std::io::Error::from_raw_os_error(2)));
+        assert!(!is_in_use_error(&std::io::Error::other("x")));
+    }
+
     #[test]
     fn update_does_not_install_a_missing_vendor() {
         let root = tempfile::tempdir().unwrap();
