@@ -83,8 +83,8 @@ enum Pass {
 }
 
 /// `naner update-vendors [vendor...]`
-pub fn execute_update(args: &[String]) -> i32 {
-    run_pass(args, Pass::Update)
+pub fn execute_update(args: &[String], state: naner_core::console::ConsoleState) -> i32 {
+    run_pass_with_prompt(args, state, Pass::Update)
 }
 
 /// `naner upgrade-vendors [vendor...]`
@@ -95,6 +95,14 @@ pub fn execute_update(args: &[String]) -> i32 {
 /// PowerShell waits for a GUI-subsystem process, so the shell's own line
 /// editor and naner's prompt otherwise compete for the same keystrokes.
 pub fn execute_upgrade(args: &[String], state: naner_core::console::ConsoleState) -> i32 {
+    run_pass_with_prompt(args, state, Pass::Upgrade)
+}
+
+fn run_pass_with_prompt(
+    args: &[String],
+    state: naner_core::console::ConsoleState,
+    pass: Pass,
+) -> i32 {
     let has = |flag: &str| args.iter().any(|a| a.eq_ignore_ascii_case(flag));
     let may_prompt = !has(NO_PROMPT_FLAG)
         && !has(CLOSE_PROCESSES_FLAG)
@@ -104,7 +112,7 @@ pub fn execute_upgrade(args: &[String], state: naner_core::console::ConsoleState
     if may_prompt && let Some(code) = super::bootstrap::reexec_in_own_console_if_racy(state) {
         return code;
     }
-    let code = run_pass(args, Pass::Upgrade);
+    let code = run_pass(args, pass);
     if may_prompt {
         super::bootstrap::wait_for_key_before_exit(state);
     }

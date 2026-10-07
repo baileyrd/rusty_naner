@@ -550,6 +550,21 @@ impl<'a> UnifiedVendorInstaller<'a> {
             return false;
         }
 
+        // Same check upgrade does: Git's updater, for one, cannot replace
+        // `git.exe` while an editor or shell has it open, and said only "exit
+        // code 2".
+        if has_binary_updater(vendor, &target_dir) {
+            match in_use::resolve(
+                &vendor.name,
+                &target_dir,
+                &self.naner_root,
+                self.in_use_policy,
+                false,
+            ) {
+                Resolution::Proceed => {}
+                Resolution::Skip | Resolution::Scheduled => return false,
+            }
+        }
         if let Some(result) = self.try_native_update(vendor, &target_dir) {
             return result;
         }
@@ -622,6 +637,7 @@ impl<'a> UnifiedVendorInstaller<'a> {
                 &target_dir,
                 &self.naner_root,
                 self.in_use_policy,
+                true,
             ) {
                 Resolution::Proceed => {}
                 Resolution::Skip => return false,
@@ -1705,6 +1721,25 @@ fn scrape_match_is_newer(
 /// for comparison, silently lossy for display.
 fn with_v_prefix(version: &str) -> String {
     format!("v{}", version.trim_start_matches(['v', 'V']))
+}
+
+/// Whether `vendor` has an updater binary in its own tree that rewrites that
+/// tree in place (rustup, conda, bun, git). These are the native updaters a
+/// running process can break; the npm/pip ones only touch `home/`.
+fn has_binary_updater(vendor: &VendorDefinition, target_dir: &Path) -> bool {
+    let key = vendor.key.as_str();
+    let binary = if key.eq_ignore_ascii_case("Rust") {
+        target_dir.join(".cargo").join("bin").join("rustup.exe")
+    } else if key.eq_ignore_ascii_case("Anaconda") {
+        target_dir.join("Scripts").join("conda.exe")
+    } else if key.eq_ignore_ascii_case("Bun") {
+        target_dir.join("bun.exe")
+    } else if key.eq_ignore_ascii_case("GitForWindows") {
+        target_dir.join("cmd").join("git.exe")
+    } else {
+        return false;
+    };
+    binary.is_file()
 }
 
 /// When `e` means a file is in use, say so and name what is holding the

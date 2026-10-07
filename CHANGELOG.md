@@ -1,4 +1,10 @@
 ## [Unreleased]
+### Fixed
+- `update-vendors` now checks for running processes before it runs rustup,
+  conda, bun or Git for Windows' own updater, and offers to close them (or
+  `--close-processes`). Git's updater used to fail with a bare "exit code 2"
+  when an editor or shell had `git.exe` open. Updates cannot be queued for
+  the next launch; only upgrades can.
 ### Added
 - `upgrade-vendors` checks, before replacing a vendor, whether a running
   process holds its folder. On a terminal it asks: close them and continue,

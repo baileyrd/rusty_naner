@@ -198,7 +198,7 @@ impl Verb {
             // `self-update` predates the single binary; kept as an alias so
             // muscle memory and old docs keep working.
             Self::SelfUpdate => bootstrap::execute_update(rest, state),
-            Self::UpdateVendors => vendors::execute_update(rest),
+            Self::UpdateVendors => vendors::execute_update(rest, state),
             Self::UpgradeVendors => vendors::execute_upgrade(rest, state),
             Self::Install => vendors::execute_install(rest),
             Self::Root => root::execute(),
