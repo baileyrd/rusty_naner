@@ -1,0 +1,333 @@
+//! Files held open by running processes: finding who holds a vendor's tree,
+//! offering to close them, or deferring the replacement to the next logon.
+//!
+//! Replacing a vendor means deleting or overwriting files a running `pwsh.exe`
+//! or `WindowsTerminal.exe` has mapped, which Windows refuses (os error 5,
+//! 32, 33, 1224). Checking *before* the replacement starts -- rather than
+//! reacting to the failure afterwards -- means the download is not wasted and
+//! the tree is never left half-replaced.
+
+use std::io::{BufRead, IsTerminal, Write};
+use std::path::Path;
+
+use crate::logger;
+
+/// What to do when something is holding a vendor's folder.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InUsePolicy {
+    /// Say who is holding it and stop. For pipes and scripts.
+    #[default]
+    Report,
+    /// Ask: close them, retry at next logon, or skip.
+    Prompt,
+    /// Close them without asking (`--close-processes`).
+    Close,
+}
+
+impl InUsePolicy {
+    /// `Prompt` only when a person can answer; otherwise `Report`.
+    pub fn interactive_default() -> Self {
+        if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
+            Self::Prompt
+        } else {
+            Self::Report
+        }
+    }
+}
+
+/// A running process with an executable under a vendor's folder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Holder {
+    pub pid: u32,
+    pub name: String,
+    /// This naner process, or one of its parents. Closing it would close the
+    /// console naner is running in (or naner itself), so it is never killed.
+    pub protected: bool,
+}
+
+/// What the caller should do next.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resolution {
+    /// Nothing is holding the tree (or it was just freed): go ahead.
+    Proceed,
+    /// The user declined, or it could not be freed: leave the vendor alone.
+    Skip,
+    /// Deferred to the next logon: leave the vendor alone for now.
+    Scheduled,
+}
+
+/// Parse the tab-separated `pid<TAB>name<TAB>0|1` lines the lookup prints.
+pub(crate) fn parse_holders(output: &str) -> Vec<Holder> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.trim().split('\t');
+            let pid = parts.next()?.trim().parse().ok()?;
+            let name = parts.next()?.trim().to_string();
+            let protected = parts.next().map(str::trim) == Some("1");
+            (!name.is_empty()).then_some(Holder {
+                pid,
+                name,
+                protected,
+            })
+        })
+        .collect()
+}
+
+/// Running processes whose executable lives under `dir`. Best-effort (one
+/// PowerShell call): empty when it cannot be asked or nothing matches.
+pub fn find_holders(dir: &Path) -> Vec<Holder> {
+    // Placeholders, not `format!`: the script is full of braces.
+    let script = r#"
+$dir = '@DIR@'
+$anc = @{}
+$cur = @SELF@
+while ($cur -and -not $anc.ContainsKey($cur)) {
+  $anc[$cur] = 1
+  $p = Get-CimInstance Win32_Process -Filter "ProcessId=$cur" -ErrorAction SilentlyContinue
+  if (-not $p) { break }
+  $cur = $p.ParentProcessId
+}
+Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($dir, 'OrdinalIgnoreCase') } |
+  ForEach-Object { "$($_.Id)`t$($_.ProcessName)`t$([int]$anc.ContainsKey([int]$_.Id))" }
+"#
+    .replace("@DIR@", &dir.display().to_string().replace('\'', "''"))
+    .replace("@SELF@", &std::process::id().to_string());
+
+    let Ok(output) = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+    else {
+        return Vec::new();
+    };
+    parse_holders(&String::from_utf8_lossy(&output.stdout))
+}
+
+/// Windows error codes for "something has this file open".
+pub fn is_in_use_error(e: &std::io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(5 | 32 | 33 | 1224))
+}
+
+fn describe(holders: &[Holder]) -> String {
+    holders
+        .iter()
+        .map(|h| format!("{} ({})", h.name, h.pid))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn kill(holders: &[Holder]) {
+    for holder in holders.iter().filter(|h| !h.protected) {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/PID", &holder.pid.to_string()])
+            .output();
+    }
+}
+
+/// One answer to the prompt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Choice {
+    Close,
+    Reboot,
+    Skip,
+}
+
+pub(crate) fn parse_choice(input: &str, can_close: bool) -> Choice {
+    match input.trim().to_ascii_lowercase().as_str() {
+        "k" | "kill" | "c" | "close" if can_close => Choice::Close,
+        "r" | "reboot" | "l" | "logon" => Choice::Reboot,
+        _ => Choice::Skip,
+    }
+}
+
+fn ask(can_close: bool) -> Choice {
+    let options = if can_close {
+        "[k] close them and continue, [r] replace at next logon, [s] skip"
+    } else {
+        "[r] replace at next logon, [s] skip"
+    };
+    print!("  {options} (default: skip): ");
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    if std::io::stdin().lock().read_line(&mut line).is_err() {
+        return Choice::Skip;
+    }
+    parse_choice(&line, can_close)
+}
+
+/// Make sure nothing is holding `dir` before `vendor` is replaced.
+///
+/// `command_args` is what `naner` should be re-run with at the next logon
+/// (e.g. `["upgrade-vendors", "Windows Terminal"]`).
+pub fn resolve(
+    vendor: &str,
+    dir: &Path,
+    naner_root: &Path,
+    policy: InUsePolicy,
+    command_args: &[&str],
+) -> Resolution {
+    let holders = find_holders(dir);
+    if holders.is_empty() {
+        return Resolution::Proceed;
+    }
+
+    logger::warning(&format!("  {vendor} is in use by: {}", describe(&holders)));
+    let can_close = holders.iter().any(|h| !h.protected);
+    if holders.iter().any(|h| h.protected) {
+        logger::warning(
+            "  Some of those are running naner itself or the console it is in; \
+             they cannot be closed from here.",
+        );
+    }
+
+    let choice = match policy {
+        InUsePolicy::Report => {
+            logger::info(
+                "  Close them and retry, or re-run with --close-processes to close them for you.",
+            );
+            return Resolution::Skip;
+        }
+        InUsePolicy::Close if can_close => Choice::Close,
+        InUsePolicy::Close => Choice::Skip,
+        InUsePolicy::Prompt => ask(can_close),
+    };
+
+    match choice {
+        Choice::Close => {
+            kill(&holders);
+            std::thread::sleep(std::time::Duration::from_millis(800));
+            let remaining = find_holders(dir);
+            if remaining.is_empty() {
+                logger::info(&format!("  Closed what was holding {vendor}"));
+                Resolution::Proceed
+            } else {
+                logger::failure(&format!("  Still in use by: {}", describe(&remaining)));
+                Resolution::Skip
+            }
+        }
+        Choice::Reboot => match schedule_at_logon(vendor, naner_root, command_args) {
+            Ok(()) => {
+                logger::info(&format!(
+                    "  Scheduled: {vendor} will be replaced the next time you sign in, \
+                     before anything has it open."
+                ));
+                Resolution::Scheduled
+            }
+            Err(e) => {
+                logger::failure(&format!("  Could not schedule it: {e}"));
+                Resolution::Skip
+            }
+        },
+        Choice::Skip => {
+            logger::info(&format!("  Skipping {vendor}"));
+            Resolution::Skip
+        }
+    }
+}
+
+/// The command line `RunOnce` runs at the next logon. No quoting around the
+/// whole string: `cmd /c` only strips quotes when the string *starts* with
+/// one, and this starts with `set`.
+pub(crate) fn logon_command(exe: &Path, naner_root: &Path, command_args: &[&str]) -> String {
+    let args: Vec<String> = command_args.iter().map(|a| format!("\"{a}\"")).collect();
+    format!(
+        "cmd.exe /c set \"NANER_ROOT={}\"&&\"{}\" {} --no-prompt",
+        naner_root.display(),
+        exe.display(),
+        args.join(" ")
+    )
+}
+
+/// Register a one-shot command under `HKCU\...\RunOnce`: Windows runs it at
+/// the user's next logon and then deletes it, before they have had the chance
+/// to open a terminal.
+fn schedule_at_logon(vendor: &str, naner_root: &Path, command_args: &[&str]) -> Result<(), String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let value_name: String = format!("NanerUpgrade-{vendor}")
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let out = std::process::Command::new("reg")
+        .args([
+            "add",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce",
+            "/v",
+            &value_name,
+            "/t",
+            "REG_SZ",
+            "/d",
+            &logon_command(&exe, naner_root, command_args),
+            "/f",
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).trim().to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn holders_are_parsed_with_their_protection_flag() {
+        let parsed = parse_holders("100\tpwsh\t1\n200\tWindowsTerminal\t0\n\nbad line\n");
+        assert_eq!(
+            parsed,
+            vec![
+                Holder {
+                    pid: 100,
+                    name: "pwsh".into(),
+                    protected: true
+                },
+                Holder {
+                    pid: 200,
+                    name: "WindowsTerminal".into(),
+                    protected: false
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn choices_default_to_skip_and_respect_what_can_be_closed() {
+        assert_eq!(parse_choice("k\n", true), Choice::Close);
+        assert_eq!(parse_choice("K", true), Choice::Close);
+        // Nothing closable: "k" must not be honoured.
+        assert_eq!(parse_choice("k", false), Choice::Skip);
+        assert_eq!(parse_choice("r", false), Choice::Reboot);
+        assert_eq!(parse_choice("", true), Choice::Skip);
+        assert_eq!(parse_choice("whatever", true), Choice::Skip);
+    }
+
+    #[test]
+    fn the_logon_command_reruns_naner_against_the_same_root_without_prompting() {
+        let cmd = logon_command(
+            Path::new(r"C:\tools\naner\vendor\bin\naner.exe"),
+            Path::new(r"C:\tools\naner"),
+            &["upgrade-vendors", "Windows Terminal"],
+        );
+        assert_eq!(
+            cmd,
+            r#"cmd.exe /c set "NANER_ROOT=C:\tools\naner"&&"C:\tools\naner\vendor\bin\naner.exe" "upgrade-vendors" "Windows Terminal" --no-prompt"#
+        );
+    }
+
+    #[test]
+    fn in_use_errors_are_recognised_by_windows_code() {
+        for code in [5, 32, 33, 1224] {
+            assert!(is_in_use_error(&std::io::Error::from_raw_os_error(code)));
+        }
+        assert!(!is_in_use_error(&std::io::Error::from_raw_os_error(2)));
+        assert!(!is_in_use_error(&std::io::Error::other("x")));
+    }
+}

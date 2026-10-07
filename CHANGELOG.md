@@ -1,5 +1,12 @@
 ## [Unreleased]
 ### Added
+- `upgrade-vendors` checks, before replacing a vendor, whether a running
+  process holds its folder. On a terminal it asks: close them and continue,
+  replace at next logon (a one-shot `RunOnce` entry that re-runs the upgrade
+  before anything is open), or skip. naner never offers to close itself or
+  the console it runs in. `--close-processes` closes without asking;
+  `--no-prompt` (and any redirected output) only reports and skips.
+### Added
 - `update-vendors --accept-conda-tos` accepts Anaconda's Terms of Service for
   its default channels before `conda update --all`. Opt-in only: it is the
   user's acceptance, so naner never does it unasked. Without the flag, a

@@ -3,12 +3,14 @@
 //! cascade, and the Windows Terminal portable-mode configurator.
 
 mod config_merge;
+mod in_use;
 mod installer;
 mod loader;
 mod msvc_build_tools;
 mod wt_config;
 
 pub use config_merge::{VendorsMergeOutcome, merge_shipped_vendor_defaults};
+pub use in_use::InUsePolicy;
 pub use installer::{UnifiedVendorInstaller, VendorDownloadInfo};
 pub use loader::VendorConfigurationLoader;
 pub use wt_config::{WindowsTerminalConfigurator, is_windows_terminal};
