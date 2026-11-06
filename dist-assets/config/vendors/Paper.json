@@ -1,0 +1,27 @@
+{
+  "Paper": {
+    "name": "Paper",
+    "description": "Design tool for creating interfaces on a 2D canvas, with an MCP server for agents",
+    "extractDir": "paper",
+    "enabled": true,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://download.todesktop.com/2601167vjw8xe/Paper%20Setup%200.5.18%20-%20Build%20261031pthw9s82w-x64.exe",
+      "version": "0.5.18",
+      "fileName": "Paper Setup 0.5.18 - Build 261031pthw9s82w-x64.exe",
+      "size": "~130"
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "ff645c09854ee2607795ecc05d9cbf92f23fdb6781991e02cc50c4f2e967f36c",
+      "required": true
+    },
+    "installType": "installer",
+    "installerArgs": [
+      "/S",
+      "/D=%TARGETDIR%"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "TickTick": {
+    "name": "TickTick",
+    "description": "Task manager and to-do list with calendar, habits and focus timer",
+    "extractDir": "tick",
+    "enabled": true,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "static",
+      "url": "https://download.ticktick.app/download/win64/tick_win_setup_release_x64_8250.exe",
+      "version": "8250",
+      "fileName": "tick_win_setup_release_x64_8250.exe",
+      "size": "~24"
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "5db85f11176da76755f7cd3cbe361e5b4381bf589095d5159a41f3a42bf45b2a",
+      "required": true
+    },
+    "installType": "installer",
+    "installerArgs": [
+      "/VERYSILENT",
+      "/NORESTART",
+      "/DIR=%TARGETDIR%"
+    ]
+  }
+}
