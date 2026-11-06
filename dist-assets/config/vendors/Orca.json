@@ -1,0 +1,31 @@
+{
+  "Orca": {
+    "name": "Orca",
+    "description": "Agent IDE for running Claude Code, Codex and other coding agents in parallel across git worktrees",
+    "extractDir": "orca",
+    "enabled": true,
+    "required": false,
+    "dependencies": [],
+    "releaseSource": {
+      "type": "github",
+      "repo": "stablyai/orca",
+      "assetPattern": "orca-windows-setup.exe",
+      "fallback": {
+        "version": "v1.4.251",
+        "url": "https://github.com/stablyai/orca/releases/download/v1.4.251/orca-windows-setup.exe",
+        "fileName": "orca-windows-setup.exe",
+        "size": "~210"
+      }
+    },
+    "checksum": {
+      "algorithm": "SHA256",
+      "value": "e1bf85addf3b9e16d32c3d3985334c188082c7472b88e14c1137c470a06dbb1a",
+      "required": true
+    },
+    "installType": "installer",
+    "installerArgs": [
+      "/S",
+      "/D=%TARGETDIR%"
+    ]
+  }
+}

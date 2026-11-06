@@ -23,7 +23,7 @@ ureq = { version = "2", default-features = false, features = ["native-tls", "gzi
 native-tls = "0.2"
 # Archive handling: native zip + tar.xz (pure Rust so the Windows cross-check
 # works); 7z/msi/exe stay shell-outs (MIGRATION_ANALYSIS §2.3).
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 tar = "0.4"
 lzma-rs = "0.3"
 # Web-scrape / filename version patterns: the in-house POSIX-ERE engine
